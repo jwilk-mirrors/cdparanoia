@@ -7,5 +7,6 @@
  *
  ******************************************************************/
 
-extern void fft_forward(int n, float *buf);
-extern void fft_backward(int n, float *buf);
+extern void fft_forward(int n, float *buf, float *trigcache, int *sp);
+extern void fft_backward(int n, float *buf, float *trigcache, int *sp);
+extern void fft_i(int n, float **trigcache, int **splitcache);

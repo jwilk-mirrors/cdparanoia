@@ -57,6 +57,7 @@ typedef struct cdrom_drive{
   int interface;
   int bigendianp;
   int nsectors;
+  int ignore_toc_offset;
 
   int cd_extra;
   int tracks;
@@ -83,7 +84,6 @@ typedef struct cdrom_drive{
   /* SCSI command buffer and offset pointers */
   unsigned char *sg;
   unsigned char *sg_buffer;
-  int clear_buff_via_bug;
   unsigned char inqbytes[4];
 
   /* Scsi parameters and state */
@@ -92,7 +92,10 @@ typedef struct cdrom_drive{
   unsigned int orgsize;
   long bigbuff;
   int adjust_ssize;
+
   int fua;
+  int lun;
+
   sigset_t sigset;
 
 } cdrom_drive;
@@ -139,7 +142,7 @@ extern long cdda_disc_lastsector(cdrom_drive *d);
 /* Errors returned by lib: 
 
 001: Unable to set CDROM to read audio mode
-002: Unable to read table of contents
+002: Unable to read table of contents lead-out
 003: CDROM reporting illegal number of tracks
 004: Unable to read table of contents header
 005: Unable to read table of contents entry
@@ -147,6 +150,7 @@ extern long cdda_disc_lastsector(cdrom_drive *d);
 007: Unknown, unrecoverable error reading data
 008: Unable to identify CDROM model
 009: CDROM reporting illegal table of contents
+010: Unrecoverable system error reading data
 
 100: Interface not supported
 101: Drive is neither a CDROM nor a WORM device

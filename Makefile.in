@@ -3,6 +3,9 @@
 # DO NOT EDIT BELOW! ##########################################################
 # (unless, of course, you know what you are doing :) ##########################
 
+VPATH=@srcdir@
+srcdir=@srcdir@
+
 @SET_MAKE@
 FLAGS=@TYPESIZES@ @CFLAGS@
 OPT=@OPT@ $(FLAGS)
@@ -41,8 +44,8 @@ lib:
 	cd paranoia && $(MAKE) lib
 
 install:
-		$(INSTALL) -m 755 cdparanoia $(BINDIR)
-		$(INSTALL) -m 444 cdparanoia.1 $(MANDIR)/man1
+		$(INSTALL) -m 755 $(srcdir)/cdparanoia $(BINDIR)
+		$(INSTALL) -m 444 $(srcdir)/cdparanoia.1 $(MANDIR)/man1
 
 
 cdparanoia:	$(OFILES) interface/cdda_interface.a paranoia/cdda_paranoia.a

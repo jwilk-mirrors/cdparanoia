@@ -21,19 +21,20 @@
  *   22.01.98 - first version
  *   15.02.98 - alpha 2: juggled two includes from interface/low_interface.h
  *                       that move contents in Linux 2.1
- *
  *                       Linked status bar to isatty to avoid it appearing
  *                       in a redirected file.
- *                       (suggested by Matija Nalis <mnalis@public.srce.hr>)
- * 
  *                       Played with making TOC less verbose.
- *    4.04.98 - alpha 3: zillions of bugfixes, also added MMC and IDE_SCSI
+ *   04.04.98 - alpha 3: zillions of bugfixes, also added MMC and IDE_SCSI
  *                       emulation support
- *    4.05.98 - alpha 4: Segfault fix, cosmetic repairs
- *    4.05.98 - alpha 5: another segfault fix, cosmetic repairs, 
+ *   05.04.98 - alpha 4: Segfault fix, cosmetic repairs
+ *   05.04.98 - alpha 5: another segfault fix, cosmetic repairs, 
  *                       Gadi Oxman provided code to identify/fix nonstandard
  *                       ATAPI CDROMs 
- *                       
+ *   07.04.98 - alpha 6: Bugfixes to autodetection
+ *   18.06.98 - alpha 7: Additional SCSI error handling code
+ *                       cosmetic fixes
+ *                       segfault fixes
+ *                       new sync/silence code, smaller fft      
  */
 
 #include <stdio.h>
@@ -183,7 +184,7 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
 
 static void display_toc(cdrom_drive *d){
   int i;
-  report("\nTable of contents (audio tracks only):\n"
+  report("Table of contents (audio tracks only):\n"
 	 "track        length               begin        copy pre ch\n"
 	 "===========================================================");
   
@@ -209,7 +210,7 @@ static void display_toc(cdrom_drive *d){
 
 static void usage(FILE *f){
   fprintf( f,
-VERSION"\n\n"
+VERSION"\n"
 
 "USAGE:\n"
 "  cdparanoia [options] <span> [outfile]\n\n"
@@ -219,6 +220,8 @@ VERSION"\n\n"
 "  -q --quiet                      : quiet operation\n"
 "  -V --version                    : print version info and quit\n"
 "  -Q --query                      : autosense drive, query disc and quit\n"
+"  -B --batch                      : 'batch' mode (saves each track to a\n"
+"                                    seperate file.\n"
 "  -s --search-for-drive           : do an exhaustive search for drive\n"
 "  -h --help                       : print help\n\n"
 
@@ -242,7 +245,8 @@ VERSION"\n\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
 "  -Y --disable-extra-paranoia     : only do cdda2wav-style overlap checking\n"
 "  -X --disable-scratch-detection  : do not look for scratches\n"
-"  -W --disable-scratch-repair     : disable scratch repair (still detect)\n\n"
+"  -W --disable-scratch-repair     : disable scratch repair (still detect)\n"
+"  -F --disable-fragmentation      : disable fragmentation of read at rifts\n\n"
 
 "The span argument may be a simple track number or a offset/span\n"
 "specification.  The syntax of an offset/span takes the rough form:\n\n"
@@ -285,20 +289,31 @@ long callbegin;
 long callend;
 
 static void callback(long sector, int function){
+  /*
 
-  /* (== PROGRESS == [--+:---x-------------->           ] == 002765 == . ==) */
+ (== PROGRESS == [--+:---x-------------->           | 007218 01 ] == :-) . ==) 
 
+ */
+
+  int graph=30;
   char buffer[256];
   static long c_sector=0,v_sector=0;
   static char dispcache[30]="                              ";
   static int last=0;
   static long lasttime=0;
+  long osector=0;
   struct timeval thistime;
-  int graph=30;
-  char heartbeat=' ';
+  static char heartbeat=' ';
   int position=0,aheadposition=0;
+  static int overlap=0;
   static printit=-1;
 
+  static int slevel=0;
+  static int slast=0;
+  static int stimeout=0;
+  char *smilie="= :-)";
+  
+  osector=sector;
   sector/=CD_FRAMESIZE_RAW/2;
 
   if(printit==-1)
@@ -322,6 +337,7 @@ static void callback(long sector, int function){
     if(function==-1){
       last=8;
       heartbeat='*';
+      slevel=0;
       v_sector=sector;
     }else
       if(position<graph && position>=0)
@@ -331,68 +347,136 @@ static void callback(long sector, int function){
 	case PARANOIA_CB_READ:
 	  if(sector>c_sector)c_sector=sector;
 	  break;
+
 	case PARANOIA_CB_FIXUP_EDGE:
+	  if(stimeout>=5)
+	    if(overlap>CD_FRAMEWORDS)
+	      slevel=2;
+	    else
+	      slevel=1;
 	  if(dispcache[position]==' ') 
 	    dispcache[position]='-';
 	  break;
 	case PARANOIA_CB_FIXUP_ATOM:
+	  if(slevel<4 || stimeout>5)slevel=4;
 	  if(dispcache[position]==' ' ||
 	     dispcache[position]=='-')
 	    dispcache[position]='+';
 	  break;
 	case PARANOIA_CB_SKIP:
+	  slevel=8;
 	  dispcache[position]='V';
+	  break;
+	case PARANOIA_CB_OVERLAP:
+	  overlap=osector;
+	  break;
+	case PARANOIA_CB_SCRATCH:
+	  if(slevel<7 || stimeout>5)slevel=7;
+	  break;
+	case PARANOIA_CB_DRIFT:
+	  if(slevel<3 || stimeout>5)slevel=3;
+	  break;
+	case PARANOIA_CB_BACKOFF:
+	  if(slevel<6 || stimeout>5)slevel=6;
+	  break;
+	case PARANOIA_CB_FIXUP_DROPPED:
+	case PARANOIA_CB_FIXUP_DUPED:
+	  if(slevel<5 || stimeout>5)slevel=5;
 	  break;
 	}
     
-    switch(last){
-    case 0:
-      heartbeat=' ';
+    switch(slevel){
+    case 0:  /* finished, or no jitter */
+      smilie=" :^D";
       break;
-    case 1:case 7:
-      heartbeat='.';
-    break;
-    case 2:case 6:
-      heartbeat='o';
+    case 1:  /* normal.  no atom, low jitter */
+      smilie=" :-)";
       break;
-    case 3:case 5:  
-      heartbeat='0';
+    case 2:  /* normal, overlap > 1 */
+      smilie=" :-|";
+      break; 
+    case 3:  /* drift */
+      smilie=" :-/";
       break;
-    case 4:
-      heartbeat='O';
+    case 4:  /* atom fixup */
+      smilie=" :-P";
       break;
+    case 5:  /* dropped/duped bytes */
+      smilie=" 8-|";
+      break;
+    case 6:  /* backoff */
+      smilie=" :-0";
+      break;
+    case 7:  /* scratch */
+      smilie=" :-(";
+      break;
+    case 8:  /* skip */
+      smilie=" ;-(";
+      break;
+
     }
     
     if(!quiet){
       long test;
       gettimeofday(&thistime,NULL);
       test=thistime.tv_sec*10+thistime.tv_usec/100000;
-      
-      if(lasttime!=test || function==-1){
-	last++;
-	lasttime=test;
-	if(last>7)last=0;
-	
+
+      if(lasttime!=test || function==-1 || slast!=slevel){
+	if(lasttime!=test || function==-1){
+	  last++;
+	  lasttime=test;
+	  if(last>7)last=0;
+	  stimeout++;
+	  switch(last){
+	  case 0:
+	    heartbeat=' ';
+	    break;
+	  case 1:case 7:
+	    heartbeat='.';
+	    break;
+	  case 2:case 6:
+	    heartbeat='o';
+	    break;
+	  case 3:case 5:  
+	    heartbeat='0';
+	    break;
+	  case 4:
+	    heartbeat='O';
+	    break;
+	  }
+	  if(function==-1)
+	    heartbeat='*';
+
+	}
+	if(slast!=slevel){
+	  stimeout=0;
+	}
+	slast=slevel;
+
 	if(v_sector==0)
 	  sprintf(buffer,
-		  "\r  (== PROGRESS == [%s] == ...... == %c ==)     ",
-		  dispcache,heartbeat);
+		  "\r (== PROGRESS == [%s| ...... %02d ] ==%s %c ==)   ",
+		  dispcache,overlap/CD_FRAMEWORDS,smilie,heartbeat);
 	
 	else
 	  sprintf(buffer,
-		  "\r  (== PROGRESS == [%s] == %06ld == %c ==)     ",
-		  dispcache,v_sector,heartbeat);
+		  "\r (== PROGRESS == [%s| %06ld %02d ] ==%s %c ==)   ",
+		  dispcache,v_sector,overlap/CD_FRAMEWORDS,smilie,heartbeat);
 	
 	if(aheadposition>=0 && aheadposition<graph && !(function==-1))
-	  buffer[aheadposition+20]='>';
+	  buffer[aheadposition+19]='>';
 	
 	fprintf(stderr,buffer);
       }
     }
   }
+
+  /* clear the indicator for next batch */
+  if(function==-1)
+    memset(dispcache,' ',graph);
 }
 
-const char *optstring = "scCn:d:g:prRwavqVQhZYXWB";
+const char *optstring = "scCn:d:g:prRwavqVQhZYXWBFi:";
 
 struct option options [] = {
 	{"search-for-drive",no_argument,NULL,'s'},
@@ -416,6 +500,7 @@ struct option options [] = {
 	{"disable-extra-paranoia",no_argument,NULL,'Y'},
 	{"disable-scratch-detection",no_argument,NULL,'X'},
 	{"disable-scratch-repair",no_argument,NULL,'W'},
+	{"disable-fragmentation",no_argument,NULL,'F'},
 	{"output-info",required_argument,NULL,'i'},
 
 	{NULL,0,NULL,0}
@@ -517,7 +602,7 @@ int main(int argc,char *argv[]){
       break;
     case 'V':
       fprintf(stderr,VERSION);
-      fprintf(stderr,"\n\n");
+      fprintf(stderr,"\n");
       exit(0);
       break;
     case 'Q':
@@ -537,7 +622,10 @@ int main(int argc,char *argv[]){
       paranoia_mode&=~(PARANOIA_MODE_SCRATCH|PARANOIA_MODE_REPAIR);
       break;
     case 'W':
-      paranoia_mode&=PARANOIA_MODE_REPAIR;
+      paranoia_mode&=~PARANOIA_MODE_REPAIR;
+      break;
+    case 'F':
+      paranoia_mode&=~(PARANOIA_MODE_FRAGMENT);
       break;
     case 'i':
       if(info_file)free(info_file);
@@ -550,11 +638,15 @@ int main(int argc,char *argv[]){
   }
 
   if(optind>=argc && !query_only){
-    /* D'oh.  No span. Fetch me a brain, Igor. */
-    usage(stderr);
-    exit(1);
-  }
-  span=copystring(argv[optind]);
+    if(batch)
+      span=NULL;
+    else{
+      /* D'oh.  No span. Fetch me a brain, Igor. */
+      usage(stderr);
+      exit(1);
+    }
+  }else
+    span=copystring(argv[optind]);
 
   report(VERSION);
 
@@ -578,8 +670,13 @@ int main(int argc,char *argv[]){
 	  d=cdda_identify("/dev/cdrom",verbose,NULL);
 	  if(d==NULL  && !verbose){
 	    verbose=1;
-	    report("/dev/cdrom exists but isn't accessible.  More information:\n");
+	    report("\n/dev/cdrom exists but isn't accessible.  By default,\n"
+		   "cdparanoia stops searching for an accessible drive here.\n"
+		   "Consider using -s to force a more complete autosense\n"
+		   "of the machine.\n\nMore information about /dev/cdrom:");
+
 	    d=cdda_identify("/dev/cdrom",CDDA_MESSAGE_PRINTIT,NULL);
+	    report("\n");
 	    exit(1);
 	  }else
 	    report("");
@@ -674,44 +771,49 @@ int main(int argc,char *argv[]){
     long batch_last;
     int batch_track;
 
-    /* look for the hyphen */ 
-    char *span2=strchr(span,'-');
-    if(strrchr(span,'-')!=span2){
-      report("Error parsing span argument");
-      cdda_close(d);
-      d=NULL;
-      exit(1);
-    }
-
-    if(span2!=NULL){
-      *span2='\0';
-      span2++;
-    }
-
-    first_sector=parse_offset(d,span,-1);
-    if(first_sector==-1)
-      last_sector=parse_offset(d,span2,cdda_disc_firstsector(d));
-    else
-      last_sector=parse_offset(d,span2,first_sector);
-
-    if(first_sector==-1){
-      if(last_sector==-1){
+    if(span){
+      /* look for the hyphen */ 
+      char *span2=strchr(span,'-');
+      if(strrchr(span,'-')!=span2){
 	report("Error parsing span argument");
 	cdda_close(d);
 	d=NULL;
 	exit(1);
-      }else{
-	first_sector=cdda_disc_firstsector(d);
       }
-    }else{
-      if(last_sector==-1){
-	if(span2){ /* There was a hyphen */
-	  last_sector=cdda_disc_lastsector(d);
+      
+      if(span2!=NULL){
+	*span2='\0';
+	span2++;
+      }
+      
+      first_sector=parse_offset(d,span,-1);
+      if(first_sector==-1)
+	last_sector=parse_offset(d,span2,cdda_disc_firstsector(d));
+      else
+	last_sector=parse_offset(d,span2,first_sector);
+      
+      if(first_sector==-1){
+	if(last_sector==-1){
+	  report("Error parsing span argument");
+	  cdda_close(d);
+	  d=NULL;
+	  exit(1);
 	}else{
-	  last_sector=
-	    cdda_track_lastsector(d,cdda_sector_gettrack(d,first_sector));
+	  first_sector=cdda_disc_firstsector(d);
+	}
+      }else{
+	if(last_sector==-1){
+	  if(span2){ /* There was a hyphen */
+	    last_sector=cdda_disc_lastsector(d);
+	  }else{
+	    last_sector=
+	      cdda_track_lastsector(d,cdda_sector_gettrack(d,first_sector));
+	  }
 	}
       }
+    }else{
+      first_sector=cdda_disc_firstsector(d);
+      last_sector=cdda_disc_lastsector(d);
     }
 
     {
@@ -739,7 +841,7 @@ int main(int argc,char *argv[]){
 
     {
       long cursor;
-      p=paranoia_init(d,3L*1024L*1024L,50); /* big! ~5M av */
+      p=paranoia_init(d);
       paranoia_modeset(p,paranoia_mode);
       
       if(verbose)
@@ -748,6 +850,10 @@ int main(int argc,char *argv[]){
 	cdda_verbose_set(d,CDDA_MESSAGE_LOGIT,CDDA_MESSAGE_FORGETIT);
       
       paranoia_seek(p,cursor=first_sector,SEEK_SET);      
+
+      /* this is probably a good idea in general */
+      seteuid(getuid());
+      setegid(getgid());
 
       while(cursor<=last_sector){
 	if(batch){
@@ -789,7 +895,7 @@ int main(int argc,char *argv[]){
 		strncat(path,argv[optind+1],pos);
 	      strncat(file,argv[optind+1]+pos,100);
 	      
-	      sprintf(buffer,"%strack%d.%s",path,batch_track,file);
+	      sprintf(buffer,"%strack%02d.%s",path,batch_track,file);
 	    }else
 	      sprintf(buffer,"%s",argv[optind+1]);
 	    
@@ -807,7 +913,7 @@ int main(int argc,char *argv[]){
 	  /* default */
 	  char buffer[32];
 	  if(batch)
-	    sprintf(buffer,"track%d.",batch_track);
+	    sprintf(buffer,"track%02d.",batch_track);
 	  else
 	    buffer[0]='\0';
 	  
@@ -838,10 +944,10 @@ int main(int argc,char *argv[]){
 	case 0: /* raw */
 	  break;
 	case 1: /* wav */
-	  WriteWav(out,(last_sector-first_sector+1)*CD_FRAMESIZE_RAW);
+	  WriteWav(out,(batch_last-batch_first+1)*CD_FRAMESIZE_RAW);
 	  break;
 	case 2: /* aifc */
-	  WriteAifc(out,(last_sector-first_sector+1)*CD_FRAMESIZE_RAW);
+	  WriteAifc(out,(batch_last-batch_first+1)*CD_FRAMESIZE_RAW);
 	  break;
 	}
 	

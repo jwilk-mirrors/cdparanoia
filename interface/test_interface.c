@@ -50,19 +50,22 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
 
   while(bytes_so_far<bytestotal){
     long local_bytes=bytestotal-bytes_so_far;
-    int jitter=(begin/100)*2;
-    long bytes=8*CD_FRAMESIZE_RAW; /* max 8 sectors */
+    int jitter=(int)((drand48()-.5)*CD_FRAMESIZE_RAW*4)*4;
+    long rbytes,bytes=8*(int)(drand48()*CD_FRAMESIZE_RAW); /* max 8 sectors */
 
     char *local_buf=buffer+bytes_so_far;
     if(bytes>local_bytes)bytes=local_bytes;
 
     if(begin==0)jitter=0;
+    if(jitter<0)jitter=0;
 
     /*    printf("%d %ld sector jitter nbytes\n",jitter,
 	   bytes); */
     
     lseek(d->cdda_fd,begin+bytes_so_far+jitter,SEEK_SET);
-    read(d->cdda_fd,local_buf,bytes);
+    rbytes=read(d->cdda_fd,local_buf,bytes);
+    if(rbytes<bytes)
+      memset(local_buf+rbytes,0,bytes-rbytes);
     bytes_so_far+=bytes;
   }
 

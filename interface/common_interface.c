@@ -101,14 +101,14 @@ int data_bigendianp(cdrom_drive *d){
 	
 	for(j=0;j<128;j++)a[j]=le16_to_cpu(buff[j*2+beginsec+460]);
 	for(j=0;j<128;j++)b[j]=le16_to_cpu(buff[j*2+beginsec+461]);
-	fft_forward(128,a);
-	fft_forward(128,b);
+	fft_forward(128,a,NULL,NULL);
+	fft_forward(128,b,NULL,NULL);
 	for(j=0;j<128;j++)lsb_energy+=fabs(a[j])+fabs(b[j]);
 	
 	for(j=0;j<128;j++)a[j]=be16_to_cpu(buff[j*2+beginsec+460]);
 	for(j=0;j<128;j++)b[j]=be16_to_cpu(buff[j*2+beginsec+461]);
-	fft_forward(128,a);
-	fft_forward(128,b);
+	fft_forward(128,a,NULL,NULL);
+	fft_forward(128,b,NULL,NULL);
 	for(j=0;j<128;j++)msb_energy+=fabs(a[j])+fabs(b[j]);
       }
     }

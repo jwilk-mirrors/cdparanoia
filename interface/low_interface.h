@@ -22,6 +22,8 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 #include <linux/major.h>
 #include <linux/version.h>

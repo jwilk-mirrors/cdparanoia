@@ -532,18 +532,30 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   d->sg=malloc(MAX_BIG_BUFF_SIZE);
   d->sg_buffer=d->sg+SG_OFF;
 
-  d->clear_buff_via_bug=1;
-
   d->drive_type=type;
   d->cdda_fd=g_fd;
   d->ioctl_fd=i_fd;
   d->interface=GENERIC_SCSI;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
+  {  /* our scsi layer doesn't want to block on read; 
+	we use select() to block */
+    int n = fcntl(g_fd, F_GETFL);
+    fcntl(g_fd, F_SETFL, n|O_NONBLOCK);
+  }
+
+  {
+    /* get the lun */
+    scsiid lun;
+    if(get_scsi_id(i_fd,&lun))
+      d->lun=0; /* a reasonable guess on a failed ioctl */
+    else
+      d->lun=lun.lun;
+  }
 
   p = scsi_inquiry(d);
 
-  if (*p != TYPE_ROM && *p != TYPE_WORM) {
+  if (!p || (*p != TYPE_ROM && *p != TYPE_WORM)) {
     idmessage(messagedest,messages,
 	      "\t\tDrive is neither a CDROM nor a WORM device\n",NULL);
     free(d->sg);

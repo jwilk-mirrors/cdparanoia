@@ -15,6 +15,7 @@ static int cooked_readtoc (cdrom_drive *d){
   int tracks;
   struct cdrom_tochdr hdr;
   struct cdrom_tocentry entry;
+  long offset=0;
 
   /* get TocHeader to find out how many entries there are */
   if(ioctl(d->ioctl_fd, CDROMREADTOCHDR, &hdr ))
@@ -29,6 +30,7 @@ static int cooked_readtoc (cdrom_drive *d){
 
   /* get all TocEntries */
   for(i=0;i<hdr.cdth_trk1;i++){
+    long temp;
     entry.cdte_track= i+1;
     entry.cdte_format = CDROM_LBA;
     if(ioctl(d->ioctl_fd,CDROMREADTOCENTRY,&entry)){
@@ -38,7 +40,9 @@ static int cooked_readtoc (cdrom_drive *d){
       
     d->disc_toc[i].bFlags = (entry.cdte_adr << 4) | (entry.cdte_ctrl & 0x0f);
     d->disc_toc[i].bTrack = i+1;
-    d->disc_toc[i].dwStartSector = entry.cdte_addr.lba;
+    temp=d->disc_toc[i].dwStartSector = entry.cdte_addr.lba;
+    if(d->ignore_toc_offset && i==0)offset=temp;
+    d->disc_toc[i].dwStartSector -= offset;
   }
 
   entry.cdte_track = CDROM_LEADOUT;
@@ -49,7 +53,7 @@ static int cooked_readtoc (cdrom_drive *d){
   }
   d->disc_toc[i].bFlags = (entry.cdte_adr << 4) | (entry.cdte_ctrl & 0x0f);
   d->disc_toc[i].bTrack = entry.cdte_track;
-  d->disc_toc[i].dwStartSector = entry.cdte_addr.lba;
+  d->disc_toc[i].dwStartSector = entry.cdte_addr.lba-offset;
 
   tracks=hdr.cdth_trk1+1;
   d->cd_extra=FixupTOC(d,tracks);
@@ -110,7 +114,7 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
 	  return(-7);
 	}
       }
-      if(retry_count>4==0)
+      if(retry_count>4)
 	if(sectors>1)
 	  sectors>>=1;
       retry_count++;
@@ -164,6 +168,21 @@ static int verify_read_command(cdrom_drive *d){
   return(-6);
 }
 
+#include "drive_exceptions.h"
+
+static void check_exceptions(cdrom_drive *d,exception *list){
+
+  int i=0;
+  while(list[i].model){
+    if(!strncmp(list[i].model,d->drive_model,strlen(list[i].model))){
+      if(list[i].bigendianp!=-1)d->bigendianp=list[i].bigendianp;
+      if(list[i].ignore_toc_offset!=-1)d->ignore_toc_offset=list[i].ignore_toc_offset;
+      return;
+    }
+    i++;
+  }
+}
+
 /* set function pointers to use the ioctl routines */
 int cooked_init_drive (cdrom_drive *d){
   int ret;
@@ -211,6 +230,9 @@ int cooked_init_drive (cdrom_drive *d){
 		      way of determining other than this guess tho */
     d->bigendianp=0;
     d->is_atapi=1;
+
+    check_exceptions(d,atapi_list);
+
     break;
   default:
     d->nsectors=40; 
