@@ -4,12 +4,13 @@
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
 Name: cdparanoia-III
 Version: %{realver}
-Release: 2
+Release: 3
 Copyright: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-%{realver}.src.tgz 
 Url: http://www.xiph.org/paranoia/index.html
 BuildRoot: /var/tmp/cdparanoia-root
+Obsoletes: cdparanoia
 
 %description
 Cdparanoia (Paranoia III) reads digital audio directly from a CD, then
@@ -51,6 +52,7 @@ install -m 0644 interface/cdda_interface.h $RPM_BUILD_ROOT/usr/include
 install -m 0755 interface/libcdda_interface.so.0.%{ver} \
 	$RPM_BUILD_ROOT/usr/lib
 install -m 0755 interface/libcdda_interface.a $RPM_BUILD_ROOT/usr/lib
+gzip -9 $RPM_BUILD_ROOT/usr/man/man1/*
 
 %post -p /sbin/ldconfig
 
@@ -64,7 +66,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README GPL FAQ.txt
 /usr/bin/cdparanoia
-/usr/man/man1/cdparanoia.1
+/usr/man/man1/cdparanoia.1.gz
 /usr/lib/libcdda_paranoia.so.*
 /usr/lib/libcdda_interface.so.*
 
@@ -77,6 +79,11 @@ rm -rf $RPM_BUILD_ROOT
 /usr/lib/libcdda_interface.a
 
 %changelog
+* Wed Apr 19 2000 Trond Eivind Glomsrød <teg@redhat.com>
+- Switched spec file from the one used in Red Hat Linux 6.2, which
+  also changes the name
+- gzip man page
+
 * Thu Dec 23 1999 Peter Jones <pjones@redhat.com>
 - update package to provide cdparanoia-alpha9.7-2.*.rpm and 
   cdparanoia-devel-alpha9.7-2.*.rpm.  Also, URLs point at xiph.org
