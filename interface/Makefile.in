@@ -1,0 +1,44 @@
+# cdda_paranoia makefile.in ready to go for autoconf.
+
+# DO NOT EDIT BELOW! ##########################################################
+# (unless, of course, you know what you are doing :) ##########################
+
+@SET_MAKE@
+FLAGS=@TYPESIZES@ @CFLAGS@
+OPT=@OPT@ $(FLAGS)
+DEBUG=@DEBUG@ $(FLAGS) -DCDDA_TEST
+CC=@CC@
+LD=@CC@
+LDFLAGS=@LDFLAGS@ $(FLAGS)
+AR=@AR@
+RANLIB=@RANLIB@
+LIBS = -lm
+
+OFILES = scan_devices.o	common_interface.o cooked_interface.o interface.o\
+	scsi_interface.o smallft.o toc.o test_interface.o
+
+all: 
+	$(MAKE) cdda_interface.a CFLAGS="$(OPT)" 
+
+debug: 
+	$(MAKE) cdda_interface.a CFLAGS="$(DEBUG)"
+
+lib:	
+	$(MAKE) cdda_interface.a CFLAGS="$(OPT)" 
+
+test:	
+	$(MAKE) cdda_interface.a CFLAGS="$(DEBUG)"
+	$(CC) $(DEBUG) -c test.c
+	$(LD) $(DEBUG) test.o $(LDFLAGS) -o cdda_test $(LIBS) cdda_interface.a
+
+cdda_interface.a: 	$(OFILES)	
+		$(AR) -r cdda_interface.a $(OFILES)
+		$(RANLIB) cdda_interface.a
+.c.o:
+	$(CC) $(CFLAGS) -c $<
+
+clean:
+	-rm -f *.o core *~ *.a *.out
+
+distclean:
+	-rm -f *.o core *~ *.a *.out Makefile

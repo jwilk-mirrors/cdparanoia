@@ -1,0 +1,55 @@
+
+###############################################################################
+# DO NOT EDIT BELOW! ##########################################################
+# (unless, of course, you know what you are doing :) ##########################
+
+@SET_MAKE@
+FLAGS=@TYPESIZES@ @CFLAGS@
+OPT=@OPT@ $(FLAGS)
+DEBUG=@DEBUG@ $(FLAGS)
+CC=@CC@
+LD=@CC@
+LDFLAGS=@LDFLAGS@ $(FLAGS)
+AR=@AR@
+RANLIB=@RANLIB@
+LIBS = interface/cdda_interface.a paranoia/cdda_paranoia.a -lm
+
+OFILES = main.o report.o header.o
+
+all: 	
+	cd interface && $(MAKE) all
+	cd paranoia && $(MAKE) all
+	$(MAKE) target CFLAGS="$(OPT)" 
+
+debug:  
+	cd interface && $(MAKE) debug
+	cd paranoia && $(MAKE) debug
+	$(MAKE) target CFLAGS="$(DEBUG)" 
+	$(MAKE) tests CFLAGS="$(OPT)"
+
+tests:	generate_test.o verify_test.o
+	$(LD) $(CFLAGS) $(LDFLAGS) generate_test.o -o generate_test
+	$(LD) $(CFLAGS) $(LDFLAGS) verify_test.o -o verify_test
+
+lib:	
+	cd interface && $(MAKE) lib
+	cd paranoia && $(MAKE) lib
+
+target:	$(OFILES)
+	$(LD) $(CFLAGS) $(LDFLAGS) $(OFILES) -o cdparanoia $(LIBS)	
+
+.c.o:
+	$(CC) $(CFLAGS) -c $<
+
+clean:
+	cd interface && $(MAKE) clean
+	cd paranoia && $(MAKE) clean
+	-rm -f cdparanoia *~ config.* *.o *.wav *.aifc *.raw \
+		verify_test generate_test core gmon.out
+
+distclean:
+	cd interface && $(MAKE) distclean
+	cd paranoia && $(MAKE) distclean
+	-rm -f cdparanoia *~ config.* *.o *.wav *.aifc *.raw test.file \
+	Makefile verify_test generate_test core gmon.out
+ 

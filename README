@@ -1,0 +1,175 @@
+cdparanoia release III README
+[February 14, 1998]
+Monty <xiphmont@mit.edu>
+
+This CDDA reader distribution ('cdparanoia') reads audio from the
+CDROM directly as data, with no analog step between, and writes the
+data to a file or pipe as .wav, .aifc or as raw 16 bit linear PCM.
+
+These are installation notes; for lots of other cdparanoia related
+information, see
+
+http://www.mit.edu/afs/sipb/user/xiphmont/cdparanoia/index.html
+
+WARNING: (Danger! Danger!)
+==========================
+
+This is a *prerelease* of the new cdparanoia package; due to the huge
+pool of hardware out there and the newness of the software, this
+package is probably kinda buggy yet.  If you use this prerelease and
+have any sort of trouble, PLEASE let me know.  Contact information is
+at the end of this file.
+
+Requirements
+============
+
+1. A CDDA capable CDROM drive (ATAPI, SCSI, or proprietary)
+2. Linux 2.x.x
+   2a. /proc filesystem support
+   2b. kernel support for the particular CDROM in use
+   2c. kernel support for the generic SCSI interface (if using a SCSI 
+	CDROM drive) and proper device (/dev/sg?) files (get them
+	with the MAKEDEV script) in /dev. Most distributions 
+	already have the /dev/sg? files.
+
+Although cdparanoia will likely work with Linux 1.2 and 1.3, I'll
+bet money on some weird situation relying on a feature missing before
+2.0. Try it out and complain if something doesn't work.
+
+Also, although a stock SCSI setup will work, performance will be
+better if linux/include/scsi/sg.h defines SG_BIG_BUFF to 32768 or
+bigger.  Recent kernels (2.0.x+?) already do this.  Cdparanoia will
+tell you how big your generic SCSI buffer is.
+
+Compiling cdparanoia
+==================
+
+To build the cdparanoia utility:
+
+	./configure
+	make all
+and as root
+	make install
+
+This will compile cdparanoia and copy the binary to /usr/local/bin
+and the man page to /usr/local/man/man1 (defaults).
+
+Unlike cdda2wav, cdparanoia is smart enough to find CDROM drives
+and the appropriate interfaces automatically; if you have only one
+CDROM drive, you'll not need to worry about it.  If your machine has
+more than one CDROM drive and cdparanoia finds the wrong one,
+you'll need to tell it which device to use on the command line (see
+the man page and Troubleshooting below).
+
+
+To build the cdparanoia.a library:
+
+	./configure
+	make lib
+
+Additional installation notes
+=============================
+
+Most Linux setups already have performed the steps described below.
+The list is useful for doublechecking. (taken from Heiko's cdda2wav
+README)
+
+(for SCSI devices)
+
+  Cdparanoia requires the generic SCSI interface; you'll need
+  a kernel with compiled-in or module-supplied sg interface.
+  In case of a module, this has to be loaded ('modprobe sg'; 
+  usually done in boot time scripts).
+  This can be verified with 'cat /proc/devices'. It should
+  have a line under Character devices:
+  21 sg
+
+  Cdparanoia also requires the kernel SCSI cdrom driver, ie, 
+  a kernel with compiled-in or module-supplied cdrom support.
+  In case of a module, this has to be loaded ('modprobe sr_mod';
+  again, usually part of boot up scripts).
+  This can be verified with 'cat /proc/devices'. It should
+  have a line under Block devices:
+  11 sr
+
+  In the /dev directory there have to be these descriptors:
+  br--------   1 cduser   user      11,   0 Jan 23  1995 sr0
+  br--------   1 cduser   user      11,   1 Mar 24  1993 sr1
+  etc...
+  and a link named 'cdrom' to the cdrom drive used.
+
+  and
+  crw-------   1 cduser   user      21,   0 Aug 27  1995 sga
+  crw-------   1 cduser   user      21,   1 Aug 27  1995 sgb
+  crw-------   1 cduser   user      21,   2 Aug 27  1995 sgc
+  crw-------   1 cduser   user      21,   3 Aug 27  1995 sgd
+  crw-------   1 cduser   user      21,   4 Aug 27  1995 sge
+  crw-------   1 cduser   user      21,   5 Aug 27  1995 sgf
+  crw-------   1 cduser   user      21,   6 Aug 27  1995 sgg
+  crw-------   1 cduser   user      21,   7 Aug 27  1995 sgh
+
+  Permissions and ownership can be changed at will, of course.
+  Here access is permitted only to user 'cduser'.
+
+(for ATAPI and proprietary cdrom devices)
+
+  The kernel must have compiled-in or module-supplied cdrom support.
+  In case of a module, this has to be loaded ('modprobe <modulename>';
+  this is normally included in the boot-up scripts).
+  This can be verified with 'cat /proc/devices'. It should
+  have a line under Block devices:
+  <major> <name of cdrom driver>
+
+  In the /dev directory there have to be these descriptors:
+  br--------   1 cduser   user <major>,   0 Jan 23  1995 <cdrom device 1>
+  br--------   1 cduser   user <major>,   1 Mar 24  1993 <cdrom device 2>
+  etc...
+
+  a link named 'cdrom' to the cdrom drive used will speed up the
+  process of finding the cdrom (cdparanoia checks for the link first)
+
+  These steps are usually performed automatically during the
+  installation of Linux.
+
+Missing Features (compared to cdda2wav)
+=======================================
+
+Specifically, 'cdparanoia' will not play to sound cards, do MD5
+signatures, do rate reduction, or generally make use of the maximum
+speed available from a CDROM drive.  If your CDROM drive is *not*
+prone to jitter and you don't have scratched discs to worry about,
+you're probably better off going with Heiko's original cdda2wav.
+
+   For ATAPI cdroms
+   	kernel support for the ATAPI cdrom driver. 
+
+   For cdrom drives with proprietary busses 
+    	Please check the CDROM-HOWTO for features of the respective
+    	drivers. The only satisfyingly working driver is the sony
+    	driver IMO. 
+
+Unlike cdda2wav, cdparanoia does not require threading, IPC or
+optional sound card support.
+
+Troubleshooting
+===============
+
+lots o' stuff on the website.
+
+Contacts
+========
+
+The author of the original cdda2wav package is Heiko Eissfeldt; he can
+be contacted about cdda2wav at heiko@colossus.escape.de.  Although the
+cd interface code in cdparanoia is derived from cdda2wav, this
+package is my own fault; don't bother Heiko with bug reports, comments
+and questions.
+
+I can be contacted at xiphmont@mit.edu.  The main distribution site
+for cdparanoia (and the original Paranoia patches to cdda2wav) is
+http://www.mit.edu/afs/sipb/user/xiphmont/cdparanoia/
+
+Happy hunting.  Be nice to copyrights.
+
+Monty
+
