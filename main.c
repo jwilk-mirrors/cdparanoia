@@ -189,6 +189,7 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
 }
 
 static void display_toc(cdrom_drive *d){
+  long audiolen=0;
   int i;
   report("\nTable of contents (audio tracks only):\n"
 	 "track        length               begin        copy pre ch\n"
@@ -210,7 +211,15 @@ static void display_toc(cdrom_drive *d){
 	      cdda_track_preemp(d,i)?" yes":"  no",
 	      cdda_track_channels(d,i)==2?" 2":" 4");
       report(buffer);
+      audiolen+=off;
     }
+  {
+    char buffer[256];
+    sprintf(buffer, "TOTAL %7ld [%02d:%02d.%02d]    (audio only)",
+	    audiolen,(int)(audiolen/(60*75)),(int)((audiolen/75)%60),
+	    (int)(audiolen%75));
+      report(buffer);
+  }
   report("");
 }
 
@@ -253,7 +262,13 @@ VERSION"\n"
 "                                    autosense\n"
 "  -g --force-generic-device <dev> : use specified generic scsi device\n"
 "  -S --force-read-speed <n>       : read from device at specified speed\n"
-
+"  -t --toc-offset <n>             : Add <n> sectors to the values reported\n"
+"                                    when addressing tracks. May be negative\n"
+"  -T --toc-bias                   : Assume that the beginning offset of \n"
+"                                    track 1 as reported in the TOC will be\n"
+"                                    addressed as LBA 0.  Necessary for some\n"
+"                                    Toshiba drives to get track boundaries\n"
+"                                    correct\n"
 "  -z --never-skip                 : never accept any less than perfect\n"
 "                                    data reconstruction (don't allow 'V's)\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
@@ -541,8 +556,8 @@ static void callback(long inpos, int function){
 	if(abort_on_skip && skipped_flag && function !=-1){
 	  sprintf(buffer,
 		  "\r (== PROGRESS == [%s| %06ld %02d ] ==%s %c ==)   ",
-		  "  ...aborting; please wait...  ",
-		  dispcache,v_sector,overlap/CD_FRAMEWORDS,smilie,heartbeat);
+		  "  ...aborting; please wait... ",
+		  v_sector,overlap/CD_FRAMEWORDS,smilie,heartbeat);
 	}else{
 	  if(v_sector==0)
 	    sprintf(buffer,
@@ -568,7 +583,7 @@ static void callback(long inpos, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:o:d:g:S:prRwafvqVQhZzYXWBi:";
+const char *optstring = "escCn:o:d:g:S:prRwafvqVQhZzYXWBi:Tt:";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -580,6 +595,8 @@ struct option options [] = {
 	{"force-cdrom-device",required_argument,NULL,'d'},
 	{"force-generic-device",required_argument,NULL,'g'},
 	{"force-read-speed",required_argument,NULL,'S'},
+	{"toc-offset",required_argument,NULL,'t'},
+	{"toc-bias",no_argument,NULL,'T'},
 	{"output-raw",no_argument,NULL,'p'},
 	{"output-raw-little-endian",no_argument,NULL,'r'},
 	{"output-raw-big-endian",no_argument,NULL,'R'},
@@ -626,6 +643,8 @@ static void cleanup(void){
 }
 
 int main(int argc,char *argv[]){
+  int toc_bias=0;
+  int toc_offset=0;
   int force_cdrom_endian=-1;
   int force_cdrom_sectors=-1;
   int force_cdrom_overlap=-1;
@@ -636,7 +655,7 @@ int main(int argc,char *argv[]){
   int output_type=1; /* 0=raw, 1=wav, 2=aifc */
   int output_endian=0; /* -1=host, 0=little, 1=big */
   int query_only=0;
-  int batch=0;
+  int batch=0,i;
 
   /* full paranoia, but allow skipping */
   int paranoia_mode=PARANOIA_MODE_FULL^PARANOIA_MODE_NEVERSKIP; 
@@ -751,6 +770,12 @@ int main(int argc,char *argv[]){
     case 'i':
       if(info_file)free(info_file);
       info_file=copystring(info_file);
+      break;
+    case 'T':
+      toc_bias=-1;
+      break;
+    case 't':
+      toc_offset=atoi(optarg);
       break;
     default:
       usage(stderr);
@@ -871,6 +896,14 @@ int main(int argc,char *argv[]){
     report("\nUnable to open disc.");
     exit(1);
   }
+
+  /* bias the disc.  A hack.  Of course. */
+  if(toc_bias){
+    toc_offset=-cdda_track_firstsector(d,1);
+  }
+  for(i=0;i<d->tracks+1;i++)
+    d->disc_toc[i].dwStartSector+=toc_offset;
+
 
   if(force_cdrom_speed!=-1){
     cdda_speed_set(d,force_cdrom_speed);

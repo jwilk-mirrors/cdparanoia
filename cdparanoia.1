@@ -137,9 +137,27 @@ supported).  This can reduce underruns on machines with slow disks, or
 which are low on memory.
 
 .TP
+.BI "\-t --toc-offset " number
+Use this option to force the entire disc LBA addressing to shift by
+the given amount; the value is added to the beginning offsets in the
+TOC.  This can be used to shift track boundaries for the whole disc
+manually on sector granularity.  The next option does something
+similar...
+
+.TP
+.BI "\-T --toc-bias "
+Some drives (usually random Toshibas) report the actual track
+beginning offset values in the TOC, but then treat the beginning of
+track 1 index 1 as sector 0 for all read operations.  This results in
+every track seeming to start too late (losing a bit of the beginning
+and catching a bit of the next track).
+.B \-T
+accounts for this behavior.
+
+.TP
 .B \-Z --disable-paranoia
 Disable 
-.b all
+.B all
 data verification and correction features.  When using -Z, cdparanoia
 reads data exactly as would cdda2wav with an overlap setting of zero.
 This option implies that 
