@@ -47,28 +47,42 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
   char *buffer=(char *)p;
   long bytestotal=sectors*CD_FRAMESIZE_RAW;
   begin*=CD_FRAMESIZE_RAW;
+ 
+  if(begin<=12007 && begin+sectors>12000){
+    errno=EIO;
+    return(TR_ILLEGAL);
+  }
 
   while(bytes_so_far<bytestotal){
     long local_bytes=bytestotal-bytes_so_far;
-    int jitter=(int)((drand48()-.5)*CD_FRAMESIZE_RAW*4)*4;
-    long rbytes,bytes=8*(int)(drand48()*CD_FRAMESIZE_RAW); /* max 8 sectors */
+    int jitter=0;/*(int)((drand48()-.5)*CD_FRAMESIZE_RAW)*4;*/
+    long rbytes,bytes=CD_FRAMESIZE_RAW*(int)(drand48()*4+1);
 
     char *local_buf=buffer+bytes_so_far;
     if(bytes>local_bytes)bytes=local_bytes;
 
-    if(begin==0)jitter=0;
-    if(jitter<0)jitter=0;
+    /*    if(begin==0)jitter=0;*/
+    if(begin+bytes_so_far+jitter<0)jitter=0;
 
-    /*    printf("%d %ld sector jitter nbytes\n",jitter,
-	   bytes); */
-    
-    lseek(d->cdda_fd,begin+bytes_so_far+jitter,SEEK_SET);
-    rbytes=read(d->cdda_fd,local_buf,bytes);
-    if(rbytes<bytes)
-      memset(local_buf+rbytes,0,bytes-rbytes);
-    bytes_so_far+=bytes;
+    {
+      long bound=2352;
+      long nextbound=begin+bytes_so_far+bound;
+      nextbound=nextbound-(nextbound%bound)+12;
+      
+      if(begin+bytes_so_far+bytes>nextbound){
+	bytes=nextbound-begin-bytes_so_far;
+      }
+
+      if(drand48()>.5){
+	lseek(d->cdda_fd,begin+bytes_so_far+jitter-8,SEEK_SET);
+      }else{
+	lseek(d->cdda_fd,begin+bytes_so_far+jitter+8,SEEK_SET);
+      }
+      rbytes=read(d->cdda_fd,local_buf,bytes);
+      
+      bytes_so_far+=rbytes;
+    }
   }
-
   return(sectors);
 
 }

@@ -51,9 +51,7 @@
 
 #include "cdda_interface.h"
 
-#define MAX_RETRIES 32 /* There's a *reason* for this value.  Don't
-			  change it randomly without looking at what
-			  it's used for */
+#define MAX_RETRIES 32
 #define MAX_BIG_BUFF_SIZE 65536
 #define MIN_BIG_BUFF_SIZE 4096
 #define SG_OFF sizeof(struct sg_header)

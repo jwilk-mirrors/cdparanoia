@@ -526,7 +526,9 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 
   sigemptyset (&(d->sigset));
   sigaddset (&(d->sigset), SIGINT);
+  sigaddset (&(d->sigset), SIGTERM);
   sigaddset (&(d->sigset), SIGPIPE);
+  sigaddset (&(d->sigset), SIGPROF);
 
   /* malloc our big buffer for scsi commands */
   d->sg=malloc(MAX_BIG_BUFF_SIZE);
@@ -538,11 +540,6 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   d->interface=GENERIC_SCSI;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
-  {  /* our scsi layer doesn't want to block on read; 
-	we use select() to block */
-    int n = fcntl(g_fd, F_GETFL);
-    fcntl(g_fd, F_SETFL, n|O_NONBLOCK);
-  }
 
   {
     /* get the lun */

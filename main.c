@@ -35,6 +35,11 @@
  *                       cosmetic fixes
  *                       segfault fixes
  *                       new sync/silence code, smaller fft      
+ *   15.07.98 - alpha 8: More new SCSI code, better error recovery
+ *                       more segfault fixes (two linux bugs, one my fault)
+ *                       Fixup reporting fixes, smilie fixes.
+ *                       AIFF support (in addition to AIFC)
+ *                       Path parsing fixes
  */
 
 #include <stdio.h>
@@ -184,7 +189,7 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
 
 static void display_toc(cdrom_drive *d){
   int i;
-  report("Table of contents (audio tracks only):\n"
+  report("\nTable of contents (audio tracks only):\n"
 	 "track        length               begin        copy pre ch\n"
 	 "===========================================================");
   
@@ -229,8 +234,9 @@ VERSION"\n"
 "                                    order\n"
 "  -r --output-raw-little-endian   : output raw 16 bit little-endian PCM\n"
 "  -R --output-raw-big-endian      : output raw 16 bit big-endian PCM\n"
-"  -w --output-wav                 : output as wav file (default)\n"
-"  -a --output-aifc                : output as aifc file\n"
+"  -w --output-wav                 : output as WAV file (default)\n"
+"  -f --output-aiff                : output as AIFF file\n"
+"  -a --output-aifc                : output as AIFF-C file\n"
 "  -i --output-info <file>         : output human readable ripping info to\n"
 "                                    file\n\n"
 
@@ -245,8 +251,7 @@ VERSION"\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
 "  -Y --disable-extra-paranoia     : only do cdda2wav-style overlap checking\n"
 "  -X --disable-scratch-detection  : do not look for scratches\n"
-"  -W --disable-scratch-repair     : disable scratch repair (still detect)\n"
-"  -F --disable-fragmentation      : disable fragmentation of read at rifts\n\n"
+"  -W --disable-scratch-repair     : disable scratch repair (still detect)\n\n"
 
 "The span argument may be a simple track number or a offset/span\n"
 "specification.  The syntax of an offset/span takes the rough form:\n\n"
@@ -343,6 +348,11 @@ static void callback(long sector, int function){
       if(position<graph && position>=0)
 	switch(function){
 	case PARANOIA_CB_VERIFY:
+	  if(stimeout>=30)
+	    if(overlap>CD_FRAMEWORDS)
+	      slevel=2;
+	    else
+	      slevel=1;
 	  break;
 	case PARANOIA_CB_READ:
 	  if(sector>c_sector)c_sector=sector;
@@ -362,6 +372,11 @@ static void callback(long sector, int function){
 	  if(dispcache[position]==' ' ||
 	     dispcache[position]=='-')
 	    dispcache[position]='+';
+	  break;
+	case PARANOIA_CB_READERR:
+	  slevel=8;
+	  if(dispcache[position]!='V')
+	    dispcache[position]='e';
 	  break;
 	case PARANOIA_CB_SKIP:
 	  slevel=8;
@@ -476,7 +491,7 @@ static void callback(long sector, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "scCn:d:g:prRwavqVQhZYXWBFi:";
+const char *optstring = "scCn:d:g:prRwafvqVQhZYXWBi:";
 
 struct option options [] = {
 	{"search-for-drive",no_argument,NULL,'s'},
@@ -489,6 +504,7 @@ struct option options [] = {
 	{"output-raw-little-endian",no_argument,NULL,'r'},
 	{"output-raw-big-endian",no_argument,NULL,'R'},
 	{"output-wav",no_argument,NULL,'w'},
+	{"output-aiff",no_argument,NULL,'f'},
 	{"output-aifc",no_argument,NULL,'a'},
 	{"batch",no_argument,NULL,'B'},
 	{"verbose",no_argument,NULL,'v'},
@@ -587,6 +603,10 @@ int main(int argc,char *argv[]){
       break;
     case 'a':
       output_type=2;
+      output_endian=1;
+      break;
+    case 'f':
+      output_type=3;
       output_endian=1;
       break;
     case 'v':
@@ -847,7 +867,7 @@ int main(int argc,char *argv[]){
       if(verbose)
 	cdda_verbose_set(d,CDDA_MESSAGE_LOGIT,CDDA_MESSAGE_LOGIT);
       else
-	cdda_verbose_set(d,CDDA_MESSAGE_LOGIT,CDDA_MESSAGE_FORGETIT);
+	cdda_verbose_set(d,CDDA_MESSAGE_FORGETIT,CDDA_MESSAGE_FORGETIT);
       
       paranoia_seek(p,cursor=first_sector,SEEK_SET);      
 
@@ -881,23 +901,38 @@ int main(int argc,char *argv[]){
 	    report("outputting to stdout\n");
 	  }else{
 	    char buffer[256];
+	    char path[256];
 
-	    if(batch){
-	      char path[128];
-	      char file[128];
-	      
-	      char *post=strrchr(argv[optind+1],'/');
-	      int pos=(post?post-argv[optind+1]:0);
-	      
-	      path[0]='\0';
-	      file[0]='\0';
-	      if(pos && pos<100)
-		strncat(path,argv[optind+1],pos);
-	      strncat(file,argv[optind+1]+pos,100);
-	      
-	      sprintf(buffer,"%strack%02d.%s",path,batch_track,file);
-	    }else
-	      sprintf(buffer,"%s",argv[optind+1]);
+	    char *post=strrchr(argv[optind+1],'/');
+	    int pos=(post?post-argv[optind+1]+1:0);
+	    char *file=argv[optind+1]+pos;
+	    
+	    path[0]='\0';
+
+	    if(pos)
+	      strncat(path,argv[optind+1],pos>256?256:pos);
+
+	    if(batch)
+	      snprintf(buffer,246,"%strack%02d.%s",path,batch_track,file);
+	    else
+	      snprintf(buffer,246,"%s%s",path,file);
+
+	    if(file[0]=='\0'){
+	      switch(output_type){
+	      case 0: /* raw */
+		strcat(buffer,"cdda.raw");
+		break;
+	      case 1:
+		strcat(buffer,"cdda.wav");
+		break;
+	      case 2:
+		strcat(buffer,"cdda.aifc");
+		break;
+	      case 3:
+		strcat(buffer,"cdda.aiff");
+		break;
+	      }
+	    }
 	    
 	    out=open(buffer,O_RDWR|O_CREAT|O_TRUNC,0660);
 	    if(out==-1){
@@ -911,7 +946,7 @@ int main(int argc,char *argv[]){
 	  }
 	}else{
 	  /* default */
-	  char buffer[32];
+	  char buffer[80];
 	  if(batch)
 	    sprintf(buffer,"track%02d.",batch_track);
 	  else
@@ -926,6 +961,9 @@ int main(int argc,char *argv[]){
 	    break;
 	  case 2:
 	    strcat(buffer,"cdda.aifc");
+	    break;
+	  case 3:
+	    strcat(buffer,"cdda.aiff");
 	    break;
 	  }
 	  
@@ -948,6 +986,9 @@ int main(int argc,char *argv[]){
 	  break;
 	case 2: /* aifc */
 	  WriteAifc(out,(batch_last-batch_first+1)*CD_FRAMESIZE_RAW);
+	  break;
+	case 3: /* aiff */
+	  WriteAiff(out,(batch_last-batch_first+1)*CD_FRAMESIZE_RAW);
 	  break;
 	}
 	

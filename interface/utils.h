@@ -82,7 +82,8 @@ static inline size16 cpu_to_le16(size16 x){
 
 static inline char *copystring(const char *s){
   if(s){
-    char *ret=malloc((strlen(s)+1)*sizeof(char));
+    char *ret=malloc((strlen(s)+9)*sizeof(char)); /* +9 to get around a linux
+						     libc 5 bug. below too */
     strcpy(ret,s);
     return(ret);
   }
@@ -92,9 +93,9 @@ static inline char *copystring(const char *s){
 static inline char *catstring(char *buff,const char *s){
   if(s){
     if(buff)
-      buff=realloc(buff,strlen(buff)+strlen(s)+1);
+      buff=realloc(buff,strlen(buff)+strlen(s)+9);
     else
-      buff=calloc(strlen(s)+1,1);
+      buff=calloc(strlen(s)+9,1);
     strcat(buff,s);
   }
   return(buff);
@@ -141,7 +142,7 @@ static void idperror(int messagedest,char **messages,const char *f,
     if(!s)
       buffer=(char *)f;
     else{
-      buffer=malloc(strlen(f)+strlen(s)+1);
+      buffer=malloc(strlen(f)+strlen(s)+9);
       sprintf(buffer,f,s);
       malloced=1;
     }
@@ -184,7 +185,7 @@ static void idmessage(int messagedest,char **messages,const char *f,
     if(!s)
       buffer=(char *)f;
     else{
-      buffer=malloc(strlen(f)+strlen(s)+2);
+      buffer=malloc(strlen(f)+strlen(s)+10);
       sprintf(buffer,f,s);
       strcat(buffer,"\n");
       malloced=1;

@@ -28,16 +28,23 @@ int ioctl_ping_cdrom(int fd){
 
 /* Use the ioctl thingy above ping the cdrom; this will get model info */
 char *atapi_drive_info(int fd){
-  static struct hd_driveid id;
+  /* Work around the fact that the struct grew without warning in
+     2.1/2.0.34 */
+  
+  struct hd_driveid *id=malloc(512); /* the size in 2.0.34 */
+  char *ret;
 
-  if (!(ioctl(fd, HDIO_GET_IDENTITY, &id))) {
+  if (!(ioctl(fd, HDIO_GET_IDENTITY, id))) {
 
-    if(id.model==0 || id.model[0]==0)
-      return(copystring("Generic Unidentifiable ATAPI CDROM"));
+    if(id->model==0 || id->model[0]==0)
+      ret=copystring("Generic Unidentifiable ATAPI CDROM");
     else
-      return(copystring(id.model));
-  }
-  return(copystring("Generic Unidentifiable CDROM"));
+      ret=copystring(id->model);
+  }else
+    ret=copystring("Generic Unidentifiable CDROM");
+
+  free(id);
+  return(ret);
 }
 
 int data_bigendianp(cdrom_drive *d){

@@ -77,6 +77,7 @@ typedef struct cdrom_drive{
   long (*read_audio)   (struct cdrom_drive *d, void *p, long begin, 
 		       long sectors);
   int error_retry;
+  int report_all;
 
   int is_atapi;
   int is_mmc;
@@ -139,6 +140,34 @@ extern int cdda_track_preemp(cdrom_drive *d,int track);
 extern long cdda_disc_firstsector(cdrom_drive *d);
 extern long cdda_disc_lastsector(cdrom_drive *d);
 
+/* transport errors: */
+
+#define TR_OK            0
+#define TR_EWRITE        1  /* Error writing packet command (transport) */
+#define TR_EREAD         2  /* Error reading packet data (transport) */
+#define TR_UNDERRUN      3  /* Read underrun */
+#define TR_OVERRUN       4  /* Read overrun */
+#define TR_ILLEGAL       5  /* Illegal/rejected request */
+#define TR_MEDIUM        6  /* Medium error */
+#define TR_BUSY          7  /* Device busy */
+#define TR_NOTREADY      8  /* Device not ready */
+#define TR_FAULT         9  /* Devive failure */
+#define TR_UNKNOWN      10  /* Unknown error */
+
+static char *strerror_tr[]={
+  "Success",
+  "Error writing packet command to device",
+  "Error reading command from device",
+  "SCSI packet data underrun (too little data)",
+  "SCSI packet data overrun (too much data)",
+  "Illegal SCSI request (rejected by target)",
+  "Medium reading data from medium",
+  "Device busy",
+  "Device not ready",
+  "Target hardware fault",
+  "Unidentifiable error"
+};
+
 /* Errors returned by lib: 
 
 001: Unable to set CDROM to read audio mode
@@ -150,7 +179,7 @@ extern long cdda_disc_lastsector(cdrom_drive *d);
 007: Unknown, unrecoverable error reading data
 008: Unable to identify CDROM model
 009: CDROM reporting illegal table of contents
-010: Unrecoverable system error reading data
+010: Unaddressable sector 
 
 100: Interface not supported
 101: Drive is neither a CDROM nor a WORM device

@@ -90,33 +90,26 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
 	  return(-300);  
 	}
       default:
-      case EIO:
-      case EINVAL:
 	if(sectors==1){
-	  if(errno==EIO){
-	    /* *Could* be I/O or media error.  I think.  If we're at
-	       30 retries, we better skip this unhappy little
-	       sector. */
-	    if(retry_count==MAX_RETRIES-1){
-	      /* OK, skip.  We need to make the scratch code pick
-		 up the blank sector tho. */
-	      char b[256];
-	      sprintf(b,"Unable to find sector %ld: skipping...\n",
-		      begin);
-	      cdmessage(d,b);
-	      memset(arg.buf,-1,CD_FRAMESIZE_RAW);
-	      err=0;
-	    }
-	    break;
+	    
+
+	  /* *Could* be I/O or media error.  I think.  If we're at
+	     30 retries, we better skip this unhappy little
+	     sector. */
+	  if(retry_count>MAX_RETRIES-1){
+	    char b[256];
+	    sprintf(b,"010: Unable to access sector %ld: skipping...\n",
+		    begin);
+	    cderror(d,b);
+	    return(-10);
+	    
 	  }
-	  /* OK, ok, bail. */
-	  cderror(d,"007: Unknown, unrecoverable error reading data\n");
-	  return(-7);
+	  break;
 	}
       }
       if(retry_count>4)
 	if(sectors>1)
-	  sectors>>=1;
+	  sectors=sectors*3/4;
       retry_count++;
       if(retry_count>MAX_RETRIES){
 	cderror(d,"007: Unknown, unrecoverable error reading data\n");

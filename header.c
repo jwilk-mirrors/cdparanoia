@@ -49,6 +49,30 @@ void WriteWav(int f,long bytes){
   PutNum(bytes,f,0,4);             /* 40-43 */
 }
 
+void WriteAiff(int f,long bytes){
+  long size=bytes+54;
+  long frames=bytes/4;
+
+  /* Again, quick and dirty */
+
+  write(f,"FORM",4);             /*  4 */
+  PutNum(size-8,f,1,4);          /*  8 */
+  write(f,"AIFF",4);             /* 12 */
+
+  write(f,"COMM",4);             /* 16 */
+  PutNum(38,f,1,4);              /* 20 */
+  PutNum(2,f,1,2);               /* 22 */
+  PutNum(frames,f,1,4);          /* 26 */    
+  PutNum(16,f,1,2);              /* 28 */
+  write(f,"@\016\254D\0\0\0\0\0\0",10); /* 38 (44.100 as a float) */
+
+  write(f,"SSND",4);             /* 42 */
+  PutNum(bytes+8,f,1,4);         /* 46 */
+  PutNum(0,f,1,4);               /* 50 */
+  PutNum(0,f,1,4);               /* 54 */
+
+}
+
 void WriteAifc(int f,long bytes){
   long size=bytes+86;
   long frames=bytes/4;

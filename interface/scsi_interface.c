@@ -1,3 +1,7 @@
+/* MMC-2 drives have 0x52 which they are required to support... get
+the track length from here. ATAPI should be MMC-2 style.  Older SCSI,
+use SubQ? */
+
 /******************************************************************
  * CopyPolicy: GNU Public License 2 applies
  * Original interface.c Copyright (C) 1994-1997 
@@ -54,20 +58,20 @@ static void find_bloody_big_buff_size(cdrom_drive *d){
 
 }
 
-/* process a complete scsi command. */
-static int handle_scsi_cmd(cdrom_drive *d,
-			   unsigned int cmd_len, 
-			   unsigned int in_size, 
-			   unsigned int out_size,
-			   unsigned char bytefill,
-			   int bytecheck){
-  int status = 0;
-  struct sg_header *sg_hd=(struct sg_header *)d->sg;
-  long writebytes=SG_OFF+cmd_len+in_size;
+static void reset_scsi(cdrom_drive *d){
+
+  /* really ought to close the fd and reopen */
+
+  d->enable_cdda(d,0);
+  d->enable_cdda(d,1);
+
+}
+
+static void clear_garbage(cdrom_drive *d){
   fd_set fdset;
   struct timeval tv;
-
-  /* generic scsi device services */
+  struct sg_header *sg_hd=(struct sg_header *)d->sg;
+  int flag=0;
 
   /* clear out any possibly preexisting garbage */
   FD_ZERO(&fdset);
@@ -81,64 +85,99 @@ static int handle_scsi_cmd(cdrom_drive *d,
     sg_hd->twelve_byte = 0;
     sg_hd->result = 0;
     sg_hd->reply_len = SG_OFF;
-    read(d->cdda_fd, sg_hd, SG_OFF);
+    read(d->cdda_fd, sg_hd, 1);
 
     /* reset for select */
     FD_ZERO(&fdset);
     FD_SET(d->cdda_fd,&fdset);
     tv.tv_sec=0;
     tv.tv_usec=0;
-
+    if(!flag && d->report_all)
+      cdmessage(d,"Clearing previously returned data from SCSI buffer\n");
+    flag=1;
   }
+}
+
+/* process a complete scsi command. */
+static int handle_scsi_cmd(cdrom_drive *d,
+			   unsigned int cmd_len, 
+			   unsigned int in_size, 
+			   unsigned int out_size,
+			   unsigned char bytefill,
+			   int bytecheck){
+  int status = 0;
+  struct sg_header *sg_hd=(struct sg_header *)d->sg;
+  long writebytes=SG_OFF+cmd_len+in_size;
+
+  /* generic scsi device services */
+
+  /* clear out any possibly preexisting garbage */
+  clear_garbage(d);
 
   sg_hd->twelve_byte = cmd_len == 12;
   sg_hd->result = 0;
   sg_hd->reply_len = SG_OFF + out_size;
 
+  /* hack to see when packets die/ get truncated */
   if(bytecheck && out_size>in_size){
-    memset(d->sg_buffer+cmd_len+in_size,bytefill,out_size-in_size);
+    memset(d->sg_buffer+cmd_len+in_size,bytefill,out_size-in_size); 
+    /* the size does not remove cmd_len due to the way the kernel
+       driver copies buffers */
     writebytes+=(out_size-in_size);
   }
 
   sigprocmask (SIG_BLOCK, &(d->sigset), NULL );
   errno=0;
   status = write(d->cdda_fd, sg_hd, writebytes );
+
   if (status<0 || status != writebytes ) {
     sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
-    return(1);
+    if(errno==0)errno=EIO;
+    return(TR_EWRITE);
   }
   
-  /* I *really* like select. */
-  /* we don't want to block on read because the sg.c driver gets
-     itself into odd states where read blocks forever (our fd is set
-     to O_NONBLOCK).  Nor do we want to alarm.  Thus, select. */
-
-  errno=4;
-
-  while(errno==4){
-
-    FD_ZERO(&fdset);
-    FD_SET(d->cdda_fd,&fdset);
-    tv.tv_sec=10;
-    tv.tv_usec=0;
-    errno=0;
-
-    if(select(d->cdda_fd+1,&fdset,NULL,NULL,&tv)!=1){
-      /* D'oh! */
-      if(errno!=4)return(1);
-    }
-  }
-
   errno=0;
   status = read(d->cdda_fd, sg_hd, SG_OFF + out_size);
   sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
 
-  if (status<0 || status != SG_OFF + out_size || sg_hd->result){
-    return(1);
+  if (status<0)return(TR_EREAD);
+
+  if(status != SG_OFF + out_size || sg_hd->result){
+    errno=EIO;
+    return(TR_EREAD);
+  }
+
+  if(sg_hd->sense_buffer[0]){
+    switch(sg_hd->sense_buffer[2]&0xf){
+    case 0:
+      errno=EIO;
+      return(TR_UNKNOWN);
+    case 1:
+      break;
+    case 2:
+      errno=EBUSY;
+      return(TR_BUSY);
+    case 3:
+      errno=EIO;
+      return(TR_MEDIUM);
+    case 4:
+      errno=EIO;
+      return(TR_FAULT);
+    case 5:
+      errno=EINVAL;
+      return(TR_ILLEGAL);
+    default:
+      errno=EIO;
+      return(TR_UNKNOWN);
+    }
   }
 
   /* still not foolproof; the following doesn't guarantee that we got
      all the data, just that the command was not rejected. */
+
+  /* Why do this with the above sense stuff?  For some reason,
+     commands still get through.  Perhaps no data comes back even
+     though the target reports success? */
 
   if(bytecheck && in_size+cmd_len<out_size){
     long i,flag=0;
@@ -149,15 +188,13 @@ static int handle_scsi_cmd(cdrom_drive *d,
       }
     
     if(!flag){
-      return(1);
+      errno=EINVAL;
+      return(TR_ILLEGAL);
     }
   }
 
-  /* Look if we got what we expected to get */
-  if (status == SG_OFF + out_size) 
-    return(0);
-  else
-    return(status);
+  errno=0;
+  return(0);
 }
 
 /* Group 1 (10b) command */
@@ -532,7 +569,13 @@ static int i_read_sony (cdrom_drive *d, void *p, long begin, long sectors){
 }
 
 static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors){
-  memcpy(d->sg_buffer,(char []){0xbe, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
+
+  /*  if(begin<=12007 && begin+sectors>12000){
+    errno=EIO;
+    return(TR_ILLEGAL);
+  }*/
+
+  memcpy(d->sg_buffer,(char []){0xbe, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0},12);
 
   d->sg_buffer[3] = (begin >> 16) & 0xFF;
   d->sg_buffer[4] = (begin >> 8) & 0xFF;
@@ -557,6 +600,19 @@ static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors){
   return(0);
 }
 
+static int i_read_mmc3 (cdrom_drive *d, void *p, long begin, long sectors){
+  memcpy(d->sg_buffer,(char []){0xbe, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
+
+  d->sg_buffer[3] = (begin >> 16) & 0xFF;
+  d->sg_buffer[4] = (begin >> 8) & 0xFF;
+  d->sg_buffer[5] = begin & 0xFF;
+  d->sg_buffer[8] = sectors;
+  if(handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1))
+    return(1);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
 static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 			  int (*map)(cdrom_drive *, void *, long, long)){
   int retry_count,err;
@@ -570,6 +626,17 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
   
   while(1) {
     if((err=map(d,(p?buffer:NULL),begin,sectors))){
+      if(d->report_all){
+	char b[256];
+	sprintf(b,"scsi_read error: sector=%ld length=%ld retry=%d\n",
+		begin,sectors,retry_count);
+	cdmessage(d,b);
+	sprintf(b,"                 Transport error: %s\n",strerror_tr[err]);
+	cdmessage(d,b);
+	sprintf(b,"                 System error: %s\n",strerror(errno));
+	cdmessage(d,b);
+      }
+
       if(!d->error_retry)return(-7);
       switch(errno){
       case EINTR:
@@ -586,45 +653,30 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	    return(-300);  
 	  }
 	}
-      case EIO:
-      case EINVAL:
       default:
 	if(sectors==1){
-	  if(errno==EIO){
+	  if(errno==EIO)
 	    if(d->fua==-1) /* testing for FUA support */
 	      return(-7);
-	    /* *Could* be I/O or media error.  I think.  If we're at
-	       30 retries, we better skip this unhappy little
-	       sector. */
-	    if(retry_count==MAX_RETRIES-1){
-	      /* OK, skip.  We need to make the scratch code pick
-		 up the blank sector tho. */
-	      char b[256];
-	      sprintf(b,"Unable to find sector %ld: skipping...\n",
-		      begin);
-	      cdmessage(d,b);
-	      memset(buffer,-1,CD_FRAMESIZE_RAW);
-	      err=0;
-	    }
-	    break;
-	  }
-
-	  /* OK, ok, bail. */
-	  {
+	  
+	  /* *Could* be I/O or media error.  I think.  If we're at
+	     30 retries, we better skip this unhappy little
+	     sector. */
+	  if(retry_count>MAX_RETRIES-1){
 	    char b[256];
-	    snprintf(b,256,"010: Unrecoverable system error reading data: "
-		     "%d (%s)\n",errno,strerror(errno));
+	    sprintf(b,"010: Unable to access sector %ld\n",
+		    begin);
 	    cderror(d,b);
-
-	  return(-7);
+	    return(-10);
+	    
 	  }
+	  break;
 	}
-	
+
 	/* Hmm.  OK, this is just a tad silly.  just in case this was
            a timeout and a reset happened, we need to set the drive
            back to cdda */
-	d->enable_cdda(d,0);
-	d->enable_cdda(d,1);
+	reset_scsi(d);
       }
     }else{
 
@@ -637,15 +689,24 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	    break;
 
 	i/=CD_FRAMESIZE_RAW;
-	if(i!=sectors)
-	  d->enable_cdda(d,1);
+	if(i!=sectors){
+	  if(d->report_all){
+	    char b[256];
+	    sprintf(b,"scsi_read underrun: pos=%ld len=%ld read=%ld retry=%d\n",
+		    begin,sectors,i,retry_count);
+	    
+	    cdmessage(d,b);
+	  }
+	  reset_scsi(d);
+	}
+	
 	if(i>0)return(i);
       }else
 	break;
     }
-
+    
     if(retry_count>4)
-      if(sectors>1)sectors>>=1;
+      if(sectors>1)sectors=sectors*3/4;
     retry_count++;
     if(retry_count>MAX_RETRIES){
       cderror(d,"007: Unknown, unrecoverable error reading data\n");
@@ -686,6 +747,11 @@ long scsi_read_mmc (cdrom_drive *d, void *p, long begin,
 long scsi_read_mmc2 (cdrom_drive *d, void *p, long begin, 
 			       long sectors){
   return(scsi_read_map(d,p,begin,sectors,i_read_mmc2));
+}
+
+long scsi_read_mmc3 (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_mmc3));
 }
 
 /* Some drives, given an audio read command, return only 2048 bytes
@@ -786,13 +852,17 @@ static int verify_read_command(cdrom_drive *d){
 	break;
       case 3:
 	d->read_audio=scsi_read_mmc2;
-	rs="be+f";
+	rs="bef8";
 	break;
       case 4:
+	d->read_audio=scsi_read_mmc3;
+	rs="be+4";
+	break;
+      case 5:
 	d->read_audio=scsi_read_nec;
 	rs="0xd4";
 	break;
-      case 5:
+      case 6:
 	d->read_audio=scsi_read_sony;
 	rs="0xd8";
 	j=-2;
@@ -881,6 +951,7 @@ static void check_fua_bit(cdrom_drive *d){
 
   if(d->read_audio==scsi_read_mmc)return;
   if(d->read_audio==scsi_read_mmc2)return;
+  if(d->read_audio==scsi_read_mmc3)return;
 
   cdmessage(d,"This command set may use a Force Unit Access bit.");
   cdmessage(d,"\nChecking drive for FUA bit support...\n");
@@ -909,7 +980,6 @@ static void check_fua_bit(cdrom_drive *d){
 }
 
 static int guess_atapi(cdrom_drive *d,int reportp){
-
   /* Use an Inquiry request to guess drive type. */
   
   /* the fields in byte 3 of the response serve different purposes in
@@ -1121,10 +1191,7 @@ int scsi_init_drive(cdrom_drive *d){
   check_atapi(d);
   check_mmc(d);
 
-  /* set the correct command set for *different* vendor specific
-   * implementations. Was this really necessary, folks?  */
-
-  /* generic Sony type defaults */
+  /* generic Sony type defaults; specialize from here */
   d->density = 0x0;
   d->enable_cdda = Dummy;
   d->read_audio = scsi_read_sony;
@@ -1186,6 +1253,6 @@ int scsi_init_drive(cdrom_drive *d){
   if(d->nsectors<1)find_bloody_big_buff_size(d);
   d->sg=realloc(d->sg,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF + 128);
   d->sg_buffer=d->sg+SG_OFF;
- 
+  d->report_all=1;
   return(0);
 }

@@ -7,3 +7,4 @@
 
 extern void WriteWav(int f,long bytes);
 extern void WriteAifc(int f,long bytes);
+extern void WriteAiff(int f,long bytes);
