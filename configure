@@ -834,7 +834,7 @@ else
 	case $host in 
 	i?86-*-linux*)
 		DEBUG="-g -Wall -fsigned-char"
-		OPT="-O20 -ffast-math -fsigned-char -fomit-frame-pointer -finline-functions";;
+		OPT="-O20 -ffast-math -fsigned-char -finline-functions";;
 	*)
 		DEBUG="-g -Wall -fsigned-char"
 		OPT="-O20 -fsigned-char";;

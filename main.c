@@ -40,6 +40,7 @@
  *                       Fixup reporting fixes, smilie fixes.
  *                       AIFF support (in addition to AIFC)
  *                       Path parsing fixes
+ *   Changes are becoming TNTC. Will resume the log at beta.
  */
 
 #include <stdio.h>
@@ -223,6 +224,8 @@ VERSION"\n"
 "OPTIONS:\n"
 "  -v --verbose                    : extra verbose operation\n"
 "  -q --quiet                      : quiet operation\n"
+"  -e --stderr-progress            : force output of progress information to\n"
+"                                    stderr (for wrapper scripts)\n"
 "  -V --version                    : print version info and quit\n"
 "  -Q --query                      : autosense drive, query disc and quit\n"
 "  -B --batch                      : 'batch' mode (saves each track to a\n"
@@ -253,6 +256,25 @@ VERSION"\n"
 "  -X --disable-scratch-detection  : do not look for scratches\n"
 "  -W --disable-scratch-repair     : disable scratch repair (still detect)\n\n"
 
+"OUTPUT SMILIES:\n"
+"  :-)   Normal operation, low/no jitter\n"
+"  :-|   Normal operation, considerable jitter\n"
+"  :-/   Read drift\n"
+"  :-P   Unreported loss of streaming in atomic read operation\n"
+"  8-|   Finding read problems at same point during reread; hard to correct\n"
+"  :-0   SCSI/ATAPI transport error\n"
+"  :-(   Scratch detected\n"
+"  ;-(   Gave up trying to perform a correction\n"
+"  :^D   Finished extracting\n\n"
+
+"PROGRESS BAR SYMBOLS:\n"
+"<space> No corrections needed\n"
+"   -    Jitter correction required\n"
+"   +    Unreported loss of streaming/other error in read\n"
+"   e    SCSI/ATAPI transport error (corrected)\n"
+"   V    Uncorrected error/skip\n\n"
+
+"SPAN ARGUMENT:\n"
 "The span argument may be a simple track number or a offset/span\n"
 "specification.  The syntax of an offset/span takes the rough form:\n\n"
   
@@ -286,14 +308,38 @@ VERSION"\n"
 
 "Don't forget to protect square brackets and preceeding hyphens from\n"
 "the shell...\n\n"
+"A few examples, protected from the shell:\n"
+"  A) query only with exhaustive search for a drive and full reporting\n"
+"     of autosense:\n"
+"       cdparanoia -vsQ\n\n"
+"  B) extract an entire disc, putting each track in a seperate file:\n"
+"       cdparanoia -B \"1-\"\n\n"
+"  C) extract from track 1, time 0:30.12 to 1:10.00:\n"
+"       cdparanoia \"1[:30.12]1-[1:10]\"\n\n"
 
-"Bug reports should go to xiphmont@mit.edu\n\n");
+"Submit bug reports to xiphmont@mit.edu\n\n");
 }
 
 long callbegin;
 long callend;
+long callscript=0;
 
-static void callback(long sector, int function){
+static char *callback_strings[14]={"finished",
+				   "read",
+				   "verify",
+				   "jitter",
+				   "correction",
+				   "scratch",
+				   "scratch repair",
+				   "skip",
+				   "drift",
+				   "backoff",
+				   "overlap",
+				   "dropped",
+				   "duped",
+				   "transport error"};
+
+static void callback(long inpos, int function){
   /*
 
  (== PROGRESS == [--+:---x-------------->           | 007218 01 ] == :-) . ==) 
@@ -306,7 +352,7 @@ static void callback(long sector, int function){
   static char dispcache[30]="                              ";
   static int last=0;
   static long lasttime=0;
-  long osector=0;
+  long sector,osector=0;
   struct timeval thistime;
   static char heartbeat=' ';
   int position=0,aheadposition=0;
@@ -318,118 +364,123 @@ static void callback(long sector, int function){
   static int stimeout=0;
   char *smilie="= :-)";
   
-  osector=sector;
-  sector/=CD_FRAMESIZE_RAW/2;
+  if(callscript)
+    fprintf(stderr,"##: %d [%s] @ %ld\n",
+	    function,(function>=-1&&function<=13?callback_strings[function+1]:
+		      ""),inpos);
 
-  if(printit==-1)
-    if(isatty(STDERR_FILENO))
-      printit=1;
-    else
+  if(!quiet){
+    long test;
+    osector=inpos;
+    sector=inpos/CD_FRAMEWORDS;
+    
+    if(printit==-1)
+      if(isatty(STDERR_FILENO))
+	printit=1;
+      else
       printit=0;
-
-  if(printit==1){  /* else don't bother; it's probably being 
-				 redirected */
-    position=((float)(sector-callbegin)/
-	      (callend-callbegin))*graph;
     
-    aheadposition=((float)(c_sector-callbegin)/
-		   (callend-callbegin))*graph;
+    if(printit==1){  /* else don't bother; it's probably being 
+			redirected */
+      position=((float)(sector-callbegin)/
+		(callend-callbegin))*graph;
+      
+      aheadposition=((float)(c_sector-callbegin)/
+		     (callend-callbegin))*graph;
+      
+      if(function==-2){
+	v_sector=sector;
+	return;
+      }
+      if(function==-1){
+	last=8;
+	heartbeat='*';
+	slevel=0;
+	v_sector=sector;
+      }else
+	if(position<graph && position>=0)
+	  switch(function){
+	  case PARANOIA_CB_VERIFY:
+	    if(stimeout>=30)
+	      if(overlap>CD_FRAMEWORDS)
+		slevel=2;
+	      else
+		slevel=1;
+	    break;
+	  case PARANOIA_CB_READ:
+	    if(sector>c_sector)c_sector=sector;
+	    break;
+	    
+	  case PARANOIA_CB_FIXUP_EDGE:
+	    if(stimeout>=5)
+	      if(overlap>CD_FRAMEWORDS)
+		slevel=2;
+	      else
+		slevel=1;
+	    if(dispcache[position]==' ') 
+	      dispcache[position]='-';
+	    break;
+	  case PARANOIA_CB_FIXUP_ATOM:
+	    if(slevel<3 || stimeout>5)slevel=3;
+	    if(dispcache[position]==' ' ||
+	       dispcache[position]=='-')
+	      dispcache[position]='+';
+	    break;
+	  case PARANOIA_CB_READERR:
+	    slevel=6;
+	    if(dispcache[position]!='V')
+	      dispcache[position]='e';
+	    break;
+	  case PARANOIA_CB_SKIP:
+	    slevel=8;
+	    dispcache[position]='V';
+	    break;
+	  case PARANOIA_CB_OVERLAP:
+	    overlap=osector;
+	    break;
+	  case PARANOIA_CB_SCRATCH:
+	    slevel=7;
+	    break;
+	  case PARANOIA_CB_DRIFT:
+	    if(slevel<4 || stimeout>5)slevel=4;
+	    break;
+	  case PARANOIA_CB_FIXUP_DROPPED:
+	  case PARANOIA_CB_FIXUP_DUPED:
+	    slevel=5;
+	    break;
+	  }
     
-    if(function==-2){
-      v_sector=sector;
-      return;
-    }
-    if(function==-1){
-      last=8;
-      heartbeat='*';
-      slevel=0;
-      v_sector=sector;
-    }else
-      if(position<graph && position>=0)
-	switch(function){
-	case PARANOIA_CB_VERIFY:
-	  if(stimeout>=30)
-	    if(overlap>CD_FRAMEWORDS)
-	      slevel=2;
-	    else
-	      slevel=1;
-	  break;
-	case PARANOIA_CB_READ:
-	  if(sector>c_sector)c_sector=sector;
-	  break;
-
-	case PARANOIA_CB_FIXUP_EDGE:
-	  if(stimeout>=5)
-	    if(overlap>CD_FRAMEWORDS)
-	      slevel=2;
-	    else
-	      slevel=1;
-	  if(dispcache[position]==' ') 
-	    dispcache[position]='-';
-	  break;
-	case PARANOIA_CB_FIXUP_ATOM:
-	  if(slevel<4 || stimeout>5)slevel=4;
-	  if(dispcache[position]==' ' ||
-	     dispcache[position]=='-')
-	    dispcache[position]='+';
-	  break;
-	case PARANOIA_CB_READERR:
-	  slevel=6;
-	  if(dispcache[position]!='V')
-	    dispcache[position]='e';
-	  break;
-	case PARANOIA_CB_SKIP:
-	  slevel=8;
-	  dispcache[position]='V';
-	  break;
-	case PARANOIA_CB_OVERLAP:
-	  overlap=osector;
-	  break;
-	case PARANOIA_CB_SCRATCH:
-	  slevel=7;
-	  break;
-	case PARANOIA_CB_DRIFT:
-	  if(slevel<3 || stimeout>5)slevel=3;
-	  break;
-	case PARANOIA_CB_FIXUP_DROPPED:
-	case PARANOIA_CB_FIXUP_DUPED:
-	  slevel=5;
-	  break;
-	}
-    
-    switch(slevel){
-    case 0:  /* finished, or no jitter */
-      smilie=" :^D";
-      break;
-    case 1:  /* normal.  no atom, low jitter */
-      smilie=" :-)";
-      break;
-    case 2:  /* normal, overlap > 1 */
-      smilie=" :-|";
-      break; 
-    case 3:  /* drift */
-      smilie=" :-/";
-      break;
-    case 4:  /* unreported loss of streaming */
-      smilie=" :-P";
-      break;
-    case 5:  /* dropped/duped bytes */
-      smilie=" 8-|";
-      break;
-    case 6:  /* scsi error */
-      smilie=" :-0";
-      break;
-    case 7:  /* scratch */
-      smilie=" :-(";
-      break;
-    case 8:  /* skip */
-      smilie=" ;-(";
-      break;
-
-    }
-    
-    if(!quiet){
-      long test;
+      switch(slevel){
+      case 0:  /* finished, or no jitter */
+	smilie=" :^D";
+	break;
+      case 1:  /* normal.  no atom, low jitter */
+	smilie=" :-)";
+	break;
+      case 2:  /* normal, overlap > 1 */
+	smilie=" :-|";
+	break; 
+      case 4:  /* drift */
+	smilie=" :-/";
+	break;
+      case 3:  /* unreported loss of streaming */
+	smilie=" :-P";
+	break;
+      case 5:  /* dropped/duped bytes */
+	smilie=" 8-|";
+	break;
+      case 6:  /* scsi error */
+	smilie=" :-0";
+	break;
+      case 7:  /* scratch */
+	smilie=" :-(";
+	break;
+      case 8:  /* skip */
+	smilie=" ;-(";
+	break;
+	
+      }
+      
       gettimeofday(&thistime,NULL);
       test=thistime.tv_sec*10+thistime.tv_usec/100000;
 
@@ -488,9 +539,10 @@ static void callback(long sector, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "scCn:d:g:prRwafvqVQhZYXWBi:";
+const char *optstring = "escCn:d:g:prRwafvqVQhZYXWBi:";
 
 struct option options [] = {
+	{"stderr-progress",no_argument,NULL,'e'},
 	{"search-for-drive",no_argument,NULL,'s'},
 	{"force-cdrom-little-endian",no_argument,NULL,'c'},
 	{"force-cdrom-big-endian",no_argument,NULL,'C'},
@@ -616,6 +668,10 @@ int main(int argc,char *argv[]){
     case 'q':
       verbose=CDDA_MESSAGE_FORGETIT;
       quiet=1;
+      break;
+    case 'e':
+      callscript=1;
+      fprintf(stderr,"Sending all callcaks to stderr for wrapper script\n");
       break;
     case 'V':
       fprintf(stderr,VERSION);

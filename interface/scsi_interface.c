@@ -1,8 +1,12 @@
-/* Add 0x02 0x10, 0x08 and 0xd5 as guesses in scanning for a command set */
+/* Add 0x02 0x10, 0x08 as guesses in scanning for a command set */
 
 /* MMC-2 drives have 0x52 which they are required to support... get
 the track length from here. ATAPI should be MMC-2 style.  Older SCSI,
 use SubQ? */
+
+/* Found an Acer 525... perhaps similar to the IMS 522?  The normal
+   readtoc does not work.  Could this also be the same as the Creative
+   52x,62x,82x drives? */
 
 /******************************************************************
  * CopyPolicy: GNU Public License 2 applies
@@ -191,26 +195,42 @@ static int handle_scsi_cmd(cdrom_drive *d,
   }
   
   {
-    /* Select on read with a 5 second timeout.  This is a hack until
-       a better error reporting layer is in place in alpha 10; right
-       now, always print a message. */
+    /* Select on read (and write; this signals an error) with a 5
+       second timeout.  This is a hack until a better error reporting
+       layer is in place in alpha 10; right now, always print a
+       message. */
 
-    fd_set fdset;
+    fd_set rset,wset,eset;
     struct timeval tv;
 
-    FD_ZERO(&fdset);
-    FD_SET(d->cdda_fd,&fdset);
+    FD_ZERO(&rset);
+    FD_ZERO(&wset);
+    FD_ZERO(&eset);
+    FD_SET(d->cdda_fd,&rset);
+    FD_SET(d->cdda_fd,&wset);
+    FD_SET(d->cdda_fd,&eset);
     tv.tv_sec=15;
     tv.tv_usec=0;
 
     while(1){
-      int ret=select(d->cdda_fd+1,&fdset,NULL,NULL,&tv);
-      if(ret>0)break;
+      int ret=select(d->cdda_fd+1,&rset,&wset,&eset,&tv);
       if(ret<0 && errno!=EINTR)break;
       if(ret==0){
 	fprintf(stderr,"\nSCSI transport error: timeout waiting to read"
 		" packet\n\n");
 	return(TR_EREAD);
+      }
+      if(ret>0){
+	/* is it readable or something else? */
+	if(FD_ISSET(d->cdda_fd,&rset))break;
+	if(FD_ISSET(d->cdda_fd,&eset)){
+	  fprintf(stderr,"\nSCSI transport: error reading packet\n\n");
+	  return(TR_EREAD);
+	}
+	if(FD_ISSET(d->cdda_fd,&wset)){
+	  fprintf(stderr,"\nSCSI transport: writeable when reading packet\n\n");
+	  return(TR_EREAD);
+	}
       }
     }
   }
@@ -227,7 +247,10 @@ static int handle_scsi_cmd(cdrom_drive *d,
   }
 
   if(sg_hd->sense_buffer[0]){
-    switch(sg_hd->sense_buffer[2]&0xf){
+    char key=sg_hd->sense_buffer[2]&0xf;
+    char ASC=sg_hd->sense_buffer[12];
+    char ASCQ=sg_hd->sense_buffer[13];
+    switch(key){
     case 0:
       if(errno==0)errno=EIO;
       return(TR_UNKNOWN);
@@ -236,9 +259,15 @@ static int handle_scsi_cmd(cdrom_drive *d,
     case 2:
       if(errno==0)errno=EBUSY;
       return(TR_BUSY);
-    case 3:
-      if(errno==0)errno=EIO;
-      return(TR_MEDIUM);
+    case 3: 
+      if(ASC==0x0C && ASCQ==0x09){
+	/* loss of streaming */
+	if(errno==0)errno=EIO;
+	return(TR_STREAMING);
+      }else{
+	if(errno==0)errno=EIO;
+	return(TR_MEDIUM);
+      }
     case 4:
       if(errno==0)errno=EIO;
       return(TR_FAULT);
@@ -443,7 +472,7 @@ typedef struct scsi_TOC {  /* structure of scsi table of contents (cdrom) */
   unsigned char bFlags;
   unsigned char bTrack;
   unsigned char reserved2;
-  unsigned char start_MSB;
+  signed char start_MSB;
   unsigned char start_1;
   unsigned char start_2;
   unsigned char start_LSB;
@@ -457,7 +486,6 @@ typedef struct scsi_TOC {  /* structure of scsi table of contents (cdrom) */
 static int scsi_read_toc (cdrom_drive *d){
   int i,first,last;
   unsigned tracks;
-  long offset=0;
 
   /* READTOC, MSF format flag, res, res, res, res, Start track, len msb,
      len lsb, flags */
@@ -490,18 +518,15 @@ static int scsi_read_toc (cdrom_drive *d){
       return(-5);
     }
     {
-      long temp;
       scsi_TOC *toc=(scsi_TOC *)(d->sg_buffer+4);
 
       d->disc_toc[i-first].bFlags=toc->bFlags;
       d->disc_toc[i-first].bTrack=i;
-      temp=d->disc_toc[i-first].dwStartSector= d->adjust_ssize * 
-	((toc->start_MSB<<24) + 
-	 (toc->start_1<<16)+
-	 (toc->start_2<<8)+
+      d->disc_toc[i-first].dwStartSector= d->adjust_ssize * 
+	(((int)(toc->start_MSB)<<24) | 
+	 (toc->start_1<<16)|
+	 (toc->start_2<<8)|
 	 (toc->start_LSB));
-      if(d->ignore_toc_offset && i==first)offset=temp;
-      d->disc_toc[i-first].dwStartSector-=offset;
     }
   }
 
@@ -519,10 +544,10 @@ static int scsi_read_toc (cdrom_drive *d){
     d->disc_toc[i-first].bFlags=toc->bFlags;
     d->disc_toc[i-first].bTrack=0xAA;
     d->disc_toc[i-first].dwStartSector= d->adjust_ssize * 
-	((toc->start_MSB<<24) + 
-	 (toc->start_1<<16)+
-	 (toc->start_2<<8)+
-	 (toc->start_LSB))-offset;
+	(((int)(toc->start_MSB)<<24) | 
+	 (toc->start_1<<16)|
+	 (toc->start_2<<8)|
+	 (toc->start_LSB));
   }
 
   d->cd_extra = FixupTOC(d,tracks+1); /* include lead-out */
@@ -530,12 +555,12 @@ static int scsi_read_toc (cdrom_drive *d){
 }
 
 /* a contribution from Boris for IMS cdd 522 */
+/* check this for ACER/Creative/Foo 525,620E,622E, etc? */
 static int scsi_read_toc2 (cdrom_drive *d){
   unsigned size32 foo,bar;
 
   int i;
   unsigned tracks;
-  long offset=0;
 
   memcpy(d->sg_buffer, (char[]){ 0xe5, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 10);
   d->sg_buffer[5]=1;
@@ -554,8 +579,6 @@ static int scsi_read_toc2 (cdrom_drive *d){
   }
 
   for (i = 0; i < tracks; i++){
-    long temp;
- 
     memcpy(d->sg_buffer, (char[]){ 0xe5, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 10);
     d->sg_buffer[5]=i+1;
     d->sg_buffer[8]=255;
@@ -567,10 +590,12 @@ static int scsi_read_toc2 (cdrom_drive *d){
     
     d->disc_toc[i].bFlags = d->sg_buffer[10];
     d->disc_toc[i].bTrack = i + 1;
-    memcpy (&foo, d->sg_buffer+2, 4);
-    temp=d->disc_toc[i].dwStartSector = d->adjust_ssize * be32_to_cpu(foo);
-    if(d->ignore_toc_offset && i==0)offset=temp;
-    d->disc_toc[i].dwStartSector-=offset;
+
+    d->disc_toc[i].dwStartSector= d->adjust_ssize * 
+	(((signed char)(d->sg_buffer[2])<<24) | 
+	 (d->sg_buffer[3]<<16)|
+	 (d->sg_buffer[4]<<8)|
+	 (d->sg_buffer[5]));
   }
 
   d->disc_toc[i].bFlags = 0;
@@ -578,7 +603,19 @@ static int scsi_read_toc2 (cdrom_drive *d){
   memcpy (&foo, d->sg_buffer+2, 4);
   memcpy (&bar, d->sg_buffer+6, 4);
   d->disc_toc[i].dwStartSector = d->adjust_ssize * (be32_to_cpu(foo) +
-						    be32_to_cpu(bar))-offset;
+						    be32_to_cpu(bar));
+
+  d->disc_toc[i].dwStartSector= d->adjust_ssize * 
+    ((((signed char)(d->sg_buffer[2])<<24) | 
+      (d->sg_buffer[3]<<16)|
+      (d->sg_buffer[4]<<8)|
+      (d->sg_buffer[5]))+
+     
+     ((((signed char)(d->sg_buffer[6])<<24) | 
+       (d->sg_buffer[7]<<16)|
+       (d->sg_buffer[8]<<8)|
+       (d->sg_buffer[9]))));
+
 
   d->cd_extra = FixupTOC(d,tracks+1);
   return(tracks);
@@ -757,9 +794,16 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
   while(1) {
     if((err=map(d,(p?buffer:NULL),begin,sectors))){
       if(d->report_all){
+	struct sg_header *sg_hd=(struct sg_header *)d->sg;
 	char b[256];
+
 	sprintf(b,"scsi_read error: sector=%ld length=%ld retry=%d\n",
 		begin,sectors,retry_count);
+	cdmessage(d,b);
+	sprintf(b,"                 Sense key: %x ASC: %x ASCQ: %x\n",
+		(int)(sg_hd->sense_buffer[2]&0xf),
+		(int)(sg_hd->sense_buffer[12]),
+		(int)(sg_hd->sense_buffer[13]));
 	cdmessage(d,b);
 	sprintf(b,"                 Transport error: %s\n",strerror_tr[err]);
 	cdmessage(d,b);
@@ -1358,7 +1402,6 @@ static void check_exceptions(cdrom_drive *d,exception *list){
       if(list[i].enable)d->enable_cdda=list[i].enable;
       if(list[i].read)d->read_audio=list[i].read;
       if(list[i].bigendianp!=-1)d->bigendianp=list[i].bigendianp;
-      if(list[i].ignore_toc_offset!=-1)d->ignore_toc_offset=list[i].ignore_toc_offset;
       return;
     }
     i++;

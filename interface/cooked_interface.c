@@ -15,7 +15,6 @@ static int cooked_readtoc (cdrom_drive *d){
   int tracks;
   struct cdrom_tochdr hdr;
   struct cdrom_tocentry entry;
-  long offset=0;
 
   /* get TocHeader to find out how many entries there are */
   if(ioctl(d->ioctl_fd, CDROMREADTOCHDR, &hdr ))
@@ -30,7 +29,6 @@ static int cooked_readtoc (cdrom_drive *d){
 
   /* get all TocEntries */
   for(i=0;i<hdr.cdth_trk1;i++){
-    long temp;
     entry.cdte_track= i+1;
     entry.cdte_format = CDROM_LBA;
     if(ioctl(d->ioctl_fd,CDROMREADTOCENTRY,&entry)){
@@ -40,9 +38,7 @@ static int cooked_readtoc (cdrom_drive *d){
       
     d->disc_toc[i].bFlags = (entry.cdte_adr << 4) | (entry.cdte_ctrl & 0x0f);
     d->disc_toc[i].bTrack = i+1;
-    temp=d->disc_toc[i].dwStartSector = entry.cdte_addr.lba;
-    if(d->ignore_toc_offset && i==0)offset=temp;
-    d->disc_toc[i].dwStartSector -= offset;
+    d->disc_toc[i].dwStartSector = entry.cdte_addr.lba;
   }
 
   entry.cdte_track = CDROM_LEADOUT;
@@ -53,7 +49,7 @@ static int cooked_readtoc (cdrom_drive *d){
   }
   d->disc_toc[i].bFlags = (entry.cdte_adr << 4) | (entry.cdte_ctrl & 0x0f);
   d->disc_toc[i].bTrack = entry.cdte_track;
-  d->disc_toc[i].dwStartSector = entry.cdte_addr.lba-offset;
+  d->disc_toc[i].dwStartSector = entry.cdte_addr.lba;
 
   tracks=hdr.cdth_trk1+1;
   d->cd_extra=FixupTOC(d,tracks);
@@ -169,7 +165,6 @@ static void check_exceptions(cdrom_drive *d,exception *list){
   while(list[i].model){
     if(!strncmp(list[i].model,d->drive_model,strlen(list[i].model))){
       if(list[i].bigendianp!=-1)d->bigendianp=list[i].bigendianp;
-      if(list[i].ignore_toc_offset!=-1)d->ignore_toc_offset=list[i].ignore_toc_offset;
       return;
     }
     i++;

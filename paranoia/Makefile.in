@@ -19,7 +19,7 @@ RANLIB=@RANLIB@
 
 
 OFILES = paranoia.o p_block.o overlap.o gap.o isort.o
-TFILES = isort.t gap.t p_block.t paranoia.t
+#TFILES = isort.t gap.t p_block.t paranoia.t
 
 LIBS = ../interface/cdda_interface.a -lm
 
@@ -32,7 +32,8 @@ debug:
 lib:	
 	$(MAKE) cdda_paranoia.a CFLAGS="$(OPT)" 
 
-test:	$(TFILES)
+#test:	$(TFILES)
+#
 	
 cdda_paranoia.a: 	$(OFILES)	
 		$(AR) -r cdda_paranoia.a $(OFILES)

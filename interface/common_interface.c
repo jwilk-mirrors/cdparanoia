@@ -164,11 +164,8 @@ int data_bigendianp(cdrom_drive *d){
 
 /************************************************************************/
 /* Here we fix up a couple of things that will never happen.  yeah,
-   right.  Also, originally, we did some weird stuff that came over
-   from Hannu's original code.  I'm guessing what he did was a hack
-   that seemed to work without knowing what was really going on, so
-   I'm going to try something based on 1/4 of a clue.  *Summon
-   collateral damage*... */
+   right.  The multisession stuff is from Hannu's code; it assumes it
+   knows the leasoud/leadin size. */
 
 int FixupTOC(cdrom_drive *d,int tracks){
   struct cdrom_multisession ms_str;

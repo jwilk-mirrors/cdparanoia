@@ -10,9 +10,39 @@
 #include "low_interface.h"
 #include "utils.h"
 
-#define CDDA_TEST_JITTER
-#define CDDA_TEST_BOGUSBYTES
-#define CDDA_TEST_SCRATCHES
+/* Testing times:
+
+                        6        7        8       9.2      9.3
+   OK                         0:02.66* 0:03.15  0:03.11  0:04.98
+   JITTER_SMALL               0:53.40  0:51.97  0:27.97  0:10.15
+   JITTER_LARGE      0:06.24           5:50.29  2:44.22  0:15.42
+   JITTER_MASSIVE    0:42.19                   10:58.97  0:42.81
+   FRAG_SMALL        0:04.84                    0:33.40  0:12.31
+   FRAG_LARGE        0:07.68                    3:14.69  0:19.35
+   FRAG_MASSIVE      failure                   34:16.89  2:43.02
+   BOGUS_BYTES
+   DROPDUPE_BYTES    0:19.53* 0:27.91  0:23.54  1:35.97  0:18.78
+   SCRATCH           1:07.96*                            0:16.13
+   UNDERRUN          0:06.81# failure  1:09.40# 1:07.68  0:17.53
+   
+   * defect of some sort 
+   # not including a hang at end of read
+
+   */
+
+/* Build which test model? */
+#undef  CDDA_TEST_OK
+#undef  CDDA_TEST_JITTER_SMALL
+#undef  CDDA_TEST_JITTER_LARGE
+#define CDDA_TEST_JITTER_MASSIVE
+#undef  CDDA_TEST_FRAG_SMALL
+#undef  CDDA_TEST_FRAG_LARGE
+#undef  CDDA_TEST_FRAG_MASSIVE
+#undef  CDDA_TEST_BOGUS_BYTES
+#undef  CDDA_TEST_DROPDUPE_BYTES
+#undef  CDDA_TEST_SCRATCH
+#undef  CDDA_TEST_UNDERRUN
+
 
 static int test_readtoc (cdrom_drive *d){
   int tracks=0;
@@ -42,56 +72,101 @@ static int test_readtoc (cdrom_drive *d){
    boundaries, etc */
 
 static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
+  int bytes_so_far=0;
+  long bytestotal;
+  static FILE *fd=NULL;
 
-  int bytes_so_far=0,rbytes;
-  char *buffer=(char *)p;
-  long bytestotal=sectors*CD_FRAMESIZE_RAW;
-  int jitter=4*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
- 
-  /*if(begin>=200 && begin<=220){
-    errno=EIO;
-    return(-1);
-  }*/
+  if(!fd)fd=fdopen(d->cdda_fd,"r");
+
+#ifdef CDDA_TEST_UNDERRUN
+  sectors-=1;
+#endif
+
+  bytestotal=sectors*CD_FRAMESIZE_RAW;
 
   begin*=CD_FRAMESIZE_RAW;
-  /*  while(bytes_so_far<bytestotal){
-    long local_bytes=bytestotal-bytes_so_far;
-    long rbytes,bytes=bytestotal;/*(int)(CD_FRAMESIZE_RAW*drand48())*4;*/
 
-  /*    char *local_buf=buffer+bytes_so_far;
-    if(bytes>local_bytes)bytes=local_bytes;*/
-
-  /*    if(begin==0)jitter=0;*/
-  if(begin+jitter<0)jitter=0;
-  
-  {
+  while(bytes_so_far<bytestotal){
+    int inner_bytes=bytestotal-bytes_so_far;
+    char *inner_buf=p+bytes_so_far;
     long seeki;
-    /*      long bound=23520;
-	    long nextbound=begin+bytes_so_far+bound;
-	    nextbound=nextbound-(nextbound%bound)+12;
-	    
-	    if(begin+bytes_so_far+bytes>nextbound){
-	    bytes=nextbound-begin-bytes_so_far;
-	    }*/
+    long rbytes;
+
+#ifdef CDDA_TEST_OK
+    int this_jitter=0;
+    long this_bytes=inner_bytes;
     
-    /*      if(drand48()>.5){
-	    seeki=begin+bytes_so_far+jitter-8;
-	    }else{*/
-    seeki=begin+jitter+8;
+#else
+#ifdef CDDA_TEST_JITTER_SMALL
+    int this_jitter=4*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
+    long this_bytes=inner_bytes;
+
+#else
+#ifdef CDDA_TEST_JITTER_LARGE
+    int this_jitter=32*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
+    long this_bytes=inner_bytes;
+
+#else
+#ifdef CDDA_TEST_JITTER_MASSIVE
+    int this_jitter=128*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
+    long this_bytes=inner_bytes;
+
+#else
+#ifdef CDDA_TEST_FRAG_SMALL
+    int this_jitter=4*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
+    long this_bytes=256*(int)(drand48()*CD_FRAMESIZE_RAW/8);
+
+#else
+#ifdef CDDA_TEST_FRAG_LARGE
+    int this_jitter=32*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
+    long this_bytes=256*(int)(drand48()*CD_FRAMESIZE_RAW/8);
+
+#else
+#ifdef CDDA_TEST_FRAG_MASSIVE
+    int this_jitter=32*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
+    long this_bytes=8*(int)(drand48()*CD_FRAMESIZE_RAW/8);
+
+#else
+#ifdef CDDA_TEST_DROPDUPE_BYTES
+    long this_bytes=CD_FRAMESIZE_RAW;
+    int this_jitter;
+
+    if (drand48()>.8)
+      this_jitter=32;
+    else
+      this_jitter=0;
+
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+
+    if(this_bytes>inner_bytes)this_bytes=inner_bytes;
+    if(begin+this_jitter+bytes_so_far<0)this_jitter=0;    
+    seeki=begin+bytes_so_far+this_jitter;
     
-    
-    if(lseek(d->cdda_fd,seeki,SEEK_SET)<0){
+    if(fseek(fd,seeki,SEEK_SET)<0){
       return(0);
     }
-    
-    rbytes=read(d->cdda_fd,buffer,bytestotal);
-    return(rbytes/CD_FRAMESIZE_RAW);
-    /*
-      bytes_so_far+=rbytes;
-      }*/
+    rbytes=fread(inner_buf,1,this_bytes,fd);
+    bytes_so_far+=rbytes;
   }
+
+#ifdef CDDA_TEST_SCRATCH
+  {
+    long location=300*CD_FRAMESIZE_RAW+(drand48()*56)+512;
+
+    if(begin<=location && begin+bytestotal>location){
+      memset(p+location-begin,(int)(drand48()*256),1100);
+    }
+  }
+#endif
+
   return(sectors);
-  
 }
 
 /* hook */

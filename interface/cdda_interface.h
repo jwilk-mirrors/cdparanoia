@@ -57,7 +57,6 @@ typedef struct cdrom_drive{
   int interface;
   int bigendianp;
   int nsectors;
-  int ignore_toc_offset;
 
   int cd_extra;
   int tracks;
@@ -152,7 +151,8 @@ extern long cdda_disc_lastsector(cdrom_drive *d);
 #define TR_BUSY          7  /* Device busy */
 #define TR_NOTREADY      8  /* Device not ready */
 #define TR_FAULT         9  /* Devive failure */
-#define TR_UNKNOWN      10  /* Unknown error */
+#define TR_UNKNOWN      10  /* Unspecified error */
+#define TR_STREAMING    11  /* loss of streaming */
 
 static char *strerror_tr[]={
   "Success",
@@ -165,7 +165,8 @@ static char *strerror_tr[]={
   "Device busy",
   "Device not ready",
   "Target hardware fault",
-  "Unidentifiable error"
+  "Unspecified error",
+  "Drive lost streaming"
 };
 
 /* Errors returned by lib: 
