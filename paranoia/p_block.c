@@ -242,6 +242,7 @@ void c_remove(c_block *v,long cutpos,long cutsize){
   int vs=cs(v);
   if(cutpos<0 || cutpos>vs)return;
   if(cutpos+cutsize>vs)cutsize=vs-cutpos;
+  if(cutsize<0)cutsize=vs-cutpos;
   if(cutsize<1)return;
 
   memmove(v->vector+cutpos,v->vector+cutpos+cutsize,
