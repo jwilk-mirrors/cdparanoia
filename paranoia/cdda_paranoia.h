@@ -41,6 +41,7 @@ extern cdrom_paranoia *paranoia_init(cdrom_drive *d);
 extern void paranoia_modeset(cdrom_paranoia *p,int mode);
 extern long paranoia_seek(cdrom_paranoia *p,long seek,int mode);
 extern int16_t *paranoia_read(cdrom_paranoia *p,void(*callback)(long,int));
+extern int16_t *paranoia_read_limited(cdrom_paranoia *p,void(*callback)(long,int),int maxretries);
 extern void paranoia_free(cdrom_paranoia *p);
 extern void paranoia_overlapset(cdrom_paranoia *p,long overlap);
 

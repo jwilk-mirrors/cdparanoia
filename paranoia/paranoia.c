@@ -1189,6 +1189,14 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
    persist only until the next call to paranoia_read() for this p */
 
 int16_t *paranoia_read(cdrom_paranoia *p, void(*callback)(long,int)){
+  return paranoia_read_limited(p,callback,20);
+}
+
+  /* I added max_retry functionality this way in order to avoid
+     breaking any old apps using the nerw libs.  cdparanoia 9.8 will
+     need the updated libs, but nothing else will require it. */
+int16_t *paranoia_read_limited(cdrom_paranoia *p, void(*callback)(long,int),
+			       int max_retries){
 
   long beginword=p->cursor*(CD_FRAMEWORDS);
   long endword=beginword+CD_FRAMEWORDS;
@@ -1283,7 +1291,7 @@ int16_t *paranoia_read(cdrom_paranoia *p, void(*callback)(long,int)){
 
       if(retry_count%5==0){
 	if(p->dynoverlap==MAX_SECTOR_OVERLAP*CD_FRAMEWORDS ||
-	   retry_count==20){
+	   retry_count==max_retries){
 	  if(!(p->enable&PARANOIA_MODE_NEVERSKIP))verify_skip_case(p,callback);
 	  retry_count=0;
 	}else{

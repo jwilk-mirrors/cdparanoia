@@ -248,9 +248,7 @@ VERSION"\n"
 "  -R --output-raw-big-endian      : output raw 16 bit big-endian PCM\n"
 "  -w --output-wav                 : output as WAV file (default)\n"
 "  -f --output-aiff                : output as AIFF file\n"
-"  -a --output-aifc                : output as AIFF-C file\n"
-"  -i --output-info <file>         : output human readable ripping info to\n"
-"                                    file\n\n"
+"  -a --output-aifc                : output as AIFF-C file\n\n"
 
 "  -c --force-cdrom-little-endian  : force treating drive as little endian\n"
 "  -C --force-cdrom-big-endian     : force treating drive as big endian\n"
@@ -269,8 +267,10 @@ VERSION"\n"
 "                                    addressed as LBA 0.  Necessary for some\n"
 "                                    Toshiba drives to get track boundaries\n"
 "                                    correct\n"
-"  -z --never-skip                 : never accept any less than perfect\n"
+"  -z --never-skip[=n]             : never accept any less than perfect\n"
 "                                    data reconstruction (don't allow 'V's)\n"
+"                                    but if [n] is given, skip after [n]\n"
+"                                    retries without progress.\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
 "  -Y --disable-extra-paranoia     : only do cdda2wav-style overlap checking\n"
 "  -X --abort-on-skip              : abort on imperfect reads/skips\n\n"
@@ -583,7 +583,7 @@ static void callback(long inpos, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:o:d:g:S:prRwafvqVQhZzYXWBi:Tt:";
+const char *optstring = "escCn:o:d:g:S:prRwafvqVQhZz::YXWBi:Tt:";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -614,7 +614,7 @@ struct option options [] = {
 	{"abort-on-skip",no_argument,NULL,'X'},
 	{"disable-fragmentation",no_argument,NULL,'F'},
 	{"output-info",required_argument,NULL,'i'},
-	{"never-skip",no_argument,NULL,'z'},
+	{"never-skip",optional_argument,NULL,'z'},
 
 	{NULL,0,NULL,0}
 };
@@ -651,6 +651,7 @@ int main(int argc,char *argv[]){
   char *force_cdrom_device=NULL;
   char *force_generic_device=NULL;
   int force_cdrom_speed=-1;
+  int max_retries=20;
   char *span=NULL;
   int output_type=1; /* 0=raw, 1=wav, 2=aifc */
   int output_endian=0; /* -1=host, 0=little, 1=big */
@@ -750,7 +751,12 @@ int main(int argc,char *argv[]){
       paranoia_mode=PARANOIA_MODE_DISABLE; 
       break;
     case 'z':
-      paranoia_mode|=PARANOIA_MODE_NEVERSKIP; 
+      if (optarg) {
+        max_retries = atoi (optarg);
+        paranoia_mode&=~PARANOIA_MODE_NEVERSKIP;
+      } else {
+        paranoia_mode|=PARANOIA_MODE_NEVERSKIP;
+      }
       break;
     case 'Y':
       paranoia_mode|=PARANOIA_MODE_OVERLAP; /* cdda2wav style overlap 
@@ -818,7 +824,7 @@ int main(int argc,char *argv[]){
 	    verbose=1;
 	    report("\n/dev/cdrom exists but isn't accessible.  By default,\n"
 		   "cdparanoia stops searching for an accessible drive here.\n"
-		   "Consider using -s to force a more complete autosense\n"
+		   "Consider using -sv to force a more complete autosense\n"
 		   "of the machine.\n\nMore information about /dev/cdrom:");
 
 	    d=cdda_identify("/dev/cdrom",CDDA_MESSAGE_PRINTIT,NULL);
@@ -1150,7 +1156,7 @@ int main(int argc,char *argv[]){
 	skipped_flag=0;
 	while(cursor<=batch_last){
 	  /* read a sector */
-	  int16_t *readbuf=paranoia_read(p,callback);
+	  int16_t *readbuf=paranoia_read_limited(p,callback,max_retries);
 	  char *err=cdda_errors(d);
 	  char *mes=cdda_messages(d);
 

@@ -2,7 +2,7 @@
 .SH NAME
 cdparanoia (Paranoia release III) \- an audio CD reading utility which includes extra data verification features
 .SH DATE
-version III release alpha 9.7 (13 Dec 1999)
+version III release alpha 9.8 (02 Mar 2001)
 .SH SYNOPSIS
 .B cdparanoia
 .RB [ options ]
@@ -165,9 +165,15 @@ This option implies that
 is active.
 
 .TP
+.B \-z --never-skip[=max_retries]
+Do not accept any skips; retry forever if needed.  An optional maximum
+number of retries can be specified; for comparison, default without -z is
+currently 20.
+
+.TP
 .B \-Y --disable-extra-paranoia
 Disables intra-read data verification; only overlap checking at read
-boundaries is performed. Not recommended.
+boundaries is performed. It can wedge if errors occur in the attempted overlap area. Not recommended.
 
 .TP
 .B \-X --abort-on-skip

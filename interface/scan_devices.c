@@ -283,11 +283,8 @@ typedef struct scsiid{
   int lun;
 } scsiid;
 
-#ifndef SCSI_IOCTL_GET_BUS_NUMBER
-#define SCSI_IOCTL_GET_BUS_NUMBER 0x5386
-#endif
-
 /* Even *this* isn't as simple as it bloody well should be :-P */
+/* SG has an easy interface, but SCSI overall does not */
 static int get_scsi_id(int fd, scsiid *id){
   struct sg_id argid;
   int busarg;
@@ -307,10 +304,9 @@ static int get_scsi_id(int fd, scsiid *id){
 }
 
 /* slightly wasteful, but a clean abstraction */
-static char *scsi_match(const char *device,char **prefixes,int perma,
-			int permb,char *prompt,int messagedest,
-			char **messages){
-  int dev=open(device,perma);
+static char *scsi_match(const char *device,char **prefixes,
+			char *prompt,int messagedest,char **messages){
+  int dev=open(device,O_RDONLY|O_NONBLOCK);
   scsiid a,b;
 
   int i,j;
@@ -348,7 +344,7 @@ static char *scsi_match(const char *device,char **prefixes,int perma,
 	  break;
 	}
 	
-	matchf=open(buffer,permb);
+	matchf=open(buffer,O_RDONLY|O_NONBLOCK);
 	if(matchf!=-1){
 	  if(get_scsi_id(matchf,&b)==0){
 	    if(a.bus==b.bus && a.id==b.id && a.lun==b.lun){
@@ -382,6 +378,36 @@ void strscat(char *a,char *b,int n){
   strcat(a," ");
 }
 
+/* At this point, we're going to punt compatability before SG2, and
+   allow only SG2 and SG3 */
+static int verify_SG_version(cdrom_drive *d,int messagedest,
+			     char **messages){
+  /* are we using the new SG driver by Doug Gilbert? If not, punt */
+  int version,major,minor;
+  char buffer[256];
+  idmessage(messagedest,messages,
+	    "\nFound an accessible SCSI CDROM drive."
+	    "\nLooking at revision of the SG interface in use...","");
+
+  if(ioctl(d->cdda_fd,SG_GET_VERSION_NUM,&version)){
+    /* Up, guess not. */
+    idmessage(messagedest,messages,
+	      "\tOOPS!  Old 2.0/early 2.1/early 2.2.x (non-ac patch) style "
+	      "SG.\n\tCdparanoia no longer supports the old interface.\n","");
+    return(0);
+  }
+  major=version/10000;
+  version-=major*10000;
+  minor=version/100;
+  version-=minor*100;
+  
+  sprintf(buffer,"\tSG interface version %d.%d.%d; OK.",
+	  major,minor,version);
+
+  idmessage(messagedest,messages,buffer,"");
+  return(major);
+}
+
 cdrom_drive *cdda_identify_scsi(const char *generic_device, 
 				const char *ioctl_device, int messagedest,
 				char **messages){
@@ -391,6 +417,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   struct stat g_st;
   int i_fd=-1;
   int g_fd=-1;
+  int version;
   int type;
   char *p;
 
@@ -456,13 +483,13 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 
   if(!generic_device || !ioctl_device){
     if(generic_device){
-      ioctl_device=scsi_match(generic_device,scsi_cdrom_prefixes,O_RDWR,
-			      O_RDONLY|O_NONBLOCK,
-			      "\t\tNo cdrom device found to match generic device %s",
-			      messagedest,messages);
+      ioctl_device=
+	scsi_match(generic_device,scsi_cdrom_prefixes,
+		   "\t\tNo cdrom device found to match generic device %s",
+		   messagedest,messages);
     }else{
       generic_device=
-	scsi_match(ioctl_device,scsi_generic_prefixes,O_RDONLY|O_NONBLOCK,O_RDWR,
+	scsi_match(ioctl_device,scsi_generic_prefixes,
 		   "\t\tNo generic SCSI device found to match CDROM device %s",
 		   messagedest,messages);
       if(!generic_device)	
@@ -483,7 +510,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   }
 
   if(ioctl_device)i_fd=open(ioctl_device,O_RDONLY|O_NONBLOCK);
-  g_fd=open(generic_device,O_RDWR|O_EXCL);
+  g_fd=open(generic_device,O_RDWR);
   
   if(ioctl_device && i_fd==-1)
     idperror(messagedest,messages,"\t\tCould not open SCSI cdrom device "
@@ -529,27 +556,28 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
     goto cdda_identify_scsi_fail;
   }
   
+
   d=calloc(1,sizeof(cdrom_drive));
-
-  /* build signal set to block for during generic scsi; we really *don't*
-     want to die between the SCSI write and reading the result. */
-
-  sigemptyset (&(d->sigset));
-  sigaddset (&(d->sigset), SIGINT);
-  sigaddset (&(d->sigset), SIGTERM);
-  sigaddset (&(d->sigset), SIGPIPE);
-  sigaddset (&(d->sigset), SIGPROF);
-
-  /* malloc our big buffer for scsi commands */
-  d->sg=malloc(MAX_BIG_BUFF_SIZE);
-  d->sg_buffer=d->sg+SG_OFF;
 
   d->drive_type=type;
   d->cdda_fd=g_fd;
   d->ioctl_fd=i_fd;
-  d->interface=GENERIC_SCSI;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
+
+  version=verify_SG_version(d,messagedest,messages);
+  switch(version){
+  case -1:case 0:case 1:
+    d->interface=GENERIC_SCSI;
+    goto cdda_identify_scsi_fail;
+  case 2:case 3:
+    d->interface=GENERIC_SCSI;
+    break;
+  }
+
+  /* malloc our big buffer for scsi commands */
+  d->sg=malloc(MAX_BIG_BUFF_SIZE);
+  d->sg_buffer=d->sg+SG_OFF;
 
   {
     /* get the lun */
@@ -562,7 +590,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 
   p = scsi_inquiry(d);
 
-  /* It would seem some TOSHIBA CDROM gets things wrong */
+  /* It would seem some TOSHIBA CDROMs gets things wrong */
  
   if (!strncmp (p + 8, "TOSHIBA", 7) &&
       !strncmp (p + 16, "CD-ROM", 6) &&
@@ -589,7 +617,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   strscat(d->drive_model,p+16,16);
   strscat(d->drive_model,p+32,4);
 
-  idmessage(messagedest,messages,"\t\tCDROM sensed: %s",d->drive_model);
+  idmessage(messagedest,messages,"\nCDROM model sensed sensed: %s",d->drive_model);
   
   return(d);
   

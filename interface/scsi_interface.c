@@ -19,37 +19,19 @@ static int Dummy (cdrom_drive *d,int s){
 
 #include "drive_exceptions.h"
 
-#ifndef SG_GET_RESERVED_SIZE
-#define SG_GET_RESERVED_SIZE 0x2272
-#endif 
-
-#ifndef SG_GET_SG_TABLESIZE
-#define SG_GET_SG_TABLESIZE 0x227F
-#endif 
-
-#ifndef SG_SET_COMMAND_Q
-#define SG_SET_COMMAND_Q 0x2271 
-#endif
-
-static int look_for_dougg(cdrom_drive *d){
-  /* are we using the new SG driver by Doug Gilbert? If so, our memory
-     strategy will be different. */
-  int reserved,table;
-  cdmessage(d,"\nLooking at revision of the SG interface in use...\n");
-
-  if(ioctl(d->cdda_fd,SG_GET_RESERVED_SIZE,&reserved)){
-    /* Up, guess not. */
-    cdmessage(d,"\tOld 2.0/early 2.1/early 2.2.x (non-ac patch) style SG.\n");
-    return(0);
-  }
-  cdmessage(d,"\tNew style SG with scatter/gather memory management\n");
+static void tweak_SG_buffer(cdrom_drive *d){
+  int table,reserved;
+  char buffer[256];
 
   /* maximum transfer size? */
+  if(ioctl(d->cdda_fd,SG_GET_RESERVED_SIZE,&reserved)){
+    /* Up, guess not. */
+    cdmessage(d,"\tCould not get scatter/gather buffer size.\n");
+    return;
+  }
 
   if(ioctl(d->cdda_fd,SG_GET_SG_TABLESIZE,&table))table=1;
-
   {
-    char buffer[256];
     int cur;
 
     sprintf(buffer,"\tDMA scatter/gather table entries: %d\n\t"
@@ -66,80 +48,30 @@ static int look_for_dougg(cdrom_drive *d){
     d->nsectors=cur/CD_FRAMESIZE_RAW;
     d->bigbuff=cur;
 
-    sprintf(buffer,"\tSetting default read size to %d sectors (%d bytes).\n",
+    sprintf(buffer,"\tSetting default read size to %d sectors (%d bytes).\n\n",
 	    d->nsectors,d->nsectors*CD_FRAMESIZE_RAW);
     cdmessage(d,buffer);
   } 
 
-  /* Disable command queue; we don;t need it, no reason to have it on */
+  /* Disable command queue; we don't need it, no reason to have it on */
   reserved=0;
   if(ioctl(d->cdda_fd,SG_SET_COMMAND_Q,&reserved)){
     cdmessage(d,"\tCouldn't disable command queue!  Continuing anyway...\n");
   }
 
-  return(1);
-}
-
-static void find_bloody_big_buff_size(cdrom_drive *d){
-
-  /* find the biggest read command that succeeds.  This should be
-     safe; the kernel will reject requests that are too big. */
-
-  long begin=cdda_disc_firstsector(d);
-  long cur=MAX_BIG_BUFF_SIZE/CD_FRAMESIZE_RAW;
-  cdmessage(d,"\nAttempting to autosense SG_BIG_BUFF size...\n");
-
-  d->enable_cdda(d,1);
-  if(begin==-1){
-    cur=1; /* 4096 is hardwired into linux/drivers/scsi/sg.c */
-  }else{
-
-    /* bisection is not fastest here; requests that are too big are 
-       rejected quickly */
-    /* Also, we bloody well try more than one sector juuuust in case
-       we hit an unaddressable one. */
-
-    while(cur>1){
-      long i;
-      int flag=0;
-      d->nsectors=cur;
-      
-      for(i=1;i<=d->tracks;i++){
-	if(cdda_track_audiop(d,i)==1){
-	  long firstsector=cdda_track_firstsector(d,i);
-	  long lastsector=cdda_track_lastsector(d,i);
-	  long sector=(firstsector+lastsector)>>1;
-	  
-	  errno=0;
-	  d->read_audio(d,NULL,sector,cur);
-	  if(errno!=ENOMEM)flag=1;
-	  break;
-
-	}
-      }
-      if(flag)break;
-      cur--;
-    }
-  }
-  d->enable_cdda(d,0);
-  {
-    char buffer[256];
-    sprintf(buffer,"\tSetting read block size at %ld sectors (%ld bytes).\n",
-	    cur,cur*CD_FRAMESIZE_RAW);
-    cdmessage(d,buffer);
-  }
-  d->nsectors=cur;
-  d->bigbuff=cur*CD_FRAMESIZE_RAW;
-
 }
 
 static void reset_scsi(cdrom_drive *d){
-
-  /* really ought to close the fd and reopen */
-
+  int arg;
   d->enable_cdda(d,0);
-  d->enable_cdda(d,1);
 
+  cdmessage(d,"sending SG SCSI reset... ");
+  if(ioctl(d->cdda_fd,SG_SCSI_RESET,&arg))
+    cdmessage(d,"FAILED: EBUSY\n");
+  else
+    cdmessage(d,"OK\n");
+  
+  d->enable_cdda(d,1);
 }
 
 static void clear_garbage(cdrom_drive *d){
@@ -178,6 +110,7 @@ static int handle_scsi_cmd(cdrom_drive *d,
 			   unsigned int cmd_len, 
 			   unsigned int in_size, 
 			   unsigned int out_size,
+
 			   unsigned char bytefill,
 			   int bytecheck){
   int status = 0;
@@ -826,6 +759,66 @@ static int i_read_mmc3 (cdrom_drive *d, void *p, long begin, long sectors){
   return(0);
 }
 
+/* straight from the MMC3 spec */
+static inline void LBA_to_MSF(long lba,
+			      unsigned char *M, 
+			      unsigned char *S, 
+			      unsigned char *F){
+  if(lba>=-150){
+    *M=(lba+150)/(60*75);
+    lba-=(*M)*60*75;
+    *S=(lba+150)/75;
+    lba-=(*S)*75;
+    *F=(lba+150);
+  }else{
+    *M=(lba+450150)/(60*75);
+    lba-=(*M)*60*75;
+    *S=(lba+450150)/75;
+    lba-=(*S)*75;
+    *F=(lba+450150);
+  }
+}
+
+
+static int i_read_msf (cdrom_drive *d, void *p, long begin, long sectors){
+  int ret;
+  memcpy(d->sg_buffer,(char []){0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0},12);
+
+  LBA_to_MSF(begin,d->sg_buffer+3,d->sg_buffer+4,d->sg_buffer+5);
+  LBA_to_MSF(begin+sectors,d->sg_buffer+6,d->sg_buffer+7,d->sg_buffer+8);
+
+  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_msf2 (cdrom_drive *d, void *p, long begin, long sectors){
+  int ret;
+  memcpy(d->sg_buffer,(char []){0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
+
+  LBA_to_MSF(begin,d->sg_buffer+3,d->sg_buffer+4,d->sg_buffer+5);
+  LBA_to_MSF(begin+sectors,d->sg_buffer+6,d->sg_buffer+7,d->sg_buffer+8);
+
+  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_msf3 (cdrom_drive *d, void *p, long begin, long sectors){
+  int ret;
+  memcpy(d->sg_buffer,(char []){0xb9, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
+
+  LBA_to_MSF(begin,d->sg_buffer+3,d->sg_buffer+4,d->sg_buffer+5);
+  LBA_to_MSF(begin+sectors,d->sg_buffer+6,d->sg_buffer+7,d->sg_buffer+8);
+
+  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
 static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 			  int (*map)(cdrom_drive *, void *, long, long)){
   int retry_count,err;
@@ -872,27 +865,22 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	usleep(100);
 	continue;
       case ENOMEM:
-	if(d->bigbuff==0){
-	  /* just testing for SG_BIG_BUFF */
-	  return(-7);
-	}else{
-	  /* D'oh.  Possible kernel error. Keep limping */
-	  usleep(100);
-	  if(sectors==1){
-	    /* Nope, can't continue */
-	    cderror(d,"300: Kernel memory error\n");
-	    return(-300);  
-	  }
-	  if(d->report_all){
-	    char b[256];
-	    sprintf(b,"scsi_read: kernel couldn't alloc %ld bytes.  "
-		    "backing off...\n",sectors*CD_FRAMESIZE_RAW);
-	    
-	    cdmessage(d,b);
-	  }
-	  sectors--;
-	  continue;
+	/* D'oh.  Possible kernel error. Keep limping */
+	usleep(100);
+	if(sectors==1){
+	  /* Nope, can't continue */
+	  cderror(d,"300: Kernel memory error\n");
+	  return(-300);  
 	}
+	if(d->report_all){
+	  char b[256];
+	  sprintf(b,"scsi_read: kernel couldn't alloc %ld bytes.  "
+		  "backing off...\n",sectors*CD_FRAMESIZE_RAW);
+	    
+	  cdmessage(d,b);
+	}
+	sectors--;
+	continue;
       default:
 	if(sectors==1){
 	  if(errno==EIO)
@@ -1002,6 +990,22 @@ long scsi_read_mmc3 (cdrom_drive *d, void *p, long begin,
 			       long sectors){
   return(scsi_read_map(d,p,begin,sectors,i_read_mmc3));
 }
+
+long scsi_read_msf (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_msf));
+}
+
+long scsi_read_msf2 (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_msf2));
+}
+
+long scsi_read_msf3 (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_msf3));
+}
+
 
 /* Some drives, given an audio read command, return only 2048 bytes
    of data as opposed to 2352 bytes.  Look for bytess at the end of the
@@ -1122,19 +1126,36 @@ static int verify_read_command(cdrom_drive *d){
 	rs="be 04,f8";
 	densitypossible=0;
 	break;
+
       case 5:
+	d->read_audio=scsi_read_msf;
+	rs="b9 00,10";
+	densitypossible=0;
+	break;
+      case 6:
+	d->read_audio=scsi_read_msf2;
+	rs="b9 00,f8";
+	densitypossible=0;
+	break;
+      case 7:
+	d->read_audio=scsi_read_msf3;
+	rs="b9 04,f8";
+	densitypossible=0;
+	break;
+
+      case 8:
 	d->read_audio=scsi_read_D4_10;
 	rs="d4(10)0x";
 	break;
-      case 6:
+      case 9:
 	d->read_audio=scsi_read_D4_12;
 	rs="d4(12)0x";
 	break;
-      case 7:
+      case 10:
 	d->read_audio=scsi_read_D5;
 	rs="d5 0x,00";
 	break;
-      case 8:
+      case 11:
 	d->read_audio=scsi_read_D8;
 	rs="d8 0x,00";
 	j=-2;
@@ -1194,8 +1215,6 @@ static int verify_read_command(cdrom_drive *d){
 		  if((lengthflag=count_2352_bytes(d))==2352){
 		    if(verify_nonzero(d)){
 		      cdmessage(d,"\t\tCommand set FOUND!\n");
-		      cdmessage(d,"\t\t(please email a copy of this "
-				"output to paranoia@xiph.org)\n");
 		      
 		      free(buff);
 		      d->enable_cdda(d,0);
@@ -1288,133 +1307,17 @@ static void check_fua_bit(cdrom_drive *d){
   return;
 }
 
-static int guess_atapi(cdrom_drive *d,int reportp){
-  /* Use an Inquiry request to guess drive type. */
-  
-  /* the fields in byte 3 of the response serve different purposes in
-     ATAPI an SCSI and we can probably distinguish the two, but not
-     always */
-
-  /* Check our known weird drives.... */
-  {
-    int i=0;
-    while(atapi_list[i].model){
-      if(!strncmp(atapi_list[i].model,d->drive_model,strlen(atapi_list[i].model)))
-	if(atapi_list[i].atapi!=-1){
-	  if(reportp)
-	    cdmessage(d,"\tThis drive appears on the 'known exceptions' list:\n");
-	  if(atapi_list[i].atapi){
-	    if(reportp)
-	      cdmessage(d,"\tDrive is ATAPI (using SCSI host adaptor emulation)\n");
-	  }else{
-	    if(reportp)cdmessage(d,"\tDrive is SCSI\n");
-	  }
-	  return(atapi_list[i].atapi);
-	}
-      i++;
-    }
-  }
-
-  /* No exception listing.  What does byte 3 say? */
-
-  /* Low 4 bits are data format; 0 is SCSI-I or early ATAPI,
-                                 1 is modern ATAPI or SCSI-1 CCS
-				 2 is SCSI-II (or future ATAPI?)
-				 3 is reserved (SCSI-III?) */
-
-  /* high 4 bits are ATAPI version in ATAPI and AENC/TrmIOP/Reserved in SCSI */
-
-  /* How I see it:
-     (&0x3f) 0x00 SCSI-I
-     (&0x3f) 0x01 SCSI-1 CCS 
-     (&0x3f) 0x02 SCSI-II
-     0x20 early ATAPI
-     0x21 modern ATAPI
-     0x31 Mt FUJI ATAPI
-     0x03 SCSI-III?  dunno... */
-
-  /* News flash: a good number of ATAPI drives out there seem not to
-     bother setting the 0x20 bit, and come out looking like SCSI-1-CCS. */
-
-  if(reportp){
-    char buffer[256];
-    sprintf(buffer,"\tInquiry bytes: 0x%02x 0x%02x 0x%02x 0x%02x\n",
-	    (int)d->inqbytes[0],
-	    (int)d->inqbytes[1],
-	    (int)d->inqbytes[2],
-	    (int)d->inqbytes[3]);
-    cdmessage(d,buffer);
-  }
-
-  switch(d->inqbytes[3]){
-  case 0x20:
-    /* early ATAPI */
-    if(reportp){
-      cderror(d,"\tDrive appears to be early (pre-draft) ATAPI\n");
-      cderror(d,"\tThis drive will probably break cdparanoia; please send\n");
-      cderror(d,"\temail to paranoia@xiph.org\n");
-    }
-    return(1);
-  case 0x01:
-    /* ATAPI reporting as SCSI-1-CCS most likely */
-    if(reportp)
-      cdmessage(d,"\tDrive is reporting itself as SCSI-1-CCS, but is\n"
-		  "\tprobably just a buggy/broken ATAPI drive.  Assuming\n"
-		  "\tATAPI.\n");
-    return(1);
-  case 0x21:
-    /* modern ATAPI */
-    if(reportp)
-      cdmessage(d,"\tDrive appears to be standard ATAPI\n");
-    return(1);
-  case 0x30:
-    /* Old Mt Fuji? */
-    if(reportp)
-      cdmessage(d,"\tDrive appears to be an early Mt. Fuji ATAPI CD/DVD\n");
-    return(1);
-  case 0x31:
-    /* Mt Fuji */
-    if(reportp)
-      cdmessage(d,"\tDrive appears to be Mt. Fuji ATAPI C/DVD\n");
-    return(1);
-  default:
-    if(reportp)
-      switch(d->inqbytes[3]&0x0f){
-      case 0x0:
-	cdmessage(d,"\tDrive appears to be SCSI-1\n");
-	break;
-      case 0x1:
-	cdmessage(d,"\tDrive appears to be SCSI-1-CCS\n");
-	break;
-      case 0x2:
-	cdmessage(d,"\tDrive appears to be SCSI-2\n");
-	break;
-      case 0x3:
-	cdmessage(d,"\tUnknown type, perhaps SCSI-3?\n");
-	break;
-      default:
-	cdmessage(d,"\tUnknown drive type; assuming SCSI\n");
-	break;
-      }
-  }
-  return(0);
-}
-
 static int check_atapi(cdrom_drive *d){
   int atapiret=-1;
   int fd = d->cdda_fd; /* this is the correct fd (not ioctl_fd), as the 
 			  generic device is the device we need to check */
 			  
-  cdmessage(d,"\nChecking for SCSI emulation and transport revision...\n");
+  cdmessage(d,"\nChecking for SCSI emulation...\n");
 
-  /* This isn't as strightforward as it should be */
-
-  /* first, we try the SG_EMULATED_HOST ioctl; this only exists in new
-     kernels though */
-
-  if (ioctl(fd,SG_EMULATED_HOST,&atapiret))
-    cdmessage(d,"\tNo SG_EMULATED_HOST ioctl(); Checking inquiry command...\n");
-  else {
+  if (ioctl(fd,SG_EMULATED_HOST,&atapiret)){
+    cderror(d,"\tSG_EMULATED_HOST ioctl() failed!\n");
+    return(-1);
+  } else {
     if(atapiret==1){
       cdmessage(d,"\tDrive is ATAPI (using SCSI host adaptor emulation)\n");
       /* Disable kernel SCSI command translation layer for access through sg */
@@ -1426,15 +1329,8 @@ static int check_atapi(cdrom_drive *d){
       d->is_atapi=0;
     }
 
-    if(guess_atapi(d,0)!=d->is_atapi){
-      cderror(d,"\tNOTE: Our ATAPI/SCSI guessing algorithm will detect the\n");
-      cderror(d,"\tdrive type incorrectly on older kernels; please e-mail the\n");
-      cderror(d,"\toutput of 'cdparanoia -vQ' to paranoia@xiph.org\n");
-    }
     return(d->is_atapi);
   }
-  
-  return(d->is_atapi=guess_atapi(d,1));
 }  
 
 static int check_mmc(cdrom_drive *d){
@@ -1494,6 +1390,7 @@ unsigned char *scsi_inquiry(cdrom_drive *d){
   return (d->sg_buffer);
 }
 
+
 int scsi_init_drive(cdrom_drive *d){
   int ret;
 
@@ -1509,7 +1406,7 @@ int scsi_init_drive(cdrom_drive *d){
       
   if(d->is_mmc){
 
-    d->read_audio = scsi_read_mmc3;
+    d->read_audio = scsi_read_mmc2;
     d->bigendianp=0;
 
     check_exceptions(d,mmc_list);
@@ -1519,7 +1416,7 @@ int scsi_init_drive(cdrom_drive *d){
     if(d->is_atapi){
       /* Not MMC maybe still uses 0xbe */
 
-      d->read_audio = scsi_read_mmc3;
+      d->read_audio = scsi_read_mmc2;
       d->bigendianp=0;
 
       check_exceptions(d,atapi_list);
@@ -1554,13 +1451,11 @@ int scsi_init_drive(cdrom_drive *d){
   if(d->tracks<1)
     return(d->tracks);
 
+  tweak_SG_buffer(d);
   d->opened=1;
 
   if((ret=verify_read_command(d)))return(ret);
   check_fua_bit(d);
-
-  if(!look_for_dougg(d))
-    if(d->nsectors<1)find_bloody_big_buff_size(d);
 
   d->error_retry=1;
   d->sg=realloc(d->sg,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF + 128);
@@ -1568,3 +1463,4 @@ int scsi_init_drive(cdrom_drive *d){
   d->report_all=1;
   return(0);
 }
+

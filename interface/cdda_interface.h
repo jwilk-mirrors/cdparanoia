@@ -1,6 +1,6 @@
 /******************************************************************
  * CopyPolicy: GNU Public License 2 applies
- * Copyright (C) 1998 Monty xiphmont@mit.edu
+ * Copyright (C) 2001 Xiph.org
  * and Heiko Eissfeldt heiko@escape.colossus.de
  *
  * Toplevel interface header; applications include this
