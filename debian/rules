@@ -10,7 +10,7 @@ package=cdparanoia
 build: build-debstamp
 build-debstamp:
 	$(checkdir)
-	./configure --prefix=/usr --mandir=/usr/share/man
+	./configure --prefix=/usr --mandir=/share/man
 	make CFLAGS="-O2 -g -Wall"
 	touch build-debstamp
 
@@ -48,8 +48,8 @@ libcdparanoia0: install
 	dh_installdocs       -p$@ -P$(b)/$@ README
 	dh_installchangelogs -p$@ -P$(b)/$@ 
 	dh_movefiles         -p$@ -P$(b)/$@
-	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.6 libcdda_paranoia.so.0
-	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.6 libcdda_interface.so.0
+	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.7 libcdda_paranoia.so.0
+	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.7 libcdda_interface.so.0
 	dh_strip             -p$@ -P$(b)/$@ 
 	dh_compress          -p$@ -P$(b)/$@ 
 	dh_fixperms          -p$@ -P$(b)/$@ 
@@ -60,11 +60,11 @@ libcdparanoia0: install
 	dh_builddeb          -p$@ -P$(b)/$@
 
 libcdparanoia0-dev: install
-	mkdir -p $(b)/$@/usr/share/doc
-	cd $(b)/$@/usr/share/doc; ln -s libcdparanoia0 $@
+	dh_installdocs       -p$@ -P$(b)/$@
+	dh_installchangelogs -p$@ -P$(b)/$@ 
 	dh_movefiles         -p$@ -P$(b)/$@
-	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.6 libcdda_paranoia.so
-	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.6 libcdda_interface.so
+	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.7 libcdda_paranoia.so
+	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.7 libcdda_interface.so
 	dh_strip             -p$@ -P$(b)/$@ 
 	dh_compress          -p$@ -P$(b)/$@ 
 	dh_fixperms          -p$@ -P$(b)/$@ 
@@ -75,9 +75,8 @@ libcdparanoia0-dev: install
 	dh_builddeb          -p$@ -P$(b)/$@
 
 cdparanoia: install
-	mkdir -p $(b)/$@/usr/share/doc
-	mkdir -p $(b)/$@/usr/share/man/man1
-	cd $(b)/$@/usr/share/doc; ln -s libcdparanoia0 $@
+	dh_installdocs       -p$@ -P$(b)/$@
+	dh_installchangelogs -p$@ -P$(b)/$@ 
 	dh_movefiles         -p$@ -P$(b)/$@
 	dh_strip             -p$@ -P$(b)/$@ 
 	dh_compress          -p$@ -P$(b)/$@ 

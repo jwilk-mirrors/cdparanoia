@@ -21,4 +21,6 @@ if [ -d $OLDDOCDIR ]; then
     fi
 fi
 
+#DEBHELPER#
+
 exit 0

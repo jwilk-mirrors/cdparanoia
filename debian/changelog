@@ -1,8 +1,23 @@
+cdparanoia (3a9.7-2) unstable; urgency=low
+
+  * Added cdparanoia/utils.h to the dev-package.
+  * Removed -p from the install flags of the Makefile.
+  * Switch all packages to use dh_installdocs in an attempt to get rid
+  of lintian warnings.
+
+ -- Dale E. Martin <dmartin@debian.org>  Wed, 22 Dec 1999 07:01:49 -0500
+
+cdparanoia (3a9.7-1) unstable; urgency=low
+
+  * New upstream source.
+
+ -- Dale E. Martin <dmartin@debian.org>  Thu, 16 Dec 1999 22:17:56 -0500
+
 cdparanoia (3a9.6-3) unstable; urgency=low
 
   * Removed obsolete dir /usr/man and replaced with /usr/share/man.
 
- -- Dale E. Martin <dmartin@debian.org>  Wed, 15 Sep 1999 21:09:23 -0400
+ -- Dale E. Martin <dmartin@debian.org>  Thu, 16 Dec 1999 22:17:37 -0500
 
 cdparanoia (3a9.6-2) unstable; urgency=low
 
