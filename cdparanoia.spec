@@ -3,7 +3,7 @@
 
 Name: cdparanoia
 Version: %{realver}
-Release: 6
+Release: 7
 License: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
@@ -45,12 +45,11 @@ applications which read CD Digital Audio disks.
 %setup -q -n %{name}-III-%{realver}
 
 %build
-rm -rf $RPM_BUILD_ROOT
 %configure --includedir=%{_includedir}/cdda
 make  
 
 %install
-rm -rf $RPM_BUILD_ROOT
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 
 install -d $RPM_BUILD_ROOT%{_bindir}
 install -d $RPM_BUILD_ROOT%{_includedir}/cdda
@@ -80,7 +79,7 @@ if [ "$1" -ge "1" ]; then
 fi
 
 %clean
-rm -rf $RPM_BUILD_ROOT
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 
 %files -n cdparanoia
 %defattr(-,root,root)
@@ -98,6 +97,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.a
 
 %changelog
+* Wed Jan  2 2002 Peter Jones <pjones@redhat.com> alpha9.8-7
+- minor cleanups of $RPM_BUILD_ROOT pruning
+
 * Thu Dec  6 2001 Peter Jones <pjones@redhat.com> alpha9.8-6
 - move includes to %{_includedir}/cdda/
 - add utils.h to %install
