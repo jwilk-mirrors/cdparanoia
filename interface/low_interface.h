@@ -24,14 +24,16 @@
 #include <sys/shm.h>
 
 #include <linux/major.h>
-#include <linux/sbpcd.h>
-#include <linux/ucdrom.h>
 #include <linux/version.h>
 
-#include <linux/cdrom.h>
-#include <linux/major.h>
-
 /* some include file locations have changed with newer kernels */
+
+#if LINUX_VERSION_CODE < 0x20100
+
+#include <linux/sbpcd.h>
+#include <linux/ucdrom.h>
+
+#endif
 
 #if LINUX_VERSION_CODE > 0x10300 + 97
 /* easiest as many dists don't make proper symlinks */
@@ -41,6 +43,9 @@
 #include <linux/../../drivers/scsi/sg.h>
 #include <linux/../../drivers/scsi/scsi.h>
 #endif
+
+#include <linux/cdrom.h>
+#include <linux/major.h>
 
 #include "cdda_interface.h"
 

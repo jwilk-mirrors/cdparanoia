@@ -178,7 +178,12 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
       free(device);
       return(NULL);
     }
-    description=atapi_drive_info(fd);
+    {
+      char *temp=atapi_drive_info(fd);
+      description=catstring(NULL,"ATAPI compatible ");
+      description=catstring(description,temp);
+      free(temp);
+    }
     
     break;
   case CDU31A_CDROM_MAJOR:
@@ -250,7 +255,7 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
   d->interface=COOKED_IOCTL;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
-  idmessage(messagedest,messages,"\t\tCDROM sensed: %s",description);
+  idmessage(messagedest,messages,"\t\tCDROM sensed: %s\n",description);
   
   return(d);
 }
@@ -521,7 +526,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 		  generic_device);
 	return(NULL);
       }else{
-	char *temp=generic_device;
+	char *temp=(char *)generic_device;
 	generic_device=ioctl_device;
 	ioctl_device=temp;
       }
@@ -538,7 +543,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 		  ioctl_device);
 	return(NULL);
       }else{
-	char *temp=generic_device;
+	char *temp=(char *)generic_device;
 	generic_device=ioctl_device;
 	ioctl_device=temp;
       }
@@ -705,7 +710,7 @@ cdrom_drive *cdda_identify_test(const char *filename, int messagedest,
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
   d->drive_model=copystring("File based test interface");
-  idmessage(messagedest,messages,"\t\tCDROM sensed: %s",d->drive_model);
+  idmessage(messagedest,messages,"\t\tCDROM sensed: %s\n",d->drive_model);
   
   return(d);
 }

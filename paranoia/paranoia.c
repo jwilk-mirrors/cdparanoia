@@ -442,12 +442,17 @@ static void i_paranoia_match(p_block *a,p_block *b,long post,
     /* if the match is only part of the overlap, we have a rift *within*
        the ostensibly atomic read */
 
-    if(*begin!=a->begin && *begin!=b->begin)
+    if(*begin!=a->begin && *begin!=b->begin){
       (*callback)(*begin,PARANOIA_CB_FIXUP_ATOM);
+      /*      printf("begin missed by %ld / %ld words\n",*begin-a->begin,
+	     *begin-b->begin);*/
+    }
 
-    if(*end!=a->end && *end!=b->end)
+    if(*end!=a->end && *end!=b->end){
       (*callback)(*end,PARANOIA_CB_FIXUP_ATOM);
-
+      /*      printf("end missed by %ld / %ld words\n",*end-a->end,
+	     *end-b->end);*/
+    }
   }
 }
 
@@ -655,7 +660,7 @@ size16 *paranoia_read(cdrom_paranoia *p,long sectors,
       long querypost=(currword/(CD_FRAMESIZE_RAW/2))*(CD_FRAMESIZE_RAW/2)
 	+(CD_FRAMESIZE_RAW/4);
       
-      (*callback)(currword,PARANOIA_CB_VERIFY);
+      (*callback)(querypost,PARANOIA_CB_VERIFY);
 	
       /* OK! compare fragments (yeah, n^2, don't worry too much) */
       
