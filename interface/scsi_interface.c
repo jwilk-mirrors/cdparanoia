@@ -1021,6 +1021,7 @@ static int verify_nonzero(cdrom_drive *d){
 
 static int verify_read_command(cdrom_drive *d){
   int i,j,k;
+  int audioflag=0;
 
   int  (*enablecommand)  (struct cdrom_drive *d, int speed);
   long (*readcommand)   (struct cdrom_drive *d, void *p, long begin, 
@@ -1041,7 +1042,8 @@ static int verify_read_command(cdrom_drive *d){
 	long firstsector=cdda_track_firstsector(d,i);
 	long lastsector=cdda_track_lastsector(d,i);
 	long sector=(firstsector+lastsector)>>1;
-	
+	audioflag=1;
+
 	if(d->read_audio(d,buff,sector,1)>0){
 	  if(count_2352_bytes(d)==2352){
 	    cdmessage(d,"\tExpected command set reads OK.\n");
@@ -1055,6 +1057,12 @@ static int verify_read_command(cdrom_drive *d){
     
     d->enable_cdda(d,0);
   }
+
+  if(!audioflag){
+    cdmessage(d,"\tCould not find any audio tracks on this disk.\n");
+    return(-403);
+  }
+
 
   {
     char *es="",*rs="";
