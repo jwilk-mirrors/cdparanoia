@@ -155,10 +155,12 @@ void offset_adjust_settings(cdrom_paranoia *p, void(*callback)(long,int)){
     			     
     if(callback)(*callback)(p->dynoverlap,PARANOIA_CB_OVERLAP);
 
-    if(p->stage1.offpoints>50){
-      p->stage1.offpoints/=2;
-      p->stage1.offaccum/=2;
-      p->stage1.offdiff/=2;
+    if(p->stage1.offpoints>600){ /* bit of a bug; this routine is
+				    called too often due to the overlap 
+				    mesh alg we use in stage 1 */
+      p->stage1.offpoints/=1.2;
+      p->stage1.offaccum/=1.2;
+      p->stage1.offdiff/=1.2;
     }
     p->stage1.offmin=0;
     p->stage1.offmax=0;
