@@ -133,8 +133,8 @@ void release_v_fragment(v_fragment *b){
   l->active--;
 
 #ifdef NOISY
-  fprintf(stderr,"Releasing v_fragment %d [%ld-%ld]\n",b->stamp,b->begin,
-	  b->end);
+  fprintf(stderr,"Releasing v_fragment %d [%ld-%ld] %ld still active\n",
+	  b->stamp,b->begin,b->end,l->active);
 #endif
 
    if(b==l->head)
@@ -171,7 +171,7 @@ void recover_fragments(cdrom_paranoia *p){
   while(v){
     v_fragment *next=v->next;
 
-    if(v->one->buffer==NULL)
+    if(v->one==NULL || v->two==NULL || v->one->buffer==NULL)
       release_v_fragment(v);
 
     v=next;
