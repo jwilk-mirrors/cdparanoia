@@ -6,15 +6,6 @@
 #ifndef _GAP_H_
 #define _GAP_H_
 
-extern long i_paranoia_overlap(size16 *buffA,size16 *buffB,
-			       long offsetA, long offsetB,
-			       long sizeA,long sizeB,
-			       long *ret_begin, long *ret_end);
-extern long i_paranoia_overlap2(size16 *buffA,size16 *buffB,
-				char *flagsA,char *flagsB,
-				long offsetA, long offsetB,
-				long sizeA,long sizeB,
-				long *ret_begin, long *ret_end);
 extern long i_paranoia_overlap_r(size16 *buffA,size16 *buffB,
 				 long offsetA, long offsetB);
 extern long i_paranoia_overlap_f(size16 *buffA,size16 *buffB,

@@ -18,12 +18,14 @@
 
 void paranoia_resetcache(cdrom_paranoia *p){
   c_block *c=c_first(p);
-  v_fragment *v=v_first(p);
+  v_fragment *v;
 
   while(c){
     free_c_block(c);
     c=c_first(p);
   }
+
+  v=v_first(p);
   while(v){
     free_v_fragment(v);
     v=v_first(p);
@@ -36,7 +38,7 @@ void paranoia_resetall(cdrom_paranoia *p){
   p->root.lastsector=0;
 
   if(p->root.vector){
-    isort_free(p->root.vector);
+    i_cblock_destructor(p->root.vector);
     p->root.vector=NULL;
   }
 
@@ -47,8 +49,8 @@ void i_paranoia_trim(cdrom_paranoia *p,long beginword,long endword){
   root_block *root=&(p->root);
   if(root->vector!=NULL){
     long target=beginword-MAX_SECTOR_OVERLAP*CD_FRAMEWORDS;
-    long rbegin=isort_begin(root->vector);
-    long rend=isort_end(root->vector);
+    long rbegin=cb(root->vector);
+    long rend=ce(root->vector);
 
     if(rbegin>beginword)
       goto rootfree;
@@ -59,7 +61,7 @@ void i_paranoia_trim(cdrom_paranoia *p,long beginword,long endword){
 
       {
 	long offset=target-rbegin;
-	isort_removef(root->vector,offset);
+	c_removef(root->vector,offset);
       }
     }
 
@@ -67,7 +69,7 @@ void i_paranoia_trim(cdrom_paranoia *p,long beginword,long endword){
       c_block *c=c_first(p);
       while(c){
 	c_block *next=c_next(c);
-	if(isort_end(c->vector)<beginword-MAX_SECTOR_OVERLAP*CD_FRAMEWORDS)
+	if(ce(c)<beginword-MAX_SECTOR_OVERLAP*CD_FRAMEWORDS)
 	  free_c_block(c);
 	c=next;
       }
@@ -78,7 +80,7 @@ void i_paranoia_trim(cdrom_paranoia *p,long beginword,long endword){
   
 rootfree:
 
-  isort_free(root->vector);
+  i_cblock_destructor(root->vector);
   root->vector=NULL;
   root->returnedlimit=-1;
   root->lastsector=0;
@@ -87,22 +89,16 @@ rootfree:
 
 /**** Statistical and heuristic[al? :-] management ************************/
 
-#ifndef rv
-#  define rv (p->root.vector)
-#  define rb (isort_begin(p->root.vector))
-#  define re (isort_end(p->root.vector))
-#endif
-
 void offset_adjust_settings(cdrom_paranoia *p, void(*callback)(long,int)){
   if(p->stage2.offpoints>=10){
     /* drift: look at the average offset value.  If it's over one
        sector, frob it.  We just want a little hysteresis [sp?]*/
     long av=(p->stage2.offpoints?p->stage2.offaccum/p->stage2.offpoints:0);
     
-    if(abs(av)>p->dynoverlap/4 && abs(av)>CD_FRAMEWORDS){
+    if(abs(av)>p->dynoverlap/4){
       av=(av/MIN_SECTOR_EPSILON)*MIN_SECTOR_EPSILON;
       
-      if(callback)(*callback)(re,PARANOIA_CB_DRIFT);
+      if(callback)(*callback)(ce(p->root.vector),PARANOIA_CB_DRIFT);
       p->dyndrift+=av;
       
       /* Adjust all the values in the cache otherwise we get a
@@ -113,16 +109,16 @@ void offset_adjust_settings(cdrom_paranoia *p, void(*callback)(long,int)){
 
 	while(v && v->one){
 	  /* safeguard beginning bounds case with a hammer */
-	  if(v->begin<av || isort_begin(v->one->vector)<av){
+	  if(fb(v)<av || cb(v->one)<av){
 	    v->one=NULL;
 	  }else{
-	    v->begin-=av;
+	    fb(v)-=av;
 	  }
 	  v=v_next(v);
 	}
 	while(c){
-	  long adj=min(av,isort_begin(c->vector));
-	  isort_set(c->vector,isort_begin(c->vector)-adj);
+	  long adj=min(av,cb(c));
+	  c_set(c,cb(c)-adj);
 	  c=c_next(c);
 	}
       }
