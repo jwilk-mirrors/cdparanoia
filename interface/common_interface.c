@@ -163,11 +163,40 @@ int data_bigendianp(cdrom_drive *d){
 }
 
 /************************************************************************/
+/* Here we fix up a couple of things that will never happen.  yeah,
+   right.  Also, originally, we did some weird stuff that came over
+   from Hannu's original code.  I'm guessing what he did was a hack
+   that seemed to work without knowing what was really going on, so
+   I'm going to try something based on 1/4 of a clue.  *Summon
+   collateral damage*... */
 
 int FixupTOC(cdrom_drive *d,int tracks){
   struct cdrom_multisession ms_str;
+      int j;
 
-  /* For a scsi device, the ioctl must got to the specialized SCSI
+  /* First off, make sure the 'starting sector' is >=0 */
+  
+  for(j=0;j<tracks;j++)
+    if(d->disc_toc[j].dwStartSector<0){
+      cdmessage(d,"\n\tTOC entry claims a negative start offset: massaging"
+		".\n");
+      d->disc_toc[j].dwStartSector=0;
+    }
+
+  /* Make sure the listed 'starting sectors' are actually increasing.
+     Flag things that are blatant/stupid/wrong */
+  {
+    long last=d->disc_toc[0].dwStartSector;
+    for(j=1;j<tracks;j++){
+      if(d->disc_toc[j].dwStartSector<last){
+	cdmessage(d,"\n\tTOC entries claim non-increasing offsets: massaging"
+		  ".\n");
+      }
+      last=d->disc_toc[j].dwStartSector;
+    }
+  }
+
+  /* For a scsi device, the ioctl must go to the specialized SCSI
      CDROM device, not the generic device. */
 
   if (d->ioctl_fd != -1) {
@@ -178,7 +207,6 @@ int FixupTOC(cdrom_drive *d,int tracks){
     if (result == -1) return -1;
 
     if (ms_str.addr.lba > 100) {
-      int j;
 
       /* This is an odd little piece of code --Monty */
 

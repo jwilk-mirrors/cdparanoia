@@ -451,10 +451,10 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 			      "\t\tNo cdrom device found to match generic device %s",
 			      messagedest,messages);
     }else{
-      generic_device=scsi_match(ioctl_device,scsi_generic_prefixes,O_RDONLY,
-				O_RDWR,
-				"\t\tNo generic found to match cdrom device %s",
-				messagedest,messages);
+      generic_device=
+	scsi_match(ioctl_device,scsi_generic_prefixes,O_RDONLY,O_RDWR,
+		   "\t\tNo generic SCSI device found to match CDROM device %s",
+		   messagedest,messages);
       if(!generic_device)	
 	goto cdda_identify_scsi_fail;
     }
@@ -473,7 +473,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   }
 
   if(ioctl_device)i_fd=open(ioctl_device,O_RDONLY);
-  g_fd=open(generic_device,O_RDWR);
+  g_fd=open(generic_device,O_RDWR|O_EXCL);
   
   if(ioctl_device && i_fd==-1)
     idperror(messagedest,messages,"\t\tCould not open SCSI cdrom device "

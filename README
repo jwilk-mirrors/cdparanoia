@@ -1,5 +1,6 @@
-cdparanoia release III alpha 3 README
-[March 19, 1998]
+cdparanoia release III alpha 9 README
+[March 19, 1998, updated October 21, 1998]
+
 Monty <xiphmont@mit.edu>
 
 This CDDA reader distribution ('cdparanoia') reads audio from the
@@ -19,6 +20,12 @@ pool of hardware out there and the newness of the software, this
 package is probably kinda buggy yet.  If you use this prerelease and
 have any sort of trouble, PLEASE let me know.  Contact information is
 at the end of this file.
+
+In addition, this software is alpha for a reason; although the code
+itself is high-quality and robust, the structure of the code and
+especially the setup of the library interfaces will continue to shift.
+The progress output and library interfaces will not be set in stone
+until this software reaches beta.
 
 Requirements
 ============
@@ -46,9 +53,10 @@ Requirements
 3. A Linux 2.0.x or 2.1.x kernel
 
 ATAPI drives may be used either with the native IDE cdrom driver, or
-with IDE-SCSI host adaptor emulation.  Both work well, but the SCSI
-emulation mode may be able to identify and use unusual drives that
-report 'CDDA incapable' in native ATAPI mode.  
+with IDE-SCSI host adaptor emulation.  Both work, but the SCSI
+emulation mode works much better for CDDA extraction.  Cdparanoia may
+also be able to identify and use unusual drives that report 'CDDA
+incapable' in native ATAPI mode.
 
 Also, although a stock SCSI setup may work, performance will be
 better if linux/include/scsi/sg.h defines SG_BIG_BUFF to 65536.
@@ -67,10 +75,10 @@ To build the cdparanoia utility:
 	
 This will compile cdparanoia; make install (as root) will install it.
 
-Unlike cdda2wav, cdparanoia is smart enough to find CDROM drives
-and the appropriate interfaces automatically; if you have only one
-CDROM drive, you'll not need to worry about it.  If your machine has
-more than one CDROM drive and cdparanoia finds the wrong one,
+Unlike cdda2wav and readcdda, cdparanoia is smart enough to find CDROM
+drives and the appropriate interfaces automatically; if you have only
+one CDROM drive, you'll not need to worry about it.  If your machine
+has more than one CDROM drive and cdparanoia finds the wrong one,
 you'll need to tell it which device to use on the command line (see
 the man page and Troubleshooting below).
 
@@ -78,6 +86,10 @@ To build the cdda_interface.a and cdda_paranoia.a libraries:
 
 	./configure
 	make lib
+
+Other build notes (such as building and using a debuggin version of
+cdparanoia to aid me in tracking down any trouble) can be found on the
+Cdparanoia web site at the URL given above.
 
 Additional installation notes
 =============================
@@ -171,10 +183,10 @@ Contacts
 ========
 
 The author of the original cdda2wav package is Heiko Eissfeldt; he can
-be contacted about cdda2wav at heiko@colossus.escape.de.  Although the
-cd interface code in cdparanoia is derived from cdda2wav, this
-package is my own fault; don't bother Heiko with bug reports, comments
-or questions.
+be contacted about cdda2wav at heiko@colossus.escape.de.  The 'common
+ancestry' of cdda2wav and cdparanoia diverged long ago, however; the
+no longer likely have any code whatsoever in common.  Don;t bug Heiko
+with Cdparanoia problems.
 
 I can be contacted at xiphmont@mit.edu.  The main distribution site
 for cdparanoia (and the original Paranoia patches to cdda2wav) is

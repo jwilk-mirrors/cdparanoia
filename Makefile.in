@@ -36,8 +36,9 @@ debug:
 	$(MAKE) cdparanoia CFLAGS="$(DEBUG)" 
 	$(MAKE) tests CFLAGS="$(OPT)"
 
-tests:	verify_test.o
-	$(LD) $(CFLAGS) $(LDFLAGS) verify_test.o -o verify_test
+test:	
+	cd interface && $(MAKE) all
+	cd paranoia && $(MAKE) test
 
 lib:	
 	cd interface && $(MAKE) lib

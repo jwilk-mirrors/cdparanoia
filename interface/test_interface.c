@@ -46,38 +46,44 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
   int bytes_so_far=0;
   char *buffer=(char *)p;
   long bytestotal=sectors*CD_FRAMESIZE_RAW;
-  begin*=CD_FRAMESIZE_RAW;
  
-  if(begin<=12007 && begin+sectors>12000){
+  /*if(begin>=200 && begin<=220){
     errno=EIO;
-    return(TR_ILLEGAL);
-  }
+    return(-1);
+  }*/
 
+  begin*=CD_FRAMESIZE_RAW;
   while(bytes_so_far<bytestotal){
     long local_bytes=bytestotal-bytes_so_far;
-    int jitter=0;/*(int)((drand48()-.5)*CD_FRAMESIZE_RAW)*4;*/
-    long rbytes,bytes=CD_FRAMESIZE_RAW*(int)(drand48()*4+1);
+    long rbytes,bytes=bytestotal;
+    int jitter=10*(int)((drand48()-.5)*CD_FRAMESIZE_RAW);
 
     char *local_buf=buffer+bytes_so_far;
     if(bytes>local_bytes)bytes=local_bytes;
 
-    /*    if(begin==0)jitter=0;*/
+    if(begin==0)jitter=0;
     if(begin+bytes_so_far+jitter<0)jitter=0;
 
     {
-      long bound=2352;
+      long seeki;
+      /*      long bound=23520;
       long nextbound=begin+bytes_so_far+bound;
       nextbound=nextbound-(nextbound%bound)+12;
       
       if(begin+bytes_so_far+bytes>nextbound){
 	bytes=nextbound-begin-bytes_so_far;
+      }*/
+     
+      /*      if(drand48()>.5){
+	seeki=begin+bytes_so_far+jitter-8;
+      }else{*/
+	seeki=begin+bytes_so_far+jitter+8;
+      
+
+      if(lseek(d->cdda_fd,seeki,SEEK_SET)<0){
+	return(bytes_so_far/CD_FRAMESIZE_RAW);
       }
 
-      if(drand48()>.5){
-	lseek(d->cdda_fd,begin+bytes_so_far+jitter-8,SEEK_SET);
-      }else{
-	lseek(d->cdda_fd,begin+bytes_so_far+jitter+8,SEEK_SET);
-      }
       rbytes=read(d->cdda_fd,local_buf,bytes);
       
       bytes_so_far+=rbytes;

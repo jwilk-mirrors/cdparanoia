@@ -374,7 +374,7 @@ static void callback(long sector, int function){
 	    dispcache[position]='+';
 	  break;
 	case PARANOIA_CB_READERR:
-	  slevel=8;
+	  slevel=6;
 	  if(dispcache[position]!='V')
 	    dispcache[position]='e';
 	  break;
@@ -386,17 +386,14 @@ static void callback(long sector, int function){
 	  overlap=osector;
 	  break;
 	case PARANOIA_CB_SCRATCH:
-	  if(slevel<7 || stimeout>5)slevel=7;
+	  slevel=7;
 	  break;
 	case PARANOIA_CB_DRIFT:
 	  if(slevel<3 || stimeout>5)slevel=3;
 	  break;
-	case PARANOIA_CB_BACKOFF:
-	  if(slevel<6 || stimeout>5)slevel=6;
-	  break;
 	case PARANOIA_CB_FIXUP_DROPPED:
 	case PARANOIA_CB_FIXUP_DUPED:
-	  if(slevel<5 || stimeout>5)slevel=5;
+	  slevel=5;
 	  break;
 	}
     
@@ -413,13 +410,13 @@ static void callback(long sector, int function){
     case 3:  /* drift */
       smilie=" :-/";
       break;
-    case 4:  /* atom fixup */
+    case 4:  /* unreported loss of streaming */
       smilie=" :-P";
       break;
     case 5:  /* dropped/duped bytes */
       smilie=" 8-|";
       break;
-    case 6:  /* backoff */
+    case 6:  /* scsi error */
       smilie=" :-0";
       break;
     case 7:  /* scratch */

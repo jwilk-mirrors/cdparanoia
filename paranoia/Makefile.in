@@ -3,6 +3,7 @@
 # DO NOT EDIT BELOW! ##########################################################
 # (unless, of course, you know what you are doing :) ##########################
 
+.SUFFIXES: .t
 VPATH=@srcdir@
 srcdir=@srcdir@
 
@@ -17,7 +18,9 @@ AR=@AR@
 RANLIB=@RANLIB@
 
 
-OFILES = paranoia.o p_block.o
+OFILES = paranoia.o p_block.o overlap.o gap.o isort.o
+TFILES = isort.t gap.t p_block.t paranoia.t
+
 LIBS = ../interface/cdda_interface.a -lm
 
 all: 
@@ -29,6 +32,8 @@ debug:
 lib:	
 	$(MAKE) cdda_paranoia.a CFLAGS="$(OPT)" 
 
+test:	$(TFILES)
+	
 cdda_paranoia.a: 	$(OFILES)	
 		$(AR) -r cdda_paranoia.a $(OFILES)
 		$(RANLIB) cdda_paranoia.a
@@ -36,8 +41,12 @@ cdda_paranoia.a: 	$(OFILES)
 .c.o:
 	$(CC) $(CFLAGS) -c $<
 
+.c.t:
+	$(CC) -g -DTEST $(DEBUG) -o $@ $< $(LIBS)
+	$@
+
 clean:
-	-rm -f *.o *.a core *~ 
+	-rm -f *.o *.a *.t core *~ 
 
 distclean:
 	-rm -f *.o *.a core *~ Makefile 
