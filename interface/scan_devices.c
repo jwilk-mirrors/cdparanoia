@@ -552,6 +552,15 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 
   p = scsi_inquiry(d);
 
+  /* It would seem some TOSHIBA CDROM gets things wrong */
+ 
+  if (!strncmp (p + 8, "TOSHIBA", 7) &&
+      !strncmp (p + 16, "CD-ROM", 6) &&
+      p[0] == TYPE_DISK) {
+    p[0] = TYPE_ROM;
+    p[1] |= 0x80;     /* removable */
+  }
+
   if (!p || (*p != TYPE_ROM && *p != TYPE_WORM)) {
     idmessage(messagedest,messages,
 	      "\t\tDrive is neither a CDROM nor a WORM device\n",NULL);
