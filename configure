@@ -892,10 +892,10 @@ else
 	case $host in 
 	i?86-*-linux*)
 		DEBUG="-g -Wall -fsigned-char"
-		OPT="-O20 -ffast-math -fsigned-char -finline-functions";;
+		OPT="-O2 -ffast-math -fsigned-char -finline-functions";;
 	*)
 		DEBUG="-g -Wall -fsigned-char"
-		OPT="-O20 -fsigned-char";;
+		OPT="-O2 -fsigned-char";;
         esac
 fi
 
