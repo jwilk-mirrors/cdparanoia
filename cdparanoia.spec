@@ -2,15 +2,14 @@
 %define realver	alpha%{ver}
 
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
-Name: cdparanoia-III
+Name: cdparanoia
 Version: %{realver}
-Release: 3
-Copyright: GPL
+Release: 7
+License: GPL
 Group: Applications/Multimedia
-Source: http://www.xiph.org/paranoia/download/%{name}-%{realver}.src.tgz 
+Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
 Url: http://www.xiph.org/paranoia/index.html
-BuildRoot: /var/tmp/cdparanoia-root
-Obsoletes: cdparanoia
+BuildRoot: %{_tmppath}/cdparanoia-%{version}-root
 
 %description
 Cdparanoia (Paranoia III) reads digital audio directly from a CD, then
@@ -27,32 +26,34 @@ Summary: Development tools for libcdda_paranoia (Paranoia III).
 Group: Development/Libraries
 
 %description devel
-The cdparanoia-devel package containts the static libraries and header
+The cdparanoia-devel package contains the static libraries and header
 files needed for developing applications to read CD Digital Audio disks.
 
 %prep
-%setup -q
+%setup -q -n %{name}-III-%{realver}
 
 %build
 rm -rf $RPM_BUILD_ROOT
-CFLAGS="${RPM_OPT_FLAGS}" ./configure --prefix=/usr
+%configure
 make  
 
 %install
 rm -rf $RPM_BUILD_ROOT
 
-install -d $RPM_BUILD_ROOT/usr/{include,lib,bin,man/man1}
-install -m 0755 -s cdparanoia $RPM_BUILD_ROOT/usr/bin/
-install -m 0644 cdparanoia.1 $RPM_BUILD_ROOT/usr/man/man1/ 
-install -m 0644 paranoia/cdda_paranoia.h $RPM_BUILD_ROOT/usr/include
+install -d $RPM_BUILD_ROOT%{_bindir}
+install -d $RPM_BUILD_ROOT%{_includedir}
+install -d $RPM_BUILD_ROOT%{_libdir}
+install -d $RPM_BUILD_ROOT%{_mandir}/man1
+install -m 0755 -s cdparanoia $RPM_BUILD_ROOT%{_bindir}
+install -m 0644 cdparanoia.1 $RPM_BUILD_ROOT%{_mandir}/man1/ 
+install -m 0644 paranoia/cdda_paranoia.h $RPM_BUILD_ROOT%{_includedir}
 install -m 0755 paranoia/libcdda_paranoia.so.0.%{ver} \
-	$RPM_BUILD_ROOT/usr/lib
-install -m 0755 paranoia/libcdda_paranoia.a $RPM_BUILD_ROOT/usr/lib
-install -m 0644 interface/cdda_interface.h $RPM_BUILD_ROOT/usr/include
+	$RPM_BUILD_ROOT%{_libdir}
+install -m 0755 paranoia/libcdda_paranoia.a $RPM_BUILD_ROOT%{_libdir}
+install -m 0644 interface/cdda_interface.h $RPM_BUILD_ROOT%{_includedir}
 install -m 0755 interface/libcdda_interface.so.0.%{ver} \
-	$RPM_BUILD_ROOT/usr/lib
-install -m 0755 interface/libcdda_interface.a $RPM_BUILD_ROOT/usr/lib
-gzip -9 $RPM_BUILD_ROOT/usr/man/man1/*
+	$RPM_BUILD_ROOT%{_libdir}
+install -m 0755 interface/libcdda_interface.a $RPM_BUILD_ROOT%{_libdir}
 
 %post -p /sbin/ldconfig
 
@@ -63,22 +64,34 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
-
 %doc README GPL FAQ.txt
-/usr/bin/cdparanoia
-/usr/man/man1/cdparanoia.1.gz
-/usr/lib/libcdda_paranoia.so.*
-/usr/lib/libcdda_interface.so.*
+%{_bindir}/*
+%{_mandir}/man1/*
+%{_libdir}/libcdda_paranoia.so.*
+%{_libdir}/libcdda_interface.so.*
 
 %files devel
 %defattr(-,root,root)
-
-/usr/include/cdda_paranoia.h
-/usr/lib/libcdda_paranoia.a
-/usr/include/cdda_interface.h
-/usr/lib/libcdda_interface.a
+%{_includedir}/*
+%{_libdir}/*.a
 
 %changelog
+* Tue Feb 27 2001 Karsten Hopp <karsten@redhat.de>
+- fix spelling error in description
+
+* Thu Dec  7 2000 Crutcher Dunnavant <crutcher@redhat.com>
+- rebuild for new tree
+
+* Fri Jul 21 2000 Trond Eivind Glomsrød <teg@redhat.com>
+- use %%{_tmppath}
+
+* Wed Jul 12 2000 Prospector <bugzilla@redhat.com>
+- automatic rebuild
+
+* Wed Jun 06 2000 Preston Brown <pbrown@redhat.com>
+- revert name change
+- use new rpm macro paths
+
 * Wed Apr 19 2000 Trond Eivind Glomsrød <teg@redhat.com>
 - Switched spec file from the one used in Red Hat Linux 6.2, which
   also changes the name
