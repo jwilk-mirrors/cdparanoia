@@ -35,6 +35,7 @@ static exception mmc_list[]={
   {"Memorex CR-622",                 1,   0,         Dummy,          NULL,0},
   {"SONY CD-ROM CDU-561",            0,   0,         Dummy,          NULL,0},
   {"Chinon CD-ROM CDS-525",          0,   0,         Dummy,          NULL,0},
+  {"KENWOOD CD-ROM UCR",          -1,   0,            NULL,scsi_read_D8,  0},
   {NULL,0,0,NULL,NULL,0}};
 
 /* list of drives that affect SCSI default settings */
@@ -52,6 +53,7 @@ static exception scsi_list[]={
   {"PLASMON",                     -1,   0,scsi_enable_cdda,scsi_read_28,  1},
   {"GRUNDIG CDR100IPW",           -1,   0,scsi_enable_cdda,scsi_read_28,  1},
   {"MITSUMI CD-R ",               -1,   0,scsi_enable_cdda,scsi_read_28,  1},
+  {"KENWOOD CD-ROM UCR",          -1,   0,            NULL,scsi_read_D8,  0},
 
   {"YAMAHA",                      -1,   0,scsi_enable_cdda,        NULL,  0},
 
