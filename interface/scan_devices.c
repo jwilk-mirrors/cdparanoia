@@ -21,7 +21,8 @@
 /* must be absolute paths! */
 static char *scsi_cdrom_prefixes[3]={"/dev/scd","/dev/sr",NULL};
 static char *scsi_generic_prefixes[2]={"/dev/sg",NULL};
-static char *cdrom_devices[14]={"/dev/cdrom","/dev/hd?","/dev/sg?",
+static char *cdrom_devices[]={"/dev/cdrom","/dev/hd?","/dev/sg?",
+				"/dev/cdroms/cdrom?",
 				"/dev/cdu31a","/dev/cdu535",
 				"/dev/sbpcd","/dev/sbpcd?","/dev/sonycd",
 				"/dev/mcd","/dev/sjcd",
@@ -74,7 +75,6 @@ cdrom_drive *cdda_find_a_cdrom(int messagedest,char **messages){
     idmessage(messagedest,messages,
 	      "\n\nNo cdrom drives accessible to %s found.\n",
 	      temp->pw_name);
-    free(temp);
   }
   return(NULL);
 }

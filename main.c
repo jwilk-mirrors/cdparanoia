@@ -267,6 +267,8 @@ VERSION"\n"
 "                                    addressed as LBA 0.  Necessary for some\n"
 "                                    Toshiba drives to get track boundaries\n"
 "                                    correct\n"
+"  -O --sample-offset <n>          : Add <n> samples to the offset when\n"
+"                                    reading data.  May be negative.\n"
 "  -z --never-skip[=n]             : never accept any less than perfect\n"
 "                                    data reconstruction (don't allow 'V's)\n"
 "                                    but if [n] is given, skip after [n]\n"
@@ -583,7 +585,7 @@ static void callback(long inpos, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:o:d:g:S:prRwafvqVQhZz::YXWBi:Tt:";
+const char *optstring = "escCn:o:O:d:g:S:prRwafvqVQhZz::YXWBi:Tt:";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -595,6 +597,7 @@ struct option options [] = {
 	{"force-cdrom-device",required_argument,NULL,'d'},
 	{"force-generic-device",required_argument,NULL,'g'},
 	{"force-read-speed",required_argument,NULL,'S'},
+	{"sample-offset",required_argument,NULL,'O'},
 	{"toc-offset",required_argument,NULL,'t'},
 	{"toc-bias",no_argument,NULL,'T'},
 	{"output-raw",no_argument,NULL,'p'},
@@ -645,6 +648,7 @@ static void cleanup(void){
 int main(int argc,char *argv[]){
   int toc_bias=0;
   int toc_offset=0;
+  int sample_offset=0;
   int force_cdrom_endian=-1;
   int force_cdrom_sectors=-1;
   int force_cdrom_overlap=-1;
@@ -783,6 +787,9 @@ int main(int argc,char *argv[]){
     case 't':
       toc_offset=atoi(optarg);
       break;
+    case 'O':
+      sample_offset=atoi(optarg);
+      break;
     default:
       usage(stderr);
       exit(1);
@@ -903,7 +910,23 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
+  /* Dump the TOC */
+  if(query_only || verbose)display_toc(d);
+  if(query_only)exit(0);
+
   /* bias the disc.  A hack.  Of course. */
+  /* we may need to read before or past user area; this is never
+     default, and we do it because the [allegedly informed] user told
+     us to */
+  if(sample_offset){
+    toc_offset+=sample_offset/588;
+    sample_offset%=588;
+    if(sample_offset<0){
+      sample_offset+=588;
+      toc_offset--;
+    }
+  }
+
   if(toc_bias){
     toc_offset=-cdda_track_firstsector(d,1);
   }
@@ -913,24 +936,6 @@ int main(int argc,char *argv[]){
 
   if(force_cdrom_speed!=-1){
     cdda_speed_set(d,force_cdrom_speed);
-  }
-
-  /* Dump the TOC */
-  if(query_only || verbose)display_toc(d);
-  if(query_only)exit(0);
-
-  if(d->interface==GENERIC_SCSI && d->bigbuff<=CD_FRAMESIZE_RAW){
-    report("WARNING: You kernel does not have generic SCSI 'SG_BIG_BUFF'\n"
-	   "         set, or it is set to a very small value.  Paranoia\n"
-	   "         will only be able to perform single sector reads\n"
-	   "         making it very unlikely Paranoia can work.\n\n"
-	   "         To correct this problem, the SG_BIG_BUFF define\n"
-	   "         must be set in /usr/src/linux/include/scsi/sg.h\n"
-	   "         by placing, for example, the following line just\n"
-	   "         before the last #endif:\n\n"
-	   "         #define SG_BIG_BUFF 65536\n\n"
-	   "         and then recompiling the kernel.\n\n"
-	   "         Attempting to continue...\n\n");
   }
 
   if(d->nsectors==1){
@@ -1019,6 +1024,10 @@ int main(int argc,char *argv[]){
 
     {
       long cursor;
+      int16_t offset_buffer[1176];
+      int offset_buffer_used=0;
+      int offset_skip=sample_offset*4;
+
       p=paranoia_init(d);
       paranoia_modeset(p,paranoia_mode);
       if(force_cdrom_overlap!=-1)paranoia_overlapset(p,force_cdrom_overlap);
@@ -1033,6 +1042,14 @@ int main(int argc,char *argv[]){
       /* this is probably a good idea in general */
       seteuid(getuid());
       setegid(getgid());
+
+      /* we'll need to be able to read one sector past user data if we
+	 have a sample offset in order to pick up the last bytes.  We
+	 need to set the disc length forward here so that the libs are
+	 willing to read past, assuming that works on the hardware, of
+	 course */
+      if(sample_offset)
+	d->disc_toc[d->tracks].dwStartSector++;
 
       while(cursor<=last_sector){
 	char outfile_name[256];
@@ -1152,6 +1169,17 @@ int main(int argc,char *argv[]){
 	}
 	
 	/* Off we go! */
+
+	if(offset_buffer_used){
+	  /* partial sector from previous batch read */
+	  cursor++;
+	  if(buffering_write(out,
+			     ((char *)offset_buffer)+offset_buffer_used,
+			     CD_FRAMESIZE_RAW-offset_buffer_used)){
+	    report2("Error writing output: %s",strerror(errno));
+	    exit(1);
+	  }
+	}
 	
 	skipped_flag=0;
 	while(cursor<=batch_last){
@@ -1187,14 +1215,56 @@ int main(int argc,char *argv[]){
 	  
 	  callback(cursor*(CD_FRAMEWORDS)-1,-2);
 
-	  if(buffering_write(out,(char *)readbuf,CD_FRAMESIZE_RAW)){
+	  if(buffering_write(out,((char *)readbuf)+offset_skip,
+			     CD_FRAMESIZE_RAW-offset_skip)){
 	    report2("Error writing output: %s",strerror(errno));
 	    exit(1);
 	  }
+	  offset_skip=0;
 	  
 	  if(output_endian!=bigendianp()){
 	    int i;
 	    for(i=0;i<CD_FRAMESIZE_RAW/2;i++)readbuf[i]=swap16(readbuf[i]);
+	  }
+
+	  /* One last bit of silliness to deal with sample offsets */
+	  if(sample_offset && cursor>batch_last){
+	    int i;
+	    /* read a sector and output the partial offset.  Save the
+               rest for the next batch iteration */
+	    readbuf=paranoia_read_limited(p,callback,max_retries);
+	    err=cdda_errors(d);mes=cdda_messages(d);
+
+	    if(mes || err)
+	      fprintf(stderr,"\r                               "
+		      "                                           \r%s%s\n",
+		      mes?mes:"",err?err:"");
+	  
+	    if(err)free(err);if(mes)free(mes);
+	    if(readbuf==NULL){
+	      skipped_flag=1;
+	      report("\nparanoia_read: Unrecoverable error reading through "
+		     "sample_offset shift\n\tat end of track, bailing.\n");
+	      break;
+	    }
+	    if(skipped_flag && abort_on_skip)break;
+	    skipped_flag=0;
+	    /* do not move the cursor */
+	  
+	    if(output_endian!=bigendianp())
+	      for(i=0;i<CD_FRAMESIZE_RAW/2;i++)
+		offset_buffer[i]=swap16(readbuf[i]);
+	    else
+	      memcpy(offset_buffer,readbuf,CD_FRAMESIZE_RAW);
+	    offset_buffer_used=sample_offset*4;
+	  
+	    callback(cursor*(CD_FRAMEWORDS),-2);
+
+	    if(buffering_write(out,(char *)offset_buffer,
+			       offset_buffer_used)){
+	      report2("Error writing output: %s",strerror(errno));
+	      exit(1);
+	    }
 	  }
 	}
 	callback(cursor*(CD_FRAMESIZE_RAW/2)-1,-1);
@@ -1208,6 +1278,8 @@ int main(int argc,char *argv[]){
 	    batch_track++;
 	    cursor=cdda_track_firstsector(d,batch_track);
 	    paranoia_seek(p,cursor,SEEK_SET);      
+	    offset_skip=sample_offset*4;
+	    offset_buffer_used=0;
 	  }
 	}
 	report("\n");
