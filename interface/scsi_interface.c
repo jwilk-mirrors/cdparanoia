@@ -1512,6 +1512,7 @@ int scsi_init_drive(cdrom_drive *d){
 
   d->read_toc = (!memcmp(d->drive_model, "IMS", 3) && !d->is_atapi) ? scsi_read_toc2 : 
     scsi_read_toc;
+  d->set_speed = NULL;
   
 
   if(!d->is_atapi){

@@ -78,6 +78,11 @@ int cdda_open(cdrom_drive *d){
   return(0);
 }
 
+int cdda_speed_set(cdrom_drive *d, int speed)
+{
+  return d->set_speed ? d->set_speed(d, speed) : 0;
+}
+
 long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
   if(d->opened){
     if(sectors>0){

@@ -56,6 +56,14 @@ static int cooked_readtoc (cdrom_drive *d){
   return(--tracks);  /* without lead-out */
 }
 
+
+/* Set operating speed */
+static int cooked_setspeed(cdrom_drive *d, int speed)
+{
+  return ioctl(d->ioctl_fd, CDROM_SELECT_SPEED, speed);
+}
+
+
 /* read 'SectorBurst' adjacent sectors of audio sectors 
  * to Buffer '*p' beginning at sector 'lSector'
  */
@@ -227,6 +235,7 @@ int cooked_init_drive (cdrom_drive *d){
   }
   d->enable_cdda = Dummy;
   d->read_audio = cooked_read;
+  d->set_speed = cooked_setspeed;
   d->read_toc = cooked_readtoc;
   ret=d->tracks=d->read_toc(d);
   if(d->tracks<1)

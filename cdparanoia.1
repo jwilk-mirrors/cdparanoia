@@ -137,6 +137,12 @@ generic devices seperately. This option is only useful on
 non-standard SCSI setups.
 
 .TP
+.BI "\-S --force-read-speed " number
+Use this option explicitly to set the read rate of the CD drive (where
+supported).  This can reduce underruns on machines with slow disks, or
+which are low on memory.
+
+.TP
 .B \-Z --disable-paranoia
 Disable 
 .b all

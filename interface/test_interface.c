@@ -199,6 +199,7 @@ int test_init_drive (cdrom_drive *d){
   d->enable_cdda = Dummy;
   d->read_audio = test_read;
   d->read_toc = test_readtoc;
+  d->set_speed = Dummy;
   d->tracks=d->read_toc(d);
   if(d->tracks==-1)
     return(d->tracks);
