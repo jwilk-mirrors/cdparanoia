@@ -1,3 +1,23 @@
+cdparanoia (3a9.6-3) unstable; urgency=low
+
+  * Removed obsolete dir /usr/man and replaced with /usr/share/man.
+
+ -- Dale E. Martin <dmartin@debian.org>  Wed, 15 Sep 1999 21:09:23 -0400
+
+cdparanoia (3a9.6-2) unstable; urgency=low
+
+  * Rebuilt with updated debhelper tools.  Had to tweak the "rules"
+    file for /usr/share/doc, too.
+
+ -- Dale E. Martin <dmartin@debian.org>  Fri, 10 Sep 1999 08:32:16 -0400
+
+cdparanoia (3a9.6-1) unstable; urgency=low
+
+  * New upstream source.  Handles newer 2.3 kernels.
+  * Updated web site info.
+
+ -- Dale E. Martin <dmartin@debian.org>  Fri, 10 Sep 1999 08:32:00 -0400
+
 cdparanoia (3a9.5-9) unstable; urgency=low
 
   * Rebuild with source included.  I messed up the upload somehow.
