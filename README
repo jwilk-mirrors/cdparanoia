@@ -60,9 +60,9 @@ To build the cdparanoia utility:
 	make all
 	
 This will compile cdparanoia and the shared paranoia libs; make
-install (as root) will install it.  Note that unlike previous
-releases, this version uses shared paranoia libs; you can still build
-the static version as follows:
+install (as root) will install it. Don't forget to run ldconfig;
+unlike previous releases, this version uses shared paranoia libs; you
+can still build the static version as follows:
 
 	./configure
 	make all STATIC=TRUE
