@@ -94,8 +94,7 @@ extern cdrom_paranoia *paranoia_init(cdrom_drive *d,int cache,
 				     int readahead);
 extern void paranoia_modeset(cdrom_paranoia *p,int mode);
 extern long paranoia_seek(cdrom_paranoia *p,long seek,int mode);
-extern size16 *paranoia_read(cdrom_paranoia *p,long sectors,
-			     void(*callback)(long,int));
+extern size16 *paranoia_read(cdrom_paranoia *p,void(*callback)(long,int));
 extern void paranoia_free(cdrom_paranoia *p);
 
 #endif

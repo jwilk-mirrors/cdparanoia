@@ -165,58 +165,62 @@ clever, eh? :-) Do only if we're extending a's verification area forward. */
 
 static void i_update_verified(p_block *a,p_block *b){
   long divpoint=a->verifyend;
-  long size1=divpoint-a->begin;
-  long size2=a->end-divpoint;
-  long size3=divpoint-b->begin;
-  long size4=b->end-divpoint;
-  
-  long newsizeA=size1+size4;
-  size16 *bufferA=malloc(newsizeA*2);
-  
-  long newsizeB=size3+size2;
-  size16 *bufferB=malloc(newsizeB*2);
-  
-  long endA,endB,doneA,doneB,lastA,lastB;
-  long verifyendA,verifyendB;
-  long sofarA=0,sofarB=0;
-  
-  memmove(bufferA,a->buffer,size1*2);
-  memmove(bufferB,b->buffer,size3*2);
-  sofarA+=size1;
-  sofarB+=size3;
-  
-  endB=a->end;
-  endA=b->end;
 
-  if(b->verifyend!=-1){
-    verifyendB=a->verifyend;
-    verifyendA=b->verifyend;
-  }else{
-    verifyendB=-1;
-    verifyendA=divpoint;
+  if(divpoint<b->begin || divpoint>=b->end)
+    return;
+  else{
+    long size1=divpoint-a->begin;
+    long size2=a->end-divpoint;
+    long size3=divpoint-b->begin;
+    long size4=b->end-divpoint;
+    
+    long newsizeA=size1+size4;
+    size16 *bufferA=malloc(newsizeA*2);
+    
+    long newsizeB=size3+size2;
+    size16 *bufferB=malloc(newsizeB*2);
+    
+    long endA,endB,doneA,doneB,lastA,lastB;
+    long verifyendA,verifyendB;
+    long sofarA=0,sofarB=0;
+    
+    memmove(bufferA,a->buffer,size1*2);
+    memmove(bufferB,b->buffer,size3*2);
+    sofarA+=size1;
+    sofarB+=size3;
+    
+    endB=a->end;
+    endA=b->end;
+    
+    if(b->verifyend!=-1 && divpoint<=b->end){
+      verifyendB=a->verifyend;
+      verifyendA=b->verifyend;
+    }else{
+      verifyendB=-1;
+      verifyendA=divpoint;
+    }
+    doneA=b->done;
+    doneB=a->done;
+    lastA=b->lastsector;
+    lastB=a->lastsector;
+    
+    memmove(bufferB+sofarB,a->buffer+divpoint-a->begin,size2*2);
+    memmove(bufferA+sofarA,b->buffer+divpoint-b->begin,size4*2);
+    
+    p_buffer(a,bufferA,newsizeA*2);
+    a->end=endA;
+    a->verifyend=verifyendA;
+    a->done=doneA;
+    a->lastsector=lastA;
+    a->silence=-1;
+    
+    p_buffer(b,bufferB,newsizeB*2);
+    b->end=endB;
+    b->verifyend=verifyendB;
+    b->done=doneB;
+    b->lastsector=lastB;
+    b->silence=-1;
   }
-  doneA=b->done;
-  doneB=a->done;
-  lastA=b->lastsector;
-  lastB=a->lastsector;
-  
-  memmove(bufferB+sofarB,a->buffer+divpoint-a->begin,size2*2);
-  memmove(bufferA+sofarA,b->buffer+divpoint-b->begin,size4*2);
-  
-  p_buffer(a,bufferA,newsizeA*2);
-  a->end=endA;
-  a->verifyend=verifyendA;
-  a->done=doneA;
-  a->lastsector=lastA;
-  a->silence=-1;
-  
-  p_buffer(b,bufferB,newsizeB*2);
-  b->end=endB;
-  b->verifyend=verifyendB;
-  b->done=doneB;
-  b->lastsector=lastB;
-  b->silence=-1;
-  
 }
 
 static void three_way_split(p_block *a,long riftr,long riftf){
@@ -821,6 +825,7 @@ static void verify_init_case(cdrom_paranoia *p,long beginword,
 	    ptr->verifyend=-1;
 	    ptr->verifybegin=-1;
 	    i_update_verified(root,ptr);
+	    release_p_block(ptr);
 	    return;
 	  }
 	}
@@ -1018,8 +1023,6 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
     p_block *b=p->fragments;
     
     while(b){
-      p_block *next=b->next;
-      
       if(b->begin<=post && post+min<=b->end){
 	/* Good enough.  Go */
 	
@@ -1029,8 +1032,9 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
 	i_update_verified(a,b);
 	p->skiplimit=post+min;
 	release_p_block(b);
+	return;
       }
-      b=next;
+      b=b->next;
     }
   }
 }    
@@ -1161,11 +1165,10 @@ long paranoia_seek(cdrom_paranoia *p,long seek,int mode){
 
 /* The returned buffer is *not* to be freed by the caller.  It will
    persist only until the next call to paranoia_read() for this p */
-size16 *paranoia_read(cdrom_paranoia *p,long sectors, 
-		      void(*callback)(long,int)){
+size16 *paranoia_read(cdrom_paranoia *p, void(*callback)(long,int)){
 
   long beginword=p->cursor*(CD_FRAMEWORDS);
-  long endword=beginword+sectors*(CD_FRAMEWORDS);
+  long endword=beginword+CD_FRAMEWORDS;
   long currword=beginword;
   long retry_count=0,lastend=-2;
 
@@ -1174,6 +1177,11 @@ size16 *paranoia_read(cdrom_paranoia *p,long sectors,
   /* First, is the sector we want already in the root? */
   while(p->root.verifyend==-1 || p->root.verifybegin>beginword || 
 	p->root.verifyend<endword+(MAX_SECTOR_PRECACHE*CD_FRAMEWORDS)){
+
+    if(!(p->enable&(PARANOIA_MODE_VERIFY|PARANOIA_MODE_OVERLAP)))
+      if(p->root.verifyend!=-1 && p->root.verifybegin<=beginword && 
+	 p->root.verifyend>=endword)break;
+
     lastend=p->root.verifyend;
 
     /* Nope; we need to build or extend the root verified range */
@@ -1201,8 +1209,8 @@ size16 *paranoia_read(cdrom_paranoia *p,long sectors,
       /* What is the first sector to read?  want some pre-buffer if
 	 we're not at the extreme beginning of the disc */
 
-      if(p->enable&PARANOIA_MODE_VERIFY){
-	p->jitter++;
+      if(p->enable&(PARANOIA_MODE_VERIFY|PARANOIA_MODE_OVERLAP)){
+	if(p->enable&PARANOIA_MODE_VERIFY)p->jitter++;
 	if(p->jitter>2)p->jitter=0; /* this is not arbitrary; think about it */
 	
 	if(p->root.verifyend==-1 || p->root.verifybegin>beginword)
@@ -1210,13 +1218,10 @@ size16 *paranoia_read(cdrom_paranoia *p,long sectors,
 	else
 	  readat=p->root.verifyend/(CD_FRAMEWORDS)-p->jitter-
 	    p->dynoverlap;
-      }else
-	if(p->enable&PARANOIA_MODE_OVERLAP)
-	  readat=p->cursor-p->dynoverlap; 
-	else{
-	  readat=p->cursor; 
-	  totaltoread=sectatonce;
-	}
+      }else{
+	readat=p->cursor; 
+	totaltoread=sectatonce;
+      }
 
       readat-=driftcomp;
 
@@ -1273,6 +1278,8 @@ size16 *paranoia_read(cdrom_paranoia *p,long sectors,
 	      verify_end_case(p,endword+
 			      (MAX_SECTOR_PRECACHE*CD_FRAMEWORDS),
 			      callback);
+
+
 	    }
 	  }
 
@@ -1283,7 +1290,7 @@ size16 *paranoia_read(cdrom_paranoia *p,long sectors,
       }
 
     }
-    
+
     if(p->root.verifyend==-1 || p->root.verifybegin<beginword)
       currword=beginword;
     else
@@ -1308,7 +1315,7 @@ size16 *paranoia_read(cdrom_paranoia *p,long sectors,
       }
     }
   }
-  p->cursor+=sectors;
+  p->cursor++;
 
   return(p->root.buffer+(beginword-p->root.begin));
 }

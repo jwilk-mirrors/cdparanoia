@@ -30,6 +30,9 @@
  *    4.04.98 - alpha 3: zillions of bugfixes, also added MMC and IDE_SCSI
  *                       emulation support
  *    4.05.98 - alpha 4: Segfault fix, cosmetic repairs
+ *    4.05.98 - alpha 5: another segfault fix, cosmetic repairs, 
+ *                       Gadi Oxman provided code to identify/fix nonstandard
+ *                       ATAPI CDROMs 
  *                       
  */
 
@@ -283,7 +286,7 @@ long callend;
 
 static void callback(long sector, int function){
 
-  /* (== PROGRESS == [--+:---x-------------->           ] == 000000 == . ==) */
+  /* (== PROGRESS == [--+:---x-------------->           ] == 002765 == . ==) */
 
   char buffer[256];
   static long c_sector=0,v_sector=0;
@@ -294,10 +297,17 @@ static void callback(long sector, int function){
   int graph=30;
   char heartbeat=' ';
   int position=0,aheadposition=0;
+  static printit=-1;
 
   sector/=CD_FRAMESIZE_RAW/2;
 
-  if(isatty(STDERR_FILENO)){  /* else don;t bother; it's probably being 
+  if(printit==-1)
+    if(isatty(STDERR_FILENO))
+      printit=1;
+    else
+      printit=0;
+
+  if(printit==1){  /* else don't bother; it's probably being 
 				 redirected */
     position=((float)(sector-callbegin)/
 	      (callend-callbegin))*graph;
@@ -312,6 +322,7 @@ static void callback(long sector, int function){
     if(function==-1){
       last=8;
       heartbeat='*';
+      v_sector=sector;
     }else
       if(position<graph && position>=0)
 	switch(function){
@@ -838,7 +849,7 @@ int main(int argc,char *argv[]){
 	
 	while(cursor<=batch_last){
 	  /* read a sector */
-	  size16 *readbuf=paranoia_read(p,1,callback);
+	  size16 *readbuf=paranoia_read(p,callback);
 	  char *err=cdda_errors(d);
 	  char *mes=cdda_messages(d);
 	  

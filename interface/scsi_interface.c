@@ -12,6 +12,20 @@
 #include "common_interface.h"
 #include "utils.h"
 
+/* hook */
+static int Dummy (cdrom_drive *d,int s){
+  return(0);
+}
+
+typedef struct exception {
+  char *model;
+  int atapi; /* If the ioctl doesn't work */
+  unsigned char density;
+  int  (*enable)(struct cdrom_drive *,int);
+  long (*read)(struct cdrom_drive *,void *,long,long);
+  int  bigendianp;
+} exception;
+
 static void find_bloody_big_buff_size(cdrom_drive *d){
 
   /* find the biggest read command that succeeds.  This should be
@@ -154,133 +168,6 @@ static int mode_sense(cdrom_drive *d,int size,int page){
   if(d->is_atapi)
     return(mode_sense_atapi(d,size,page));
   return(mode_sense_scsi(d,size,page));
-}
-
-static int check_atapi(cdrom_drive *d){
-  cdmessage(d,"\nChecking for SCSI emulation and transport revision...\n");
-
-  /* This isn't as strightforward as it should be */
-
-  /* first, we try the SG_EMULATED_HOST ioctl; this only exists in new
-     kernels though */
-  /* DOES NOT EXIST YET... next ide-scsi revision, wait till then */
-
-
-  /* If the ioctl fails, we use an Inquiry request to guess.  Even if
-     we know for certain, Inquiry will give us other interesting data,
-     but defer to the ioctl(). */
-
-  /* the fields in byte 3 of the response serve different purposes in
-     ATAPI an SCSI and we can probably distinguish the two, but not
-     always */
-
-  /* linux successfully translates the SCSI Inquiry */
-  memcpy(d->sg_buffer,(char[]){ 0x12,0,0,0,36,0},6);
-
-  if(handle_scsi_cmd(d,6, 0, 36)) {
-    cderror(d,"008: Unable to identify CDROM model\n");
-    return(-8);
-  }
-
-  /* What does byte 3 say? */
-
-  /* Low 4 bits are data format; 0 is SCSI-I or early ATAPI,
-                                 1 is modern ATAPI or SCSI-1 CCS
-				 2 is SCSI-II (or future ATAPI?)
-				 3 is reserved (SCSI-III?) */
-
-  /* high 4 bits are ATAPI version in ATAPI and AENC/TrmIOP/Reserved in SCSI */
-
-  /* How I see it:
-     (&0x3f) 0x00 SCSI-I
-     (&0x3f) 0x01 SCSI-1 CCS 
-     (&0x3f) 0x02 SCSI-II
-     0x20 early ATAPI
-     0x21 modern ATAPI
-     0x31 Mt FUJI ATAPI
-     0x03 SCSI-III?  dunno... */
-
-  {
-    char buffer[256];
-    sprintf(buffer,"\tInquiry bytes: 0x%02x 0x%02x 0x%02x 0x%02x\n",
-	    (int)d->sg_buffer[0],
-	    (int)d->sg_buffer[1],
-	    (int)d->sg_buffer[2],
-	    (int)d->sg_buffer[3]);
-    cdmessage(d,buffer);
-  }
-
-  d->is_atapi=1;
-  switch(d->sg_buffer[3]){
-  case 0x20:
-    /* early ATAPI */
-    cderror(d,"\tDrive appears to be early (pre-draft) ATAPI\n");
-    cderror(d,"\tThis drive will probably break cdparanoia; please send\n");
-    cderror(d,"\temail to xiphmont@mit.edu\n");
-    break;
-  case 0x21:
-    /* modern ATAPI */
-    cdmessage(d,"\tDrive appears to be standard ATAPI\n");
-    break;
-  case 0x30:
-    /* Old Mt Fuji? */
-    cdmessage(d,"\tDrive appears to be an early Mt. Fuji ATAPI C/DVD\n");
-    break;
-  case 0x31:
-    /* Mt Fuji */
-    cdmessage(d,"\tDrive appears to be Mt. Fuji ATAPI C/DVD\n");
-    break;
-  default:
-    d->is_atapi=0;
-    switch(d->sg_buffer[3]&0x0f){
-    case 0x0:
-      cdmessage(d,"\tDrive appears to be SCSI-1\n");
-      break;
-    case 0x1:
-      cdmessage(d,"\tDrive appears to be SCSI-1-CCS\n");
-      break;
-    case 0x2:
-      cdmessage(d,"\tDrive appears to be SCSI-2\n");
-      break;
-    case 0x3:
-      cdmessage(d,"\tUnknown type, perhaps SCSI-3?\n");
-      break;
-    default:
-      cdmessage(d,"\tUnknown drive type; assuming SCSI\n");
-      break;
-    }
-  }
-  return(d->is_atapi);
-}  
-
-static int check_mmc(cdrom_drive *d){
-  char *b;
-  cdmessage(d,"\nChecking for MMC style command set...\n");
-
-  d->is_mmc=0;
-  if(mode_sense(d,22,0x2A)==0){
-  
-    b=d->sg_buffer;
-    b+=b[3]+4;
-    
-    if((b[0]&0x3F)==0x2A){
-      /* MMC style drive! */
-      d->is_mmc=1;
-      
-      if(b[1]>=4)
-	if(b[5]&0x1){
-	  cdmessage(d,"\tDrive is MMC style\n");
-	  return(1);
-	}else{
-	  cdmessage(d,"\tDrive is MMC, but reports CDDA incapable.\n");
-	  cdmessage(d,"\tIt will likely not be able to read audio data.\n");
-	  return(1);
-	}
-    }
-  }
-  
-  cdmessage(d,"\tDrive does not have MMC CDDA support\n");
-  return(0);
 }
 
 static int mode_select(cdrom_drive *d,int density,int secsize){
@@ -557,6 +444,19 @@ static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors){
   return(0);
 }
 
+static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors){
+  memcpy(d->sg_buffer,(char []){0xbe, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
+
+  d->sg_buffer[3] = (begin >> 16) & 0xFF;
+  d->sg_buffer[4] = (begin >> 8) & 0xFF;
+  d->sg_buffer[5] = begin & 0xFF;
+  d->sg_buffer[8] = sectors;
+  if(handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW))
+    return(1);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
 static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 			  int (*map)(cdrom_drive *, void *, long, long)){
   int retry_count,err;
@@ -650,20 +550,9 @@ static long scsi_read_mmc (cdrom_drive *d, void *p, long begin,
   return(scsi_read_map(d,p,begin,sectors,i_read_mmc));
 }
 
-/* request vendor brand and model */
-unsigned char *scsi_inquiry(cdrom_drive *d){
-  memcpy(d->sg_buffer,(char[]){ 0x12,0,0,0,56,0},6);
-
-  if(handle_scsi_cmd(d,6, 0, 56 )) {
-    cderror(d,"008: Unable to identify CDROM model\n");
-    return(NULL);
-  }
-  return (d->sg_buffer);
-}
-
-/* hook */
-static int Dummy (cdrom_drive *d,int s){
-  return(0);
+static long scsi_read_mmc2 (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_mmc2));
 }
 
 /* So many different read commands, densities, features...
@@ -831,8 +720,205 @@ static int verify_read_command(cdrom_drive *d){
   return(-6);
 }
 
+#include "scsi_exceptions.h"
+
+static int guess_atapi(cdrom_drive *d,int reportp){
+
+  /* Use an Inquiry request to guess drive type. */
+  
+  /* the fields in byte 3 of the response serve different purposes in
+     ATAPI an SCSI and we can probably distinguish the two, but not
+     always */
+
+  /* Check our known weird drives.... */
+  {
+    int i=0;
+    while(atapi_list[i].model){
+      if(!strncmp(atapi_list[i].model,d->drive_model,strlen(atapi_list[i].model)))
+	if(atapi_list[i].atapi!=-1){
+	  if(reportp)
+	    cdmessage(d,"\tThis drive appears on the 'known exceptions' list:\n");
+	  if(atapi_list[i].atapi){
+	    if(reportp)
+	      cdmessage(d,"\tDrive is ATAPI (using SCSI host adaptor emulation)\n");
+	  }else{
+	    if(reportp)cdmessage(d,"\tDrive is SCSI\n");
+	  }
+	  return(atapi_list[i].atapi);
+	}
+      i++;
+    }
+  }
+
+  /* No exception listing.  What does byte 3 say? */
+
+  /* Low 4 bits are data format; 0 is SCSI-I or early ATAPI,
+                                 1 is modern ATAPI or SCSI-1 CCS
+				 2 is SCSI-II (or future ATAPI?)
+				 3 is reserved (SCSI-III?) */
+
+  /* high 4 bits are ATAPI version in ATAPI and AENC/TrmIOP/Reserved in SCSI */
+
+  /* How I see it:
+     (&0x3f) 0x00 SCSI-I
+     (&0x3f) 0x01 SCSI-1 CCS 
+     (&0x3f) 0x02 SCSI-II
+     0x20 early ATAPI
+     0x21 modern ATAPI
+     0x31 Mt FUJI ATAPI
+     0x03 SCSI-III?  dunno... */
+
+  if(reportp){
+    char buffer[256];
+    sprintf(buffer,"\tInquiry bytes: 0x%02x 0x%02x 0x%02x 0x%02x\n",
+	    (int)d->inqbytes[0],
+	    (int)d->inqbytes[1],
+	    (int)d->inqbytes[2],
+	    (int)d->inqbytes[3]);
+    cdmessage(d,buffer);
+  }
+
+  switch(d->inqbytes[3]){
+  case 0x20:
+    /* early ATAPI */
+    if(reportp){
+      cderror(d,"\tDrive appears to be early (pre-draft) ATAPI\n");
+      cderror(d,"\tThis drive will probably break cdparanoia; please send\n");
+      cderror(d,"\temail to xiphmont@mit.edu\n");
+    }
+    return(1);
+  case 0x21:
+    /* modern ATAPI */
+    if(reportp)
+      cdmessage(d,"\tDrive appears to be standard ATAPI\n");
+    return(1);
+  case 0x30:
+    /* Old Mt Fuji? */
+    if(reportp)
+      cdmessage(d,"\tDrive appears to be an early Mt. Fuji ATAPI C/DVD\n");
+    return(1);
+  case 0x31:
+    /* Mt Fuji */
+    if(reportp)
+      cdmessage(d,"\tDrive appears to be Mt. Fuji ATAPI C/DVD\n");
+    return(1);
+  default:
+    if(reportp)
+      switch(d->inqbytes[3]&0x0f){
+      case 0x0:
+	cdmessage(d,"\tDrive appears to be SCSI-1\n");
+	break;
+      case 0x1:
+	cdmessage(d,"\tDrive appears to be SCSI-1-CCS\n");
+	break;
+      case 0x2:
+	cdmessage(d,"\tDrive appears to be SCSI-2\n");
+	break;
+      case 0x3:
+	cdmessage(d,"\tUnknown type, perhaps SCSI-3?\n");
+	break;
+      default:
+	cdmessage(d,"\tUnknown drive type; assuming SCSI\n");
+	break;
+      }
+  }
+  return(0);
+}
+
+static int check_atapi(cdrom_drive *d){
+  int atapiret=-1;
+  int fd = d->cdda_fd; /* this is the correct fd (not ioctl_fd), as the 
+			  generic device is the device we need to check */
+			  
+  cdmessage(d,"\nChecking for SCSI emulation and transport revision...\n");
+
+  /* This isn't as strightforward as it should be */
+
+  /* first, we try the SG_EMULATED_HOST ioctl; this only exists in new
+     kernels though */
+
+  if (ioctl(fd,SG_EMULATED_HOST,&atapiret))
+    cdmessage(d,"\tNo SG_EMULATED_HOST ioctl(); Checking inquiry command...\n");
+  else {
+    if(atapiret==1){
+      cdmessage(d,"\tDrive is ATAPI (using SCSI host adaptor emulation)\n");
+      /* Disable kernel SCSI command translation layer for access through sg */
+      if (ioctl(fd,SG_SET_TRANSFORM,0))
+	cderror(d,"\tCouldn't disable kernel command translation layer\n");
+      d->is_atapi=1;
+    }else{
+      cdmessage(d,"\tDrive is SCSI\n");
+      d->is_atapi=0;
+    }
+
+    if(guess_atapi(d,0)!=d->is_atapi){
+      cderror(d,"\tNOTE: Our ATAPI/SCSI guessing algorithm will detect the\n");
+      cderror(d,"\tdrive type incorrectly on older kernels; please e-mail the\n");
+      cderror(d,"\toutput of 'cdparanoia -vQ' to xiphmont@mit.edu\n");
+    }
+    return(d->is_atapi);
+  }
+  
+  return(d->is_atapi=guess_atapi(d,1));
+}  
+
+static int check_mmc(cdrom_drive *d){
+  char *b;
+  cdmessage(d,"\nChecking for MMC style command set...\n");
+
+  d->is_mmc=0;
+  if(mode_sense(d,22,0x2A)==0){
+  
+    b=d->sg_buffer;
+    b+=b[3]+4;
+    
+    if((b[0]&0x3F)==0x2A){
+      /* MMC style drive! */
+      d->is_mmc=1;
+      
+      if(b[1]>=4)
+	if(b[5]&0x1){
+	  cdmessage(d,"\tDrive is MMC style\n");
+	  return(1);
+	}else{
+	  cdmessage(d,"\tDrive is MMC, but reports CDDA incapable.\n");
+	  cdmessage(d,"\tIt will likely not be able to read audio data.\n");
+	  return(1);
+	}
+    }
+  }
+  
+  cdmessage(d,"\tDrive does not have MMC CDDA support\n");
+  return(0);
+}
+
+static void check_exceptions(cdrom_drive *d,exception *list){
+
+  int i=0;
+  while(list[i].model){
+    if(!strncmp(list[i].model,d->drive_model,strlen(list[i].model))){
+      if(list[i].density)d->density=list[i].density;
+      if(list[i].enable)d->enable_cdda=list[i].enable;
+      if(list[i].read)d->read_audio=list[i].read;
+      if(list[i].bigendianp!=-1)d->bigendianp=list[i].bigendianp;
+      return;
+    }
+    i++;
+  }
+}
+
+/* request vendor brand and model */
+unsigned char *scsi_inquiry(cdrom_drive *d){
+  memcpy(d->sg_buffer,(char[]){ 0x12,0,0,0,56,0},6);
+
+  if(handle_scsi_cmd(d,6, 0, 56 )) {
+    cderror(d,"008: Unable to identify CDROM model\n");
+    return(NULL);
+  }
+  return (d->sg_buffer);
+}
+
 int scsi_init_drive(cdrom_drive *d){
-  unsigned char *p;
   int ret;
 
   check_atapi(d);
@@ -847,12 +933,12 @@ int scsi_init_drive(cdrom_drive *d){
   d->read_audio = scsi_read_sony;
   d->fua=0;
       
-  p = scsi_inquiry(d);
-
   if(d->is_mmc){
 
     d->read_audio = scsi_read_mmc;
     d->bigendianp=0;
+
+    check_exceptions(d,mmc_list);
 
   }else{
     
@@ -862,68 +948,16 @@ int scsi_init_drive(cdrom_drive *d){
       d->read_audio = scsi_read_mmc;
       d->bigendianp=0;
 
+      check_exceptions(d,atapi_list);
+
     }else{
 
-      /* check for brands and adjust special peculiaritites */
-      
-      /* If your drive is not treated correctly, you can adjust some things
-	 here (but please mail me so I can add it for everyone else!)
-	 
-	 d->bigendianp: should be to 0, if the CDROM drive or CD-Writer
-	 delivers the samples in the native byteorder of the audio cd (LSB
-	 first). The SCSI-II spec says this should be (bigendian) for all
-	 SCSI-II drives, but many drives are little endian anyway.
-	 
-	 NOTE: If you get correct wav files when using sox with the '-x' option,
-	 the endianess is wrong. You can specify endianness ont he commandline
-	 
-	 */
-      
-      if (!memcmp(p+8,"TOSHIBA", 7) ||
-	  !memcmp(p+8,"IBM", 3) ||
-	  !memcmp(p+8,"DEC", 3)) {
-	
-	d->density = 0x82;
-	d->enable_cdda= scsi_enable_cdda;
-	d->read_audio= scsi_read_10;
-	d->bigendianp=0;
-	/*d->fua=1;*/
-	
-      } else if (!memcmp(p+8,"IMS",3) ||
-		 !memcmp(p+8,"KODAK",5) ||
-		 !memcmp(p+8,"RICOH",5) ||
-		 !memcmp(p+8,"HP",2) ||
-		 !memcmp(p+8,"PHILIPS",7) ||
-		 !memcmp(p+8,"PLASMON",7) ||
-		 !memcmp(p+8,"GRUNDIG CDR100IPW",17) ||
-		 !memcmp(p+8,"MITSUMI CD-R ",13)) {
-	
-	d->enable_cdda= scsi_enable_cdda;
-	d->read_audio= scsi_read_10;
-	d->bigendianp=1;
-	/*d->fua=1;*/
-	
-      } else if (!memcmp(p+8,"YAMAHA",6)) {
-	
-	d->enable_cdda= scsi_enable_cdda;
-	d->bigendianp=0;
-	
-      } else if (!memcmp(p+8,"PLEXTOR",7) ||
-		 !memcmp(p+8,"SONY",4)) {
-	
-	d->bigendianp=0;
-	
-      } else if (!memcmp(p+8,"NEC",3)) {
-	
-	d->read_audio= scsi_read_nec;
-	
-	d->bigendianp=0;
-      }
+      check_exceptions(d,scsi_list);
+
     }
   }
 
-
-  d->read_toc = (!memcmp(p+8, "IMS", 3) && !d->is_atapi) ? scsi_read_toc2 : 
+  d->read_toc = (!memcmp(d->drive_model, "IMS", 3) && !d->is_atapi) ? scsi_read_toc2 : 
     scsi_read_toc;
   
   d->enable_cdda(d,0);

@@ -543,6 +543,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 
   p = scsi_inquiry(d);
 
+  memcpy(d->inqbytes,p,4);
   d->cdda_device_name=copystring(generic_device);
   d->ioctl_device_name=copystring(ioctl_device);
 

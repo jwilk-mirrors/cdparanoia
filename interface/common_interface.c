@@ -56,7 +56,7 @@ int data_bigendianp(cdrom_drive *d){
   /* Force no swap for now */
   d->bigendianp=-1;
   
-  cdmessage(d,"Attempting to determine drive endianness from data...");
+  cdmessage(d,"\nAttempting to determine drive endianness from data...");
   d->enable_cdda(d,1);
   for(i=0,checked=0;i<d->tracks;i++){
     float lsb_energy=0;

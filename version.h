@@ -7,7 +7,7 @@
  ******************************************************************/
 
 
-#define VERSION "cdparanoia III alpha prerelease 4 (April 5, 1998)\n"\
+#define VERSION "cdparanoia III alpha prerelease 5 (April 5, 1998)\n"\
                 "(C) 1998 Monty <xiphmont@mit.edu>\n\n"\
 		"This is PRERELEASE software!  Report bugs to xiphmont@mit.edu\n"\
 		"http://www.mit.edu/afs/sipb/user/xiphmont/cdparanoia/index.html"

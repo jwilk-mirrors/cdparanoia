@@ -56,6 +56,14 @@
 #define MIN_BIG_BUFF_SIZE 4096
 #define SG_OFF sizeof(struct sg_header)
 
+#ifndef SG_EMULATED_HOST
+/* old kernel version; the check for the ioctl is still runtime, this
+   is just to build */
+#define SG_EMULATED_HOST 0x2203
+#define SG_SET_TRANSFORM 0x2204
+#define SG_GET_TRANSFORM 0x2205
+#endif
+
 extern int  cooked_init_drive (cdrom_drive *d);
 extern unsigned char *scsi_inquiry (cdrom_drive *d);
 extern int  scsi_init_drive (cdrom_drive *d);
@@ -63,3 +71,4 @@ extern int  scsi_init_drive (cdrom_drive *d);
 extern int  test_init_drive (cdrom_drive *d);
 #endif
 #endif
+

@@ -84,6 +84,7 @@ typedef struct cdrom_drive{
   unsigned char *sg;
   unsigned char *sg_buffer;
   int clear_buff_via_bug;
+  unsigned char inqbytes[4];
 
   /* Scsi parameters and state */
   unsigned char density;
