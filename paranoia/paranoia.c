@@ -926,6 +926,9 @@ long paranoia_seek(cdrom_paranoia *p,long seek,int mode){
   p->cursor=sector;
 
   i_paranoia_firstlast(p);
+  
+  /* Evil hack to fix pregap patch for NEC drives! To be rooted out in a10 */
+  p->current_firstsector=sector;
 
   return(ret);
 }

@@ -320,7 +320,7 @@ VERSION"\n"
 "  B) extract an entire disc, putting each track in a seperate file:\n"
 "       cdparanoia -B \"1-\"\n\n"
 "  C) extract from track 1, time 0:30.12 to 1:10.00:\n"
-"       cdparanoia \"1[:30.12]1-[1:10]\"\n\n"
+"       cdparanoia \"1[:30.12]-1[1:10]\"\n\n"
 
 "Submit bug reports to xiphmont@mit.edu\n\n");
 }
@@ -588,8 +588,11 @@ long blocking_write(int outf, char *buffer, long num){
 
   while(words<num){
     temp=write(outf,buffer+words,num-words);
-    if(temp==-1 && errno!=EINTR && errno!=EAGAIN)
-      return(-1);
+    if(temp==-1){
+      if(errno!=EINTR && errno!=EAGAIN)
+	return(-1);
+      temp=0;
+    }
     words+=temp;
   }
   return(0);
@@ -1023,7 +1026,7 @@ int main(int argc,char *argv[]){
 	      }
 	    }
 	    
-	    out=open(buffer,O_RDWR|O_CREAT|O_TRUNC,0660);
+	    out=open(buffer,O_RDWR|O_CREAT|O_TRUNC,0666);
 	    if(out==-1){
 	      report3("Cannot open specified output file %s: %s",buffer,
 		      strerror(errno));
@@ -1056,7 +1059,7 @@ int main(int argc,char *argv[]){
 	    break;
 	  }
 	  
-	  out=open(buffer,O_RDWR|O_CREAT|O_TRUNC,0660);
+	  out=open(buffer,O_RDWR|O_CREAT|O_TRUNC,0666);
 	  if(out==-1){
 	    report3("Cannot open default output file %s: %s",buffer,
 		    strerror(errno));

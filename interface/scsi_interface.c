@@ -1,18 +1,8 @@
-/* Add 0x02 0x10, 0x08 as guesses in scanning for a command set */
-
-/* MMC-2 drives have 0x52 which they are required to support... get
-the track length from here. ATAPI should be MMC-2 style.  Older SCSI,
-use SubQ? */
-
-/* Found an Acer 525... perhaps similar to the IMS 522?  The normal
-   readtoc does not work.  Could this also be the same as the Creative
-   52x,62x,82x drives? */
-
 /******************************************************************
  * CopyPolicy: GNU Public License 2 applies
  * Original interface.c Copyright (C) 1994-1997 
  *            Eissfeldt heiko@colossus.escape.de
- * Current blenderization Copyright (C) 1998 Monty xiphmont@mit.edu
+ * Current blenderization Copyright (C) 1998-1999 Monty xiphmont@mit.edu
  * 
  * Generic SCSI interface specific code.
  *
@@ -28,6 +18,64 @@ static int Dummy (cdrom_drive *d,int s){
 }
 
 #include "drive_exceptions.h"
+
+#ifndef SG_GET_RESERVED_SIZE
+#define SG_GET_RESERVED_SIZE 0x2272
+#endif 
+
+#ifndef SG_GET_SG_TABLESIZE
+#define SG_GET_SG_TABLESIZE 0x227F
+#endif 
+
+#ifndef SG_SET_COMMAND_Q
+#define SG_SET_COMMAND_Q 0x2271 
+#endif
+
+static int look_for_dougg(cdrom_drive *d){
+  /* are we using the new SG driver by Doug Gilbert? If so, our memory
+     strategy will be different. */
+  int reserved,table;
+  cdmessage(d,"\nLooking at revision of the SG interface in use...\n");
+
+  if(ioctl(d->cdda_fd,SG_GET_RESERVED_SIZE,&reserved)){
+    /* Up, guess not. */
+    cdmessage(d,"\tOld 2.0/early 2.1/early 2.2.x (non-ac patch) style SG.\n");
+    return(0);
+  }
+  cdmessage(d,"\tNew style SG with scatter/gather memory management\n");
+
+  /* maximum transfer size? */
+
+  if(ioctl(d->cdda_fd,SG_GET_SG_TABLESIZE,&table))table=1;
+
+  {
+    char buffer[256];
+    int cur;
+
+    sprintf(buffer,"\tDMA scatter/gather table entries: %d\n\t"
+	    "table entry size: %d bytes\n\t"
+	    "maximum theoretical transfer: %d sectors\n",
+	    table,reserved,table*reserved/CD_FRAMESIZE_RAW);
+    cdmessage(d,buffer);
+
+    cur=table*reserved;
+    cur=(cur>1024*128?1024*128:cur);
+    d->nsectors=cur/CD_FRAMESIZE_RAW;
+    d->bigbuff=cur;
+
+    sprintf(buffer,"\tSetting default read size to %d sectors (%d bytes).\n",
+	    d->nsectors,d->nsectors*CD_FRAMESIZE_RAW);
+    cdmessage(d,buffer);
+  } 
+
+  /* Disable command queue; we don;t need it, no reason to have it on */
+  reserved=0;
+  if(ioctl(d->cdda_fd,SG_SET_COMMAND_Q,&reserved)){
+    cdmessage(d,"\tCouldn't disable command queue!  Continuing anyway...\n");
+  }
+
+  return(1);
+}
 
 static void find_bloody_big_buff_size(cdrom_drive *d){
 
@@ -53,19 +101,17 @@ static void find_bloody_big_buff_size(cdrom_drive *d){
       int flag=0;
       d->nsectors=cur;
       
-      /* The *correct* thing to do would be to look for the kernel
-         memory error, but the layer is not currently arranged to
-         allow this.  This will be fixed in the alpha 10 reorg */
       for(i=1;i<=d->tracks;i++){
 	if(cdda_track_audiop(d,i)==1){
 	  long firstsector=cdda_track_firstsector(d,i);
 	  long lastsector=cdda_track_lastsector(d,i);
 	  long sector=(firstsector+lastsector)>>1;
 	  
-	  if(d->read_audio(d,NULL,sector,cur)>0){
-	    flag=1;
-	    break;
-	  }
+	  errno=0;
+	  d->read_audio(d,NULL,sector,cur);
+	  if(errno!=ENOMEM)flag=1;
+	  break;
+
 	}
       }
       if(flag)break;
@@ -140,6 +186,7 @@ static int handle_scsi_cmd(cdrom_drive *d,
   /* clear out any possibly preexisting garbage */
   clear_garbage(d);
 
+  memset(sg_hd,0,sizeof(sg_hd)); 
   sg_hd->twelve_byte = cmd_len == 12;
   sg_hd->result = 0;
   sg_hd->reply_len = SG_OFF + out_size;
@@ -200,22 +247,19 @@ static int handle_scsi_cmd(cdrom_drive *d,
        layer is in place in alpha 10; right now, always print a
        message. */
 
-    fd_set rset,wset,eset;
+    fd_set rset;
     struct timeval tv;
 
     FD_ZERO(&rset);
-    FD_ZERO(&wset);
-    FD_ZERO(&eset);
     FD_SET(d->cdda_fd,&rset);
-    FD_SET(d->cdda_fd,&wset);
-    FD_SET(d->cdda_fd,&eset);
     tv.tv_sec=15;
     tv.tv_usec=0;
 
     while(1){
-      int ret=select(d->cdda_fd+1,&rset,&wset,&eset,&tv);
+      int ret=select(d->cdda_fd+1,&rset,NULL,NULL,&tv);
       if(ret<0 && errno!=EINTR)break;
       if(ret==0){
+	sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
 	fprintf(stderr,"\nSCSI transport error: timeout waiting to read"
 		" packet\n\n");
 	return(TR_EREAD);
@@ -223,14 +267,9 @@ static int handle_scsi_cmd(cdrom_drive *d,
       if(ret>0){
 	/* is it readable or something else? */
 	if(FD_ISSET(d->cdda_fd,&rset))break;
-	if(FD_ISSET(d->cdda_fd,&eset)){
-	  fprintf(stderr,"\nSCSI transport: error reading packet\n\n");
-	  return(TR_EREAD);
-	}
-	if(FD_ISSET(d->cdda_fd,&wset)){
-	  fprintf(stderr,"\nSCSI transport: writeable when reading packet\n\n");
-	  return(TR_EREAD);
-	}
+	sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
+	fprintf(stderr,"\nSCSI transport: error reading packet\n\n");
+	return(TR_EREAD);
       }
     }
   }
@@ -814,6 +853,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
       if(!d->error_retry)return(-7);
       switch(errno){
       case EINTR:
+	usleep(100);
 	continue;
       case ENOMEM:
 	if(d->bigbuff==0){
@@ -821,11 +861,21 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	  return(-7);
 	}else{
 	  /* D'oh.  Possible kernel error. Keep limping */
+	  usleep(100);
 	  if(sectors==1){
 	    /* Nope, can't continue */
 	    cderror(d,"300: Kernel memory error\n");
 	    return(-300);  
 	  }
+	  if(d->report_all){
+	    char b[256];
+	    sprintf(b,"scsi_read: kernel couldn't alloc %d bytes.  "
+		    "backing off...\n",sectors*CD_FRAMESIZE_RAW);
+	    
+	    cdmessage(d,b);
+	  }
+	  sectors--;
+	  continue;
 	}
       default:
 	if(sectors==1){
@@ -1434,7 +1484,7 @@ int scsi_init_drive(cdrom_drive *d){
       
   if(d->is_mmc){
 
-    d->read_audio = scsi_read_mmc;
+    d->read_audio = scsi_read_mmc3;
     d->bigendianp=0;
 
     check_exceptions(d,mmc_list);
@@ -1444,7 +1494,7 @@ int scsi_init_drive(cdrom_drive *d){
     if(d->is_atapi){
       /* Not MMC maybe still uses 0xbe */
 
-      d->read_audio = scsi_read_mmc;
+      d->read_audio = scsi_read_mmc3;
       d->bigendianp=0;
 
       check_exceptions(d,atapi_list);
@@ -1482,7 +1532,9 @@ int scsi_init_drive(cdrom_drive *d){
 
   if((ret=verify_read_command(d)))return(ret);
   check_fua_bit(d);
-  if(d->nsectors<1)find_bloody_big_buff_size(d);
+
+  if(!look_for_dougg(d))
+    if(d->nsectors<1)find_bloody_big_buff_size(d);
 
   d->error_retry=1;
   d->sg=realloc(d->sg,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF + 128);

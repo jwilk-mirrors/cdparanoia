@@ -60,7 +60,7 @@ void WriteAiff(int f,long bytes){
   write(f,"AIFF",4);             /* 12 */
 
   write(f,"COMM",4);             /* 16 */
-  PutNum(38,f,1,4);              /* 20 */
+  PutNum(18,f,1,4);              /* 20 */
   PutNum(2,f,1,2);               /* 22 */
   PutNum(frames,f,1,4);          /* 26 */    
   PutNum(16,f,1,2);              /* 28 */

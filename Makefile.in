@@ -44,8 +44,8 @@ lib:
 	cd paranoia && $(MAKE) lib
 
 install:
-		$(INSTALL) -m 755 $(srcdir)/cdparanoia $(BINDIR)
-		$(INSTALL) -m 444 $(srcdir)/cdparanoia.1 $(MANDIR)/man1
+		$(INSTALL) -m 0755 $(srcdir)/cdparanoia $(BINDIR)
+		$(INSTALL) -m 0644 $(srcdir)/cdparanoia.1 $(MANDIR)/man1
 
 
 cdparanoia:	$(OFILES) interface/cdda_interface.a paranoia/cdda_paranoia.a
