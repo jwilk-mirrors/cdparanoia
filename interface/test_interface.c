@@ -38,34 +38,35 @@ static int test_readtoc (cdrom_drive *d){
   return(--tracks);  /* without lead-out */
 }
 
-/* we emulate jitter, scratches and bogus bytes on boundaries */
-/* jitter and stuff isn't actually implemented yet */
+/* we emulate jitter, scratches, atomic jitter and bogus bytes on
+   boundaries, etc */
+
 static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
 
   int bytes_so_far=0;
   char *buffer=(char *)p;
   long bytestotal=sectors*CD_FRAMESIZE_RAW;
-
-  long local_bytes=bytestotal-bytes_so_far;
-  int nsectors=d->nsectors;
-  long nbytes=nsectors*CD_FRAMESIZE_RAW;
-  int jitter=(int)(drand48()*120-60)*4;
-  
-  char *local_buf=buffer+bytes_so_far;
   begin*=CD_FRAMESIZE_RAW;
-  
 
-  local_bytes=(local_bytes>nbytes?nbytes:local_bytes);
-  
-  if(begin==0)jitter=0;
-  printf("%ld %d %ld sector jitter nbytes\n",begin+bytes_so_far,jitter,
-	 local_bytes);
-  
-  lseek(d->cdda_fd,begin+bytes_so_far+jitter,SEEK_SET);
-  read(d->cdda_fd,local_buf,local_bytes);
-  
-  d->nothing_read=0;
-  return(local_bytes/(CD_FRAMESIZE_RAW));
+  while(bytes_so_far<bytestotal){
+    long local_bytes=bytestotal-bytes_so_far;
+    int jitter=(begin/100)*2;
+    long bytes=8*CD_FRAMESIZE_RAW; /* max 8 sectors */
+
+    char *local_buf=buffer+bytes_so_far;
+    if(bytes>local_bytes)bytes=local_bytes;
+
+    if(begin==0)jitter=0;
+
+    /*    printf("%d %ld sector jitter nbytes\n",jitter,
+	   bytes); */
+    
+    lseek(d->cdda_fd,begin+bytes_so_far+jitter,SEEK_SET);
+    read(d->cdda_fd,local_buf,bytes);
+    bytes_so_far+=bytes;
+  }
+
+  return(sectors);
 
 }
 
@@ -81,12 +82,11 @@ int test_init_drive (cdrom_drive *d){
   d->enable_cdda = Dummy;
   d->read_audio = test_read;
   d->read_toc = test_readtoc;
-  d->select_speed = NULL;
   d->tracks=d->read_toc(d);
   if(d->tracks==-1)
-    return(1);
+    return(d->tracks);
   d->opened=1;
-  srand48(8);
+  srand48(0);
   return(0);
 }
 

@@ -57,6 +57,7 @@ int data_bigendianp(cdrom_drive *d){
   d->bigendianp=-1;
   
   cdmessage(d,"Attempting to determine drive endianness from data...");
+  d->enable_cdda(d,1);
   for(i=0,checked=0;i<d->tracks;i++){
     float lsb_energy=0;
     float msb_energy=0;
@@ -86,8 +87,10 @@ int data_bigendianp(cdrom_drive *d){
 	  }
 	  if(!zeroflag)break;
 	  firstsector+=readsectors;
+	}else{
+	  d->enable_cdda(d,0);
+	  return(-1);
 	}
-	
       }
 
       beginsec*=CD_FRAMESIZE_RAW/2;
@@ -126,6 +129,7 @@ int data_bigendianp(cdrom_drive *d){
   free(a);
   free(b);
   d->bigendianp=endiancache;
+  d->enable_cdda(d,0);
 
   /* How did we vote?  Be potentially noisy */
   if(lsb_votes>msb_votes){
@@ -152,9 +156,6 @@ int data_bigendianp(cdrom_drive *d){
 }
 
 /************************************************************************/
-/* Query for multisession sector boundaries; make sure our last audio
-   track ends within the audio session. This is derived from Heiko's
-   code.  Frankly, I don't understand exactly what he's doing. */
 
 int FixupTOC(cdrom_drive *d,int tracks){
   struct cdrom_multisession ms_str;

@@ -26,7 +26,7 @@
 typedef struct TOC {	/* structure of table of contents */
   unsigned char bFlags;
   unsigned char bTrack;
-  unsigned size32 dwStartSector;
+  size32 dwStartSector;
 } TOC;
 
 /* interface types */
@@ -71,31 +71,28 @@ typedef struct cdrom_drive{
 
   /* functions specific to particular drives/interrfaces */
 
-  int  (*enable_cdda)  (struct cdrom_drive *d, int speed);
+  int  (*enable_cdda)  (struct cdrom_drive *d, int onoff);
   int  (*read_toc)     (struct cdrom_drive *d);
   long (*read_audio)   (struct cdrom_drive *d, void *p, long begin, 
 		       long sectors);
-  int  (*select_speed) (struct cdrom_drive *d,int speed);
+  int error_retry;
 
-  int nothing_read;
-  int maxspeed;
+  int is_atapi;
+  int is_mmc;
 
   /* SCSI command buffer and offset pointers */
   unsigned char *sg;
   unsigned char *sg_buffer;
+  int clear_buff_via_bug;
 
   /* Scsi parameters and state */
   unsigned char density;
-  unsigned char orgmode4;
-  unsigned char orgmode10;
-  unsigned char orgmode11;
+  unsigned char orgdens;
+  unsigned int orgsize;
   long bigbuff;
   int adjust_ssize;
   int fua;
-
   sigset_t sigset;
-
-  /* Cooked parameters */
 
 } cdrom_drive;
 
@@ -148,14 +145,12 @@ extern long cdda_disc_lastsector(cdrom_drive *d);
 006: Could not read any data from drive
 007: Unknown, unrecoverable error reading data
 008: Unable to identify CDROM model
+009: CDROM reporting illegal table of contents
 
 100: Interface not supported
 101: Drive is neither a CDROM nor a WORM device
 102: Permision denied on cdrom (ioctl) device
 103: Permision denied on cdrom (data) device
-
-200: Invalid speed setting for drive
-201: Speed select failed
 
 300: Kernel memory error
 

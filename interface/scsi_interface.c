@@ -6,60 +6,11 @@
  * 
  * Generic SCSI interface specific code.
  *
- *    NOTE: a bug/misfeature in the kernel requires blocking signal
- *          SIGINT during SCSI command handling. Once this flaw has
- *          been removed, the sigprocmask SIG_BLOCK and SIG_UNBLOCK 
- *          calls should removed, thus saving context switches.
- *
  ******************************************************************/
 
 #include "low_interface.h"
 #include "common_interface.h"
 #include "utils.h"
-
-#define MAX_BIG_BUFF_SIZE 65536
-#define MIN_BIG_BUFF_SIZE 4096
-#define SG_OFF sizeof(struct sg_header)
-
-/* this may be bogus; SCSI spec isn't very explicit on the point.
-   NEC drives are known to take the bit, but then return all zero
-   data :-P */
-
-static void fua_supportp(cdrom_drive *d){
-
-  if(d->fua==-1){
-    long begin=cdda_disc_firstsector(d);
-    /* try reading the first sector with the FUA bit set.  if the
-       command succeeds, set our flag */
-    
-    /* Why not just query the drive for FUA bit support?  That doesn;t
-       tell us if:
-       
-       a) the firmware is broken
-       b) the drive supports FUA, but our read proprietary read command does not
-       (see above)
-       
-       */
-    cdmessage(d,"Checking for support of FUA bit in SCSI read command...\n");
-    
-    d->fua=-1;
-    if(d->read_audio(d,NULL,begin,1)==-1){
-      cdmessage(d,"\tdrive rejected FUA bit.\n");
-      d->fua=0;
-      if(d->read_audio(d,NULL,begin,1)==-1){
-	cdmessage(d,"\tHuh.  Drive also rejected without FUA bit.\n");
-	cdmessage(d,"\tYou'd better send mail to xiphmont@mit.edu\n");
-	cdmessage(d,"\tContinuing...\n");
-      }
-      return;
-    }
-    
-    
-    
-    cdmessage(d,"\tdrive accepted FUA bit.\n");
-    d->fua=1;
-  }
-}
 
 static void find_bloody_big_buff_size(cdrom_drive *d){
 
@@ -68,8 +19,9 @@ static void find_bloody_big_buff_size(cdrom_drive *d){
 
   long begin=cdda_disc_firstsector(d);
   long cur=MAX_BIG_BUFF_SIZE/CD_FRAMESIZE_RAW;
-  cdmessage(d,"Attempting to autosense SG_BIG_BUFF size...\n");
+  cdmessage(d,"\nAttempting to autosense SG_BIG_BUFF size...\n");
 
+  d->enable_cdda(d,1);
   if(begin==-1){
     cur=1; /* 4096 is hardwired into linux/drivers/scsi/sg.c */
   }else{
@@ -83,6 +35,7 @@ static void find_bloody_big_buff_size(cdrom_drive *d){
       cur--;
     }
   }
+  d->enable_cdda(d,0);
   {
     char buffer[256];
     sprintf(buffer,"\tSetting read block size at %ld sectors (%ld bytes).\n",
@@ -92,9 +45,6 @@ static void find_bloody_big_buff_size(cdrom_drive *d){
   d->nsectors=cur;
   d->bigbuff=cur*CD_FRAMESIZE_RAW;
 
-  d->sg=realloc(d->sg,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF);
-  d->sg_buffer=d->sg+SG_OFF;
-  
 }
 
 /* process a complete scsi command. */
@@ -104,15 +54,23 @@ static int handle_scsi_cmd(cdrom_drive *d,
 			   unsigned int out_size){
   int status = 0;
   struct sg_header *sg_hd=(struct sg_header *)d->sg;
-  
+  long writebytes=SG_OFF+cmd_len+in_size;
+
   /* generic scsi device services */
   sg_hd->reply_len = SG_OFF + out_size;
   sg_hd->twelve_byte = cmd_len == 12;
   sg_hd->result = 0;
 
+  if(d->clear_buff_via_bug){
+    if(out_size>in_size){
+      memset(d->sg_buffer+cmd_len+in_size,0377,out_size-in_size);
+      writebytes+=(out_size-in_size);
+    }
+  }
+
   sigprocmask (SIG_BLOCK, &(d->sigset), NULL );
-  status = write(d->cdda_fd, sg_hd, SG_OFF + cmd_len + in_size );
-  if (status<0 || status != SG_OFF + cmd_len + in_size ) {
+  status = write(d->cdda_fd, sg_hd, writebytes );
+  if (status<0 || status != writebytes ) {
     sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
     return(1);
   }
@@ -120,103 +78,304 @@ static int handle_scsi_cmd(cdrom_drive *d,
   status = read(d->cdda_fd, sg_hd, SG_OFF + out_size);
   sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
 
-  if (status<0 || status != SG_OFF + out_size || sg_hd->result) 
-    return 1;
+  if (status<0 || status != SG_OFF + out_size || sg_hd->result) return(1);
+  if(d->clear_buff_via_bug && in_size<out_size){
+    long i,flag=0;
+    for(i=in_size;i<out_size;i++)
+      if(d->sg_buffer[i]!=(unsigned char)'\377'){
+	flag=1;
+	break;
+      }
+
+    if(!flag)return(1);
+  }
 
   /* Look if we got what we expected to get */
   if (status == SG_OFF + out_size) status = 0; /* got them all */
   return status;
 }
 
+/* Group 1 (10b) command */
+
+static int mode_sense_atapi(cdrom_drive *d,int size,int page){ 
+  memcpy(d->sg_buffer,  
+	 (char [])  {0x5A,   /* MODE_SENSE */
+		       0x00, /* reserved */
+		       0x00, /* page */
+		       0,    /* reserved */
+		       0,    /* reserved */
+		       0,    /* reserved */
+		       0,    /* reserved */
+		       0,    /* MSB (0) */
+		       0,    /* sizeof(modesense - SG_OFF) */
+		       0},   /* reserved */ 
+         10);
+  
+  d->sg_buffer[2]=0x3F&page;
+  d->sg_buffer[8]=size+4;
+
+  if (handle_scsi_cmd (d, 10, 0, size+4)) return(1);
+
+  {
+    char *b=d->sg_buffer;
+    if(b[0])return(1); /* Handles only up to 256 bytes */
+    if(b[6])return(1); /* Handles only up to 256 bytes */
+
+    b[0]=b[1]-3;
+    b[1]=b[2];
+    b[2]=b[3];
+    b[3]=b[7];
+
+    memmove(b+4,b+8,size);
+  }
+  return(0);
+}
+
+/* group 0 (6b) command */
+
+static int mode_sense_scsi(cdrom_drive *d,int size,int page){  
+  memcpy(d->sg_buffer,  
+	 (char [])  {0x1A,   /* MODE_SENSE */
+		       0x00, /* return block descriptor */
+		       0x00, /* page */
+		       0,    /* reserved */
+		       0,   /* sizeof(modesense - SG_OFF) */
+		       0},   /* control */ 
+         6);
+  
+  d->sg_buffer[2]=(0x3F&page);
+  d->sg_buffer[4]=size;
+
+  if (handle_scsi_cmd (d, 6, 0, size)) return(1);
+  return(0);
+}
+
+static int mode_sense(cdrom_drive *d,int size,int page){
+  if(d->is_atapi)
+    return(mode_sense_atapi(d,size,page));
+  return(mode_sense_scsi(d,size,page));
+}
+
+static int check_atapi(cdrom_drive *d){
+  cdmessage(d,"\nChecking for SCSI emulation and transport revision...\n");
+
+  /* This isn't as strightforward as it should be */
+
+  /* first, we try the SG_EMULATED_HOST ioctl; this only exists in new
+     kernels though */
+  /* DOES NOT EXIST YET... next ide-scsi revision, wait till then */
+
+
+  /* If the ioctl fails, we use an Inquiry request to guess.  Even if
+     we know for certain, Inquiry will give us other interesting data,
+     but defer to the ioctl(). */
+
+  /* the fields in byte 3 of the response serve different purposes in
+     ATAPI an SCSI and we can probably distinguish the two, but not
+     always */
+
+  /* linux successfully translates the SCSI Inquiry */
+  memcpy(d->sg_buffer,(char[]){ 0x12,0,0,0,36,0},6);
+
+  if(handle_scsi_cmd(d,6, 0, 36)) {
+    cderror(d,"008: Unable to identify CDROM model\n");
+    return(-8);
+  }
+
+  /* What does byte 3 say? */
+
+  /* Low 4 bits are data format; 0 is SCSI-I or early ATAPI,
+                                 1 is modern ATAPI or SCSI-1 CCS
+				 2 is SCSI-II (or future ATAPI?)
+				 3 is reserved (SCSI-III?) */
+
+  /* high 4 bits are ATAPI version in ATAPI and AENC/TrmIOP/Reserved in SCSI */
+
+  /* How I see it:
+     (&0x3f) 0x00 SCSI-I
+     (&0x3f) 0x01 SCSI-1 CCS 
+     (&0x3f) 0x02 SCSI-II
+     0x20 early ATAPI
+     0x21 modern ATAPI
+     0x31 Mt FUJI ATAPI
+     0x03 SCSI-III?  dunno... */
+
+  {
+    char buffer[256];
+    sprintf(buffer,"\tInquiry bytes: 0x%02x 0x%02x 0x%02x 0x%02x\n",
+	    (int)d->sg_buffer[0],
+	    (int)d->sg_buffer[1],
+	    (int)d->sg_buffer[2],
+	    (int)d->sg_buffer[3]);
+    cdmessage(d,buffer);
+  }
+
+  d->is_atapi=1;
+  switch(d->sg_buffer[3]){
+  case 0x20:
+    /* early ATAPI */
+    cderror(d,"\tDrive appears to be early (pre-draft) ATAPI\n");
+    cderror(d,"\tThis drive will probably break cdparanoia; please send\n");
+    cderror(d,"\temail to xiphmont@mit.edu\n");
+    break;
+  case 0x21:
+    /* modern ATAPI */
+    cdmessage(d,"\tDrive appears to be standard ATAPI\n");
+    break;
+  case 0x30:
+    /* Old Mt Fuji? */
+    cdmessage(d,"\tDrive appears to be an early Mt. Fuji ATAPI C/DVD\n");
+    break;
+  case 0x31:
+    /* Mt Fuji */
+    cdmessage(d,"\tDrive appears to be Mt. Fuji ATAPI C/DVD\n");
+    break;
+  default:
+    d->is_atapi=0;
+    switch(d->sg_buffer[3]&0x0f){
+    case 0x0:
+      cdmessage(d,"\tDrive appears to be SCSI-1\n");
+      break;
+    case 0x1:
+      cdmessage(d,"\tDrive appears to be SCSI-1-CCS\n");
+      break;
+    case 0x2:
+      cdmessage(d,"\tDrive appears to be SCSI-2\n");
+      break;
+    case 0x3:
+      cdmessage(d,"\tUnknown type, perhaps SCSI-3?\n");
+      break;
+    default:
+      cdmessage(d,"\tUnknown drive type; assuming SCSI\n");
+      break;
+    }
+  }
+  return(d->is_atapi);
+}  
+
+static int check_mmc(cdrom_drive *d){
+  char *b;
+  cdmessage(d,"\nChecking for MMC style command set...\n");
+
+  d->is_mmc=0;
+  if(mode_sense(d,22,0x2A)==0){
+  
+    b=d->sg_buffer;
+    b+=b[3]+4;
+    
+    if((b[0]&0x3F)==0x2A){
+      /* MMC style drive! */
+      d->is_mmc=1;
+      
+      if(b[1]>=4)
+	if(b[5]&0x1){
+	  cdmessage(d,"\tDrive is MMC style\n");
+	  return(1);
+	}else{
+	  cdmessage(d,"\tDrive is MMC, but reports CDDA incapable.\n");
+	  cdmessage(d,"\tIt will likely not be able to read audio data.\n");
+	  return(1);
+	}
+    }
+  }
+  
+  cdmessage(d,"\tDrive does not have MMC CDDA support\n");
+  return(0);
+}
+
+static int mode_select(cdrom_drive *d,int density,int secsize){
+  /* short circut the way Heiko does it; less flexible, but shorter */
+  if(d->is_atapi){
+    unsigned char *mode = d->sg_buffer + 18;
+
+    memcpy(d->sg_buffer,
+	   (char []) { 0x55, /* MODE_SELECT */
+			 0x10, /* no save page */
+			 0, /* reserved */
+			 0, /* reserved */
+			 0, /* reserved */
+			 0, /* reserved */
+			 0, /* reserved */
+			 0, /* reserved */
+			 12, /* sizeof(mode) */
+			 0, /* reserved */
+
+			 /* mode parameter header */
+			 0, 0, 0, 0,  0, 0, 0, 
+			 8, /* Block Descriptor Length */
+
+			 /* descriptor block */
+			 0,       /* Density Code */
+			 0, 0, 0, /* # of Blocks */
+			 0,       /* reserved */
+			 0, 0, 0},/* Blocklen */
+	   26);
+
+    /* prepare to read cds in the previous mode */
+    mode [0] = density;
+    mode [6] =  secsize >> 8;   /* block length "msb" */
+    mode [7] =  secsize & 0xFF; /* block length lsb */
+
+    /* do the scsi cmd */
+    return(handle_scsi_cmd (d,10, 16, 0));
+
+  }else{
+    unsigned char *mode = d->sg_buffer + 10;
+
+    memcpy(d->sg_buffer,
+	   (char []) { 0x15, /* MODE_SELECT */
+			 0x10, /* no save page */
+			 0, /* reserved */
+			 0, /* reserved */
+			 12, /* sizeof(mode) */
+			 0, /* reserved */
+			 /* mode section */
+			 0, 
+			 0, 0, 
+			 8,       /* Block Descriptor Length */
+			 0,       /* Density Code */
+			 0, 0, 0, /* # of Blocks */
+			 0,       /* reserved */
+			 0, 0, 0},/* Blocklen */
+	   18);
+
+    /* prepare to read cds in the previous mode */
+    mode [0] = density;
+    mode [6] =  secsize >> 8;   /* block length "msb" */
+    mode [7] =  secsize & 0xFF; /* block length lsb */
+
+    /* do the scsi cmd */
+    return(handle_scsi_cmd (d,6, 12, 0));
+  }
+}
+
 /* get current sector size from SCSI cdrom drive */
 static unsigned int get_orig_sectorsize(cdrom_drive *d){
+  if(mode_sense(d,12,0x01))return(-1);
 
-  memcpy(d->sg_buffer,  
-	 (char [])  {0x1A, /* MODE_SENSE */
-		     0x00, /* return block descriptor */
-		     0x01, /* page control current values, page 1 */
-		     0, /* reserved */
-		     12, /* sizeof(modesense - SG_OFF) */
-		     0}, /* reserved */ 
-         6);
-
-  if (handle_scsi_cmd (d, 6, 0, 12)) return(1);
-
-  d->orgmode4 = d->sg_buffer[4];
-  d->orgmode10 = d->sg_buffer[10];
-  d->orgmode11 = d->sg_buffer[11];
-
-  return (((int)(d->sg_buffer[10]) << 8) + d->sg_buffer[11]);
+  d->orgdens = d->sg_buffer[4];
+  return(d->orgsize = ((int)(d->sg_buffer[10])<<8)+d->sg_buffer[11]);
 }
 
 /* switch CDROM scsi drives to given sector size  */
 static int set_sectorsize (cdrom_drive *d,unsigned int secsize){
-  unsigned char *mode = d->sg_buffer + 6;
-
-  memcpy(d->sg_buffer,
-	 (char []) { 0x15, /* MODE_SELECT */
-		       0x10, /* no save page */
-		       0, /* reserved */
-		       0, /* reserved */
-		       12, /* sizeof(mode) */
-		       0, /* reserved */
-		       /* mode section */
-		       0, 
-		       0, 0, 
-		       8,       /* Block Descriptor Length */
-		       0,       /* Density Code */
-		       0, 0, 0, /* # of Blocks */
-		       0,       /* reserved */
-		       0, 0, 0},/* Blocklen */
-	 18);
-
-  /* prepare to read cds in the previous mode */
-  mode [4] = d->orgmode4;      /* normal density */
-  mode [10] =  secsize >> 8;   /* block length "msb" */
-  mode [11] =  secsize & 0xFF; /* block length lsb */
-
-  /* do the scsi cmd */
-  return(handle_scsi_cmd (d,6, 12, 0));
+  return(mode_select(d,d->orgdens,secsize));
 }
-
 
 /* switch Toshiba/DEC and HP drives from/to cdda density */
 static int scsi_enable_cdda (cdrom_drive *d, int fAudioMode){
-  unsigned char *mode = d->sg_buffer+6;
-
-  memcpy(d->sg_buffer,
-	 (char []) { 0x15, /* MODE_SELECT */
-		       0x10, /* no save page */
-		       0, /* reserved */
-		       0, /* reserved */
-		       12, /* sizeof(mode) */
-		       0, /* reserved */
-		       /* mode section */
-		       0, 
-		       0, 0, 
-		       8,       /* Block Descriptor Length */
-		       /* block descriptor */
-		       0,       /* Density Code */
-		       0, 0, 0, /* # of Blocks */
-		       0,       /* reserved */
-		       0, 0, 0},/* Blocklen */
-	 18);
-
   if (fAudioMode) {
-    /* prepare to read audio cdda */
-    mode [4] = d->density;  			/* cdda density */
-    mode [10] = (CD_FRAMESIZE_RAW >> 8);   /* block length "msb" */
-    mode [11] = (CD_FRAMESIZE_RAW & 0xFF);
+    if(mode_select(d,d->density,CD_FRAMESIZE_RAW)){
+      if(d->error_retry)
+	cderror(d,"001: Unable to set CDROM to read audio mode\n");
+      return(-1);
+    }
   } else {
-    /* prepare to read cds in the previous mode */
-    mode [4] = d->orgmode4; /* 0x00; 			\* normal density */
-    mode [10] = d->orgmode10; /* (CD_FRAMESIZE >> 8);  \* block length "msb" */
-    mode [11] = d->orgmode11; /* (CD_FRAMESIZE & 0xFF); \* block length lsb */
-  }
-
-  if(handle_scsi_cmd (d,6, 12,0)){
-    cderror(d,"001: Unable to set CDROM to read audio mode\n");
-    return(1);
+    if(mode_select(d,d->orgdens,d->orgsize)){
+      if(d->error_retry)
+	cderror(d,"001: Unable to set CDROM to read audio mode\n");
+      return(-1);
+    }
   }
   return(0);
 }
@@ -246,14 +405,14 @@ static int scsi_read_toc (cdrom_drive *d){
   /* do the scsi cmd (read table of contents) */
   if (handle_scsi_cmd (d,10, 0, CD_FRAMESIZE)){
     cderror(d,"002: Unable to read table of contents\n");
-    return(-1);
+    return(-2);
   }
 
   /* copy to our structure and convert start sector */
   tracks = ((d->sg_buffer[0] << 8) + d->sg_buffer[1] - 2) / 8;
   if (tracks > MAXTRK) {
     cderror(d,"003: CDROM reporting illegal number of tracks\n");
-    return(-1);
+    return(-3);
   }
 
   for (i = 0; i < tracks; i++) {
@@ -281,14 +440,14 @@ static int scsi_read_toc2 (cdrom_drive *d){
 
   if (handle_scsi_cmd (d,10, 0, 256)){
     cderror(d,"004: Unable to read table of contents header\n");
-    return(-1);
+    return(-4);
   }
 
   /* copy to our structure and convert start sector */
   tracks = d->sg_buffer[1];
   if (tracks > MAXTRK) {
     cderror(d,"003: CDROM reporting illegal number of tracks\n");
-    return(-1);
+    return(-3);
   }
 
   for (i = 0; i < tracks; i++){
@@ -299,7 +458,7 @@ static int scsi_read_toc2 (cdrom_drive *d){
 
       if (handle_scsi_cmd (d,10, 0, 256)){
 	cderror(d,"005: Unable to read table of contents entry\n");
-	return(-1);
+	return(-5);
       }
 
       d->disc_toc[i].bFlags = d->sg_buffer[10];
@@ -331,7 +490,23 @@ static int i_read_10 (cdrom_drive *d, void *p, long begin, long sectors){
   d->sg_buffer[4] = (begin >> 8) & 0xFF;
   d->sg_buffer[5] = begin & 0xFF;
   d->sg_buffer[8] = sectors;
-  if(handle_scsi_cmd(d,10, 0, sectors * CD_FRAMESIZE_RAW))
+  if(handle_scsi_cmd(d,10,0,sectors * CD_FRAMESIZE_RAW))
+    return(1);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_12 (cdrom_drive *d, void *p, long begin, long sectors){
+  memcpy(d->sg_buffer,(char []){0xA8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},12);
+
+  if(d->fua)
+    d->sg_buffer[1]=0x08;
+
+  d->sg_buffer[3] = (begin >> 16) & 0xFF;
+  d->sg_buffer[4] = (begin >> 8) & 0xFF;
+  d->sg_buffer[5] = begin & 0xFF;
+  d->sg_buffer[9] = sectors;
+  if(handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW))
     return(1);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
@@ -347,7 +522,7 @@ static int i_read_nec (cdrom_drive *d, void *p, long begin, long sectors){
   d->sg_buffer[4] = (begin >> 8) & 0xFF;
   d->sg_buffer[5] = begin & 0xFF;
   d->sg_buffer[8] = sectors;
-  if(handle_scsi_cmd(d,10, 0, sectors * CD_FRAMESIZE_RAW))
+  if(handle_scsi_cmd(d,10,0,sectors * CD_FRAMESIZE_RAW))
     return(1);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
@@ -363,29 +538,20 @@ static int i_read_sony (cdrom_drive *d, void *p, long begin, long sectors){
   d->sg_buffer[4] = (begin >> 8) & 0xFF;
   d->sg_buffer[5] = begin & 0xFF;
   d->sg_buffer[9] = sectors;
-  if(handle_scsi_cmd(d,12, 0, sectors * CD_FRAMESIZE_RAW))
+  if(handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW))
     return(1);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_sonyMSF (cdrom_drive *d, void *p, long begin, long sectors){
-  int end=begin+sectors;
-  begin+=150;
-  end+=150;
+static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors){
+  memcpy(d->sg_buffer,(char []){0xbe, 4, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0},12);
 
-  memcpy(d->sg_buffer,(char []){0xd9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},12);
-
-  if(d->fua)
-    d->sg_buffer[1]=0x08;
-
-  d->sg_buffer[3] = begin/(60*75);
-  d->sg_buffer[4] = (begin/75)%60;
-  d->sg_buffer[5] = begin%75;
-  d->sg_buffer[7] = end/(60*75); 
-  d->sg_buffer[8] = (end/75)%60;
-  d->sg_buffer[9] = end%75;
-  if(handle_scsi_cmd(d,12, 0, sectors * CD_FRAMESIZE_RAW))
+  d->sg_buffer[3] = (begin >> 16) & 0xFF;
+  d->sg_buffer[4] = (begin >> 8) & 0xFF;
+  d->sg_buffer[5] = begin & 0xFF;
+  d->sg_buffer[8] = sectors;
+  if(handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW))
     return(1);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
@@ -398,36 +564,33 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 
   /* read d->nsectors at a time, max. */
   sectors=(sectors>d->nsectors?d->nsectors:sectors);
+  sectors=(sectors<1?1:sectors);
 
   retry_count=0;
   
   do {
     if((err=map(d,(p?buffer:NULL),begin,sectors))){
+      if(!d->error_retry)return(-7);
       switch(errno){
       case ENOMEM:
 	if(d->bigbuff==0){
 	  /* just testing for SG_BIG_BUFF */
-	  return(-1);
+	  return(-7);
 	}else{
 	  /* D'oh.  Possible kernel error. Keep limping */
 	  if(sectors==1){
 	    /* Nope, can't continue */
 	    cderror(d,"300: Kernel memory error\n");
-	    return(-1);  
+	    return(-300);  
 	  }
 	}
       case EIO:
       case EINVAL:
       default:
 	if(sectors==1){
-	  if(d->nothing_read){
-	    /* Can't read the *first* sector?! Ouch! */
-	    cderror(d,"006: Could not read any data from drive\n");
-	    return(-1);
-	  }
 	  if(errno==EIO){
 	    if(d->fua==-1) /* testing for FUA support */
-	      return(-1);
+	      return(-7);
 	    /* *Could* be I/O or media error.  I think.  If we're at
 	       30 retries, we better skip this unhappy little
 	       sector. */
@@ -445,7 +608,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	  }
 	  /* OK, ok, bail. */
 	  cderror(d,"007: Unknown, unrecoverable error reading data\n");
-	  return(-1);
+	  return(-7);
 	}
       }
       if(retry_count>4==0)
@@ -453,19 +616,23 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
       retry_count++;
       if(retry_count>MAX_RETRIES){
 	cderror(d,"007: Unknown, unrecoverable error reading data\n");
-	return(-1);
+	return(-7);
       }
     }else
       break;
   } while (err);
   
-  d->nothing_read=0;
   return(sectors);
 }
 
 static long scsi_read_10 (cdrom_drive *d, void *p, long begin, 
 			       long sectors){
   return(scsi_read_map(d,p,begin,sectors,i_read_10));
+}
+
+static long scsi_read_12 (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_12));
 }
 
 static long scsi_read_nec (cdrom_drive *d, void *p, long begin, 
@@ -478,105 +645,13 @@ static long scsi_read_sony (cdrom_drive *d, void *p, long begin,
   return(scsi_read_map(d,p,begin,sectors,i_read_sony));
 }
 
-static long scsi_read_sonyMSF (cdrom_drive *d, void *p, long begin, 
+static long scsi_read_mmc (cdrom_drive *d, void *p, long begin, 
 			       long sectors){
-  return(scsi_read_map(d,p,begin,sectors,i_read_sonyMSF));
-}
-
-/********* non standardized speed selects ***********************/
-
-static int scsi_speed_toshiba(cdrom_drive *d, int speed){
-  memcpy(d->sg_buffer,(char[]){ 0x15,0x10,0,0,7,0, 0,0,0,0, 0x20,1,0}, 13);    
-
-  if (speed != 1 && speed != 2) {
-    cderror(d,"200: Invalid speed setting for drive\n");
-    return(1);
-  }
-
-  d->sg_buffer[12] = speed == 1 ? 0 : 1;   /* 0 for single speed */
-
-  /* do the scsi cmd */
-  if (handle_scsi_cmd (d,6, 7, 0)){
-    cderror(d,"201: Speed select failed\n");
-    return(1);
-  }
-  return(0);
-}
-
-static int scsi_speed_nec(cdrom_drive *d, int speed){
-  memcpy(d->sg_buffer,(char[]){ 0xc5,0x10,0,0,0,0,0,0,12,0, 
-				  0,0,0,0, 0x0f,6,0,0,0,0,0,0}, 22);    
-
-  if (speed != 1 && speed != 2) {
-    cderror(d,"200: Invalid speed setting for drive\n");
-    return(1);
-  }
-
-  /* bit 5 == 1 for single speed, otherwise double speed */
-  d->sg_buffer[16] = speed == 1 ? 1 << 5 : 0;
-
-  /* do the scsi cmd */
-  if (handle_scsi_cmd (d,10, 12, 0)){
-    cderror(d,"201: Speed select failed\n");
-    return(1);
-  }
-  return(0);
-}
-
-static int scsi_speed_philips(cdrom_drive *d, int speed){
-  memcpy(d->sg_buffer,(char[]){ 0x15,0x10,0,0,12,0,
-				  0,0,0,0, 0x23,6,0,1,0,0,0,0}, 18);    
-
-  if (speed != 1 && speed != 2 && speed != 4) {
-    cderror(d,"200: Invalid speed setting for drive\n");
-    return(1);
-  }
-
-  d->sg_buffer[12] = d->sg_buffer[14] = speed ;
-
-  /* do the scsi cmd */
-  if (handle_scsi_cmd (d,6, 12, 0)){
-    cderror(d,"201: Speed select failed\n");
-    return(1);
-  }
-  return(0);
-}
-
-static int scsi_speed_sony(cdrom_drive *d, int speed){
-  memcpy(d->sg_buffer,(char[]){ 0x15,0x10,0,0,8,0,
-				  0,0,0,0, 0x31,2,0,0}, 14);    
-
-  /* speed values > 1 are drive dependent */
-
-  if (speed > 4) speed = 8;
-  d->sg_buffer[12]=speed/2;
-
-  /* do the scsi cmd */
-  if (handle_scsi_cmd (d,6, 8, 0)){
-    cderror(d,"201: Speed select failed\n");
-    return(1);
-  }
-  return(0);
-}
-
-static int scsi_speed_yamaha(cdrom_drive *d, int speed){
-  memcpy(d->sg_buffer,(char[]){ 0x15,0x10,0,0,8,0,
-				  0,0,0,0, 0x31,2,0,0}, 14);    
-
-  /* speed values > 1 are drive dependent */
-  if (speed > 4) speed = 8;
-  d->sg_buffer[12]=(speed/2)<<4;
-
-  /* do the scsi cmd */
-  if (handle_scsi_cmd (d,6, 8, 0)){
-    cderror(d,"201: Speed select failed\n");
-    return(1);
-  }
-  return(0);
+  return(scsi_read_map(d,p,begin,sectors,i_read_mmc));
 }
 
 /* request vendor brand and model */
-static unsigned char *scsi_inquiry(cdrom_drive *d){
+unsigned char *scsi_inquiry(cdrom_drive *d){
   memcpy(d->sg_buffer,(char[]){ 0x12,0,0,0,56,0},6);
 
   if(handle_scsi_cmd(d,6, 0, 56 )) {
@@ -591,138 +666,293 @@ static int Dummy (cdrom_drive *d,int s){
   return(0);
 }
 
-int scsi_init_drive(cdrom_drive *d){
-  struct sigaction sigac;
-  unsigned char *p;
+/* So many different read commands, densities, features...
+   Verify that our selected 'read' command actually reads 
+   nonzero data, else search through other possibilities */
 
-  /* build signal set to block for during generic scsi */
-  sigemptyset (&(d->sigset));
-  sigaddset (&(d->sigset), SIGINT);
-  sigaddset (&(d->sigset), SIGPIPE);
-  sigac.sa_handler = exit;
-  sigemptyset(&sigac.sa_mask);
-  sigac.sa_flags = 0;
-  sigaction( SIGINT, &sigac, NULL);
-  sigaction( SIGQUIT, &sigac, NULL);
-  sigaction( SIGTERM, &sigac, NULL);
-  sigaction( SIGHUP, &sigac, NULL);
-  sigaction( SIGPIPE, &sigac, NULL);
-  sigaction( SIGTRAP, &sigac, NULL);
-  sigaction( SIGIOT, &sigac, NULL);
+static int verify_read_command(cdrom_drive *d){
+  int i,j,k;
 
-  /* malloc our big buffer for scsi commands */
-  if(d->nsectors==-1)
-    d->sg=malloc(MAX_BIG_BUFF_SIZE);
-  else
-    d->sg=malloc(d->nsectors*CD_FRAMESIZE_RAW);
-  d->sg_buffer=d->sg+SG_OFF;
-
-  /* set the correct command set for *different*
-   * vendor specific implementations. Was this really necessary, folks?
-   */
+  int  (*enablecommand)  (struct cdrom_drive *d, int speed);
+  long (*readcommand)   (struct cdrom_drive *d, void *p, long begin, 
+		       long sectors);
+  unsigned char density;
   
-  p = scsi_inquiry(d);
+  size16 *buff=malloc(CD_FRAMESIZE_RAW);
 
-  if (*p != TYPE_ROM && *p != TYPE_WORM) {
-    cderror(d,"101: Drive is neither a CDROM nor a WORM device\n");
-    free(d->sg);
-    d->sg=NULL;
-    return(1);
+  cdmessage(d,"\nVerifying drive can read CDDA...\n");
+
+  /* try the expected command set; grab the center of each track, look
+     for data */
+
+  /* The following is one of the scariest hacks I've ever had to use.
+     The idea is this: We want to know if a command fails.  The
+     generic scsi driver (as of now) won't tell us; it hands back the
+     uninitialized contents of the preallocated kernel buffer.  We
+     force this buffer to a known value via another bug (nonzero data
+     length for a command that doesn't take data) such that we can
+     tell if the command failed.  It's even atomic.  Scared yet? */
+
+  if(d->enable_cdda(d,1)==0){
+    
+    for(i=1;i<=d->tracks;i++){
+      if(cdda_track_audiop(d,i)==1){
+	long firstsector=cdda_track_firstsector(d,i);
+	long lastsector=cdda_track_lastsector(d,i);
+	long sector=(firstsector+lastsector)>>1;
+	
+	if(d->read_audio(d,buff,sector,1)>0){
+	  cdmessage(d,"\tExpected command set reads OK.\n");
+	  d->enable_cdda(d,0);
+	  free(buff);
+	  return(0);
+	}
+      }
+    }
+    
+    d->enable_cdda(d,0);
   }
+
+  {
+    char *es="",*rs="";
+    d->bigendianp=-1;
+    density=d->density;
+    readcommand=d->read_audio;
+    enablecommand=d->enable_cdda;
+
+
+    /* No nonzeroes?  D'oh.  Exhaustive search */
+    cdmessage(d,"\tFAILED.  Perhaps this drive cannot read CDDA?\n"
+	      "\tTrying for luck: searching for working command set...\n");
+    
+    /* loops:  
+       density/enable no,  0x0/org,  0x04/org, 0x82/org
+       read command read_10 read_12 read_sony read_mmc read_nec */
+    
+
+    for(j=0;j>=0;j++){
+      
+      switch(j){
+      case 0:
+	d->read_audio=scsi_read_10;
+	rs="0x28";
+	break;
+      case 1:
+	d->read_audio=scsi_read_12;
+	rs="0xa8";
+	break;
+      case 2:
+	d->read_audio=scsi_read_mmc;
+	rs="0xbe";
+	break;
+      case 3:
+	d->read_audio=scsi_read_nec;
+	rs="0xd4";
+	break;
+      case 4:
+	d->read_audio=scsi_read_sony;
+	rs="0xd8";
+	j=-2;
+	break;
+      }
+      
+      for(i=0;i>=0;i++){
+	switch(i){
+	case 0:
+	  d->density=0;
+	  d->enable_cdda=Dummy;
+	  es="none    ";
+	  break;
+	case 1:
+	  d->density=0;
+	  d->enable_cdda=scsi_enable_cdda;
+	  es="yes/0x00";
+	  break;
+	case 2:
+	  d->density=0x04;
+	  d->enable_cdda=scsi_enable_cdda;
+	  es="yes/0x04";
+	  break;
+	case 3:
+	  d->density=0x82;
+	  d->enable_cdda=scsi_enable_cdda;
+	  es="yes/0x82";
+	  i=-2;
+	  break;
+	}
+
+	cdmessage(d,"\r\tscanning --> density enable: [");
+	cdmessage(d,es);
+	cdmessage(d,"]  command: [");
+	cdmessage(d,rs);
+	cdmessage(d,"]        ");
+
+	if(d->enable_cdda(d,1)==0){
+	  for(k=1;k<=d->tracks;k++){
+	    if(cdda_track_audiop(d,k)==1){
+	      long firstsector=cdda_track_firstsector(d,k);
+	      long lastsector=cdda_track_lastsector(d,k);
+	      long sector=(firstsector+lastsector)>>1;
+	      
+	      if(d->read_audio(d,buff,sector,1)>0){
+		
+		cdmessage(d,"\r\tFound a potentially working command set:                  \n"
+			  "\t\tEnable/Density:");
+		cdmessage(d,es);
+		cdmessage(d,"  Read command:");
+		cdmessage(d,rs);
+		cdmessage(d,"\n\t\t(please email a copy of this "
+			  "output to xiphmont@mit.edu)\n");
+		
+		free(buff);
+		d->enable_cdda(d,0);
+		return(0);
+	      }else
+		break;
+	    }
+	  }
+	  d->enable_cdda(d,0);
+	}
+      }
+    }
+
+    /* D'oh. */
+    d->density=density;
+    d->read_audio=readcommand;
+    d->enable_cdda=enablecommand;
+
+    cdmessage(d,"\r\tUnable to find any command set; "
+	      "drive probably not CDDA capable.\n");
+
+    cderror(d,"006: Could not read any data from drive\n");
+
+  }
+  free(buff);
+  return(-6);
+}
+
+int scsi_init_drive(cdrom_drive *d){
+  unsigned char *p;
+  int ret;
+
+  check_atapi(d);
+  check_mmc(d);
+
+  /* set the correct command set for *different* vendor specific
+   * implementations. Was this really necessary, folks?  */
 
   /* generic Sony type defaults */
   d->density = 0x0;
   d->enable_cdda = Dummy;
   d->read_audio = scsi_read_sony;
-  d->select_speed = scsi_speed_sony;
   d->fua=0;
-  d->maxspeed=2;
+      
+  p = scsi_inquiry(d);
 
-  /* check for brands and adjust special peculiaritites */
+  if(d->is_mmc){
 
-  /* If your drive is not treated correctly, you can adjust some things
-     here (but please mail me so I can add it for everyone else!)
-
-     d->bigendianp: should be to 0, if the CDROM drive or CD-Writer
-     delivers the samples in the native byteorder of the audio cd (LSB
-     first). The SCSI-II spec says this should be (bigendian) for all
-     SCSI-II drives, but many drives are little endian anyway.
-
-     NOTE: If you get correct wav files when using sox with the '-x' option,
-     the endianess is wrong. You can specify endianness ont he commandline
-     
-     */
-
-  if (!memcmp(p+8,"TOSHIBA", 7) ||
-      !memcmp(p+8,"IBM", 3) ||
-      !memcmp(p+8,"DEC", 3)) {
-
-    d->density = 0x82;
-    d->enable_cdda= scsi_enable_cdda;
-    d->read_audio= scsi_read_10;
-    d->select_speed= scsi_speed_toshiba;
+    d->read_audio = scsi_read_mmc;
     d->bigendianp=0;
-    d->fua=1;
-  
-  } else if (!memcmp(p+8,"IMS",3) ||
-	     !memcmp(p+8,"KODAK",5) ||
-	     !memcmp(p+8,"RICOH",5) ||
-	     !memcmp(p+8,"HP",2) ||
-	     !memcmp(p+8,"PHILIPS",7) ||
-	     !memcmp(p+8,"PLASMON",7) ||
-	     !memcmp(p+8,"GRUNDIG CDR100IPW",17) ||
-	     !memcmp(p+8,"MITSUMI CD-R ",13)) {
 
-    d->enable_cdda= scsi_enable_cdda;
-    d->read_audio= scsi_read_10;
-    d->select_speed= scsi_speed_philips;
-    d->bigendianp=1;
-    d->fua=1;
+  }else{
+    
+    if(d->is_atapi){
+      /* Not MMC maybe still uses 0xbe */
 
-  } else if (!memcmp(p+8,"YAMAHA",6)) {
+      d->read_audio = scsi_read_mmc;
+      d->bigendianp=0;
 
-    d->enable_cdda= scsi_enable_cdda;
-    d->select_speed= scsi_speed_yamaha;
-    d->bigendianp=0;
-    d->maxspeed=8;
+    }else{
 
-  } else if (!memcmp(p+8,"PLEXTOR",7) ||
-	     !memcmp(p+8,"SONY",4)) {
-
-    d->bigendianp=0;
-    d->maxspeed=8;
-
-  } else if (!memcmp(p+8,"NEC",3)) {
-
-    d->read_audio= scsi_read_nec;
-    d->select_speed= scsi_speed_nec;
-
-    d->bigendianp=0;
-    d->maxspeed=2;
+      /* check for brands and adjust special peculiaritites */
+      
+      /* If your drive is not treated correctly, you can adjust some things
+	 here (but please mail me so I can add it for everyone else!)
+	 
+	 d->bigendianp: should be to 0, if the CDROM drive or CD-Writer
+	 delivers the samples in the native byteorder of the audio cd (LSB
+	 first). The SCSI-II spec says this should be (bigendian) for all
+	 SCSI-II drives, but many drives are little endian anyway.
+	 
+	 NOTE: If you get correct wav files when using sox with the '-x' option,
+	 the endianess is wrong. You can specify endianness ont he commandline
+	 
+	 */
+      
+      if (!memcmp(p+8,"TOSHIBA", 7) ||
+	  !memcmp(p+8,"IBM", 3) ||
+	  !memcmp(p+8,"DEC", 3)) {
+	
+	d->density = 0x82;
+	d->enable_cdda= scsi_enable_cdda;
+	d->read_audio= scsi_read_10;
+	d->bigendianp=0;
+	/*d->fua=1;*/
+	
+      } else if (!memcmp(p+8,"IMS",3) ||
+		 !memcmp(p+8,"KODAK",5) ||
+		 !memcmp(p+8,"RICOH",5) ||
+		 !memcmp(p+8,"HP",2) ||
+		 !memcmp(p+8,"PHILIPS",7) ||
+		 !memcmp(p+8,"PLASMON",7) ||
+		 !memcmp(p+8,"GRUNDIG CDR100IPW",17) ||
+		 !memcmp(p+8,"MITSUMI CD-R ",13)) {
+	
+	d->enable_cdda= scsi_enable_cdda;
+	d->read_audio= scsi_read_10;
+	d->bigendianp=1;
+	/*d->fua=1;*/
+	
+      } else if (!memcmp(p+8,"YAMAHA",6)) {
+	
+	d->enable_cdda= scsi_enable_cdda;
+	d->bigendianp=0;
+	
+      } else if (!memcmp(p+8,"PLEXTOR",7) ||
+		 !memcmp(p+8,"SONY",4)) {
+	
+	d->bigendianp=0;
+	
+      } else if (!memcmp(p+8,"NEC",3)) {
+	
+	d->read_audio= scsi_read_nec;
+	
+	d->bigendianp=0;
+      }
+    }
   }
 
-  d->read_toc = (!memcmp(p+8, "IMS", 3)) ? scsi_read_toc2 : scsi_read_toc;
 
-  {
+  d->read_toc = (!memcmp(p+8, "IMS", 3) && !d->is_atapi) ? scsi_read_toc2 : 
+    scsi_read_toc;
+  
+  d->enable_cdda(d,0);
+
+  if(!d->is_atapi){
     unsigned sector_size= get_orig_sectorsize(d);
     
-    if(sector_size!=2048 && set_sectorsize(d,2048))
+    if(sector_size<2048 && set_sectorsize(d,2048))
       d->adjust_ssize = 2048 / sector_size;
     else
       d->adjust_ssize = 1;
-  }
-
+  }else
+    d->adjust_ssize = 1;
+  
   d->tracks=d->read_toc(d);
-  if(d->tracks==-1)
-    return(1);
+  if(d->tracks<1)
+    return(d->tracks);
 
   d->opened=1;
 
+  if((ret=verify_read_command(d)))return(ret);
+  d->error_retry=1;
+  d->clear_buff_via_bug=0;
+
   if(d->nsectors<1)find_bloody_big_buff_size(d);
+  d->sg=realloc(d->sg,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF);
+  d->sg_buffer=d->sg+SG_OFF;
+ 
   /* fua_supportp(d); does the command support the FUA bit? */
 
   return(0);
 }
-
-
-

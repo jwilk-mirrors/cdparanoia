@@ -12,6 +12,11 @@ LD=@CC@
 LDFLAGS=@LDFLAGS@ $(FLAGS)
 AR=@AR@
 RANLIB=@RANLIB@
+INSTALL=@INSTALL@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+BINDIR=@bindir@
+MANDIR=@mandir@
 LIBS = interface/cdda_interface.a paranoia/cdda_paranoia.a -lm
 
 OFILES = main.o report.o header.o
@@ -19,12 +24,13 @@ OFILES = main.o report.o header.o
 all: 	
 	cd interface && $(MAKE) all
 	cd paranoia && $(MAKE) all
-	$(MAKE) target CFLAGS="$(OPT)" 
+	$(MAKE) cdparanoia CFLAGS="$(OPT)" 
+	strip cdparanoia
 
 debug:  
 	cd interface && $(MAKE) debug
 	cd paranoia && $(MAKE) debug
-	$(MAKE) target CFLAGS="$(DEBUG)" 
+	$(MAKE) cdparanoia CFLAGS="$(DEBUG)" 
 	$(MAKE) tests CFLAGS="$(OPT)"
 
 tests:	verify_test.o
@@ -34,8 +40,13 @@ lib:
 	cd interface && $(MAKE) lib
 	cd paranoia && $(MAKE) lib
 
-target:	$(OFILES)
-	$(LD) $(CFLAGS) $(LDFLAGS) $(OFILES) -o cdparanoia $(LIBS)	
+install:
+		$(INSTALL) -m 755 cdparanoia $(BINDIR)
+		$(INSTALL) -m 444 cdparanoia.1 $(MANDIR)/man1
+
+
+cdparanoia:	$(OFILES) interface/cdda_interface.a paranoia/cdda_paranoia.a
+		$(LD) $(CFLAGS) $(LDFLAGS) $(OFILES) -o cdparanoia $(LIBS)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<
@@ -50,5 +61,5 @@ distclean:
 	cd interface && $(MAKE) distclean
 	cd paranoia && $(MAKE) distclean
 	-rm -f cdparanoia *~ config.* *.o *.wav *.aifc *.raw test.file \
-	Makefile verify_test core gmon.out
+		Makefile verify_test core gmon.out
  

@@ -10,6 +10,7 @@ if test -z "$CC"; then
 fi
 AC_PROG_RANLIB
 AC_CHECK_PROG(AR,ar,ar)
+AC_CHECK_PROG(INSTALL,install,install)
 
 if test -z "$GCC"; then
 	DEBUG="-g"

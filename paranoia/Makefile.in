@@ -14,7 +14,7 @@ AR=@AR@
 RANLIB=@RANLIB@
 
 
-OFILES = paranoia.o
+OFILES = paranoia.o p_block.o
 LIBS = ../interface/cdda_interface.a -lm
 
 all: 

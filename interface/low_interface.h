@@ -52,8 +52,12 @@
 #define MAX_RETRIES 32 /* There's a *reason* for this value.  Don't
 			  change it randomly without looking at what
 			  it's used for */
+#define MAX_BIG_BUFF_SIZE 65536
+#define MIN_BIG_BUFF_SIZE 4096
+#define SG_OFF sizeof(struct sg_header)
 
 extern int  cooked_init_drive (cdrom_drive *d);
+extern unsigned char *scsi_inquiry (cdrom_drive *d);
 extern int  scsi_init_drive (cdrom_drive *d);
 #ifdef CDDA_TEST
 extern int  test_init_drive (cdrom_drive *d);

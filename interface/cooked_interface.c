@@ -21,10 +21,10 @@ static int cooked_readtoc (cdrom_drive *d){
     switch(errno){
     case EPERM:
       cderror(d,"102: Permision denied on cdrom (ioctl) device\n");
-      return(-1);
+      return(-102);
     default:
       cderror(d,"004: Unable to read table of contents header\n");
-      return(-1);
+      return(-4);
     }
 
   /* get all TocEntries */
@@ -33,7 +33,7 @@ static int cooked_readtoc (cdrom_drive *d){
     entry.cdte_format = CDROM_LBA;
     if(ioctl(d->ioctl_fd,CDROMREADTOCENTRY,&entry)){
       cderror(d,"005: Unable to read table of contents entry\n");
-      return(-1);
+      return(-5);
     }
       
     d->disc_toc[i].bFlags = (entry.cdte_adr << 4) | (entry.cdte_ctrl & 0x0f);
@@ -45,7 +45,7 @@ static int cooked_readtoc (cdrom_drive *d){
   entry.cdte_format = CDROM_LBA;
   if(ioctl(d->ioctl_fd, CDROMREADTOCENTRY, &entry)){
     cderror(d,"005: Unable to read table of contents entry\n");
-    return(-1);
+    return(-5);
   }
   d->disc_toc[i].bFlags = (entry.cdte_adr << 4) | (entry.cdte_ctrl & 0x0f);
   d->disc_toc[i].bTrack = entry.cdte_track;
@@ -76,23 +76,19 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
 
   do {
     if((err=ioctl(d->ioctl_fd, CDROMREADAUDIO, &arg))){
+      if(!d->error_retry)return(-7);
       switch(errno){
       case ENOMEM:
 	/* D'oh.  Possible kernel error. Keep limping */
 	if(sectors==1){
 	  /* Nope, can't continue */
 	  cderror(d,"300: Kernel memory error\n");
-	  return(-1);  
+	  return(-300);  
 	}
       default:
       case EIO:
       case EINVAL:
 	if(sectors==1){
-	  if(d->nothing_read){
-	    /* Can't read the *first* sector?! Ouch! */
-	    cderror(d,"006: Could not read any data from drive\n");
-	    return(-1);
-	  }
 	  if(errno==EIO){
 	    /* *Could* be I/O or media error.  I think.  If we're at
 	       30 retries, we better skip this unhappy little
@@ -111,7 +107,7 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
 	  }
 	  /* OK, ok, bail. */
 	  cderror(d,"007: Unknown, unrecoverable error reading data\n");
-	  return(-1);
+	  return(-7);
 	}
       }
       if(retry_count>4==0)
@@ -120,31 +116,13 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
       retry_count++;
       if(retry_count>MAX_RETRIES){
 	cderror(d,"007: Unknown, unrecoverable error reading data\n");
-	return(-1);
+	return(-7);
       }
     }else
       break;
   } while (err);
   
-  d->nothing_read=0;
   return(sectors);
-}
-
-/* Speed control */
-static int cooked_speed(cdrom_drive *d,int speed){
-
-  if (ioctl(d->ioctl_fd, CDROM_SELECT_SPEED, &speed)){
-    switch (errno){
-    case EPERM:
-      cderror(d,"102: Permision denied on cdrom (ioctl) device\n");
-      return(1);
-    default:
-      cderror(d,"201: Speed select failed\n");
-      return(1);
-    }
-  }
-  return(0);
-
 }
 
 /* hook */
@@ -152,25 +130,78 @@ static int Dummy (cdrom_drive *d,int Switch){
   return(0);
 }
 
+static int verify_read_command(cdrom_drive *d){
+  int i;
+  size16 *buff=malloc(CD_FRAMESIZE_RAW);
+
+  cdmessage(d,"Verifying drive can read CDDA...\n");
+
+  d->enable_cdda(d,1);
+
+  for(i=1;i<=d->tracks;i++){
+    if(cdda_track_audiop(d,i)==1){
+      long firstsector=cdda_track_firstsector(d,i);
+      long lastsector=cdda_track_lastsector(d,i);
+      long sector=(firstsector+lastsector)>>1;
+
+      if(d->read_audio(d,buff,sector,1)>0){
+	cdmessage(d,"\tExpected command set reads OK.\n");
+	d->enable_cdda(d,0);
+	free(buff);
+	return(0);
+      }
+    }
+  }
+ 
+  d->enable_cdda(d,0);
+
+  cdmessage(d,"\n\tUnable to read any data; "
+	    "drive probably not CDDA capable.\n");
+  
+  cderror(d,"006: Could not read any data from drive\n");
+
+  free(buff);
+  return(-6);
+}
+
 /* set function pointers to use the ioctl routines */
 int cooked_init_drive (cdrom_drive *d){
-  int i;
+  int ret;
 
   switch(d->drive_type){
   case MATSUSHITA_CDROM_MAJOR:	/* sbpcd 1 */
   case MATSUSHITA_CDROM2_MAJOR:	/* sbpcd 2 */
   case MATSUSHITA_CDROM3_MAJOR:	/* sbpcd 3 */
   case MATSUSHITA_CDROM4_MAJOR:	/* sbpcd 4 */
-    /* Our driver isn't very smart; don't make the buffer too big. */
-    i=25;
-    
-    while(ioctl(d->ioctl_fd, CDROMAUDIOBUFSIZ, d->nsectors)){
-      d->nsectors>>=1;
-      if(d->nsectors==0){
-	d->nsectors=10;
-	break; /* Oh, well.  Try to read anyway.*/
+    /* don't make the buffer too big; this sucker don't preempt */
+
+    cdmessage(d,"Attempting to set sbpcd buffer size...\n");
+
+    d->nsectors=8;
+    while(1){
+
+      /* this ioctl returns zero on error; exactly wrong, but that's
+         what it does. */
+
+      if(ioctl(d->ioctl_fd, CDROMAUDIOBUFSIZ, d->nsectors)==0){
+	d->nsectors>>=1;
+	if(d->nsectors==0){
+	  char buffer[256];
+	  d->nsectors=8;
+	  sprintf(buffer,"\tTrouble setting buffer size.  Defaulting to %d sectors.\n",
+		  d->nsectors);
+	  cdmessage(d,buffer);
+	  break; /* Oh, well.  Try to read anyway.*/
+	}
+      }else{
+	char buffer[256];
+	sprintf(buffer,"\tSetting read block size at %d sectors (%ld bytes).\n",
+		d->nsectors,(long)d->nsectors*CD_FRAMESIZE_RAW);
+	cdmessage(d,buffer);
+	break;
       }
     }
+
     break;
   case IDE0_MAJOR:
   case IDE1_MAJOR:
@@ -179,6 +210,7 @@ int cooked_init_drive (cdrom_drive *d){
     d->nsectors=8; /* it's a define in the linux kernel; we have no
 		      way of determining other than this guess tho */
     d->bigendianp=0;
+    d->is_atapi=1;
     break;
   default:
     d->nsectors=40; 
@@ -186,11 +218,13 @@ int cooked_init_drive (cdrom_drive *d){
   d->enable_cdda = Dummy;
   d->read_audio = cooked_read;
   d->read_toc = cooked_readtoc;
-  d->select_speed = cooked_speed;
-  d->tracks=d->read_toc(d);
-  if(d->tracks==-1)
-    return(1);
+  ret=d->tracks=d->read_toc(d);
+  if(d->tracks<1)
+    return(ret);
+
   d->opened=1;
+  if((ret=verify_read_command(d)))return(ret);
+  d->error_retry=1;
   return(0);
 }
 

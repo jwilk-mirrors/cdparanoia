@@ -33,33 +33,45 @@ int cdda_close(cdrom_drive *d){
 
 /* finish initializing the drive! */
 int cdda_open(cdrom_drive *d){
+  int ret;
   if(d->opened)return(0);
 
   switch(d->interface){
   case GENERIC_SCSI:  
-    if(scsi_init_drive(d))
-      return(1);
+    if((ret=scsi_init_drive(d)))
+      return(ret);
     break;
   case COOKED_IOCTL:  
-    if(cooked_init_drive(d))
-      return(1);
+    if((ret=cooked_init_drive(d)))
+      return(ret);
     break;
 #ifdef CDDA_TEST
   case TEST_INTERFACE:  
-    if(test_init_drive(d))
-      return(1);
+    if((ret=test_init_drive(d)))
+      return(ret);
     break;
 #endif
   default:
     cderror(d,"100: Interface not supported\n");
-    return(1);
+    return(-100);
   }
   
-  /* Get TOC, enable for CDDA */
+  /* Check TOC, enable for CDDA */
+  
+  /* Some drives happily return a TOC even if there is no disc... */
+  {
+    int i;
+    for(i=0;i<d->tracks;i++)
+      if(d->disc_toc[i].dwStartSector<0 ||
+	 d->disc_toc[i+1].dwStartSector==0){
+	d->opened=0;
+	cderror(d,"009: CDROM reporting illegal table of contents\n");
+	return(-9);
+      }
+  }
 
-  d->nothing_read=-1;
-  if(d->enable_cdda(d,1))
-    return(1);
+  if((ret=d->enable_cdda(d,1)))
+    return(ret);
     
   /*  d->select_speed(d,d->maxspeed); most drives are full speed by default */
   if(d->bigendianp==-1)d->bigendianp=data_bigendianp(d);
@@ -89,16 +101,7 @@ long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
   }
   
   cderror(d,"400: Device not open\n");
-  return(-1);
-}
-
-int cdda_speed(cdrom_drive *d, unsigned speed){
-  if(!d->opened){
-    cderror(d,"400: Device not open\n");
-    return(1);
-  }
-  if(d->select_speed(d,speed))return(1);
-  return(0);
+  return(-400);
 }
 
 void cdda_verbose_set(cdrom_drive *d,int err_action, int mes_action){
