@@ -1183,7 +1183,7 @@ static int verify_read_command(cdrom_drive *d){
 		    if(verify_nonzero(d)){
 		      cdmessage(d,"\t\tCommand set FOUND!\n");
 		      cdmessage(d,"\t\t(please email a copy of this "
-				"output to xiphmont@mit.edu)\n");
+				"output to paranoia@xiph.org)\n");
 		      
 		      free(buff);
 		      d->enable_cdda(d,0);
@@ -1339,7 +1339,7 @@ static int guess_atapi(cdrom_drive *d,int reportp){
     if(reportp){
       cderror(d,"\tDrive appears to be early (pre-draft) ATAPI\n");
       cderror(d,"\tThis drive will probably break cdparanoia; please send\n");
-      cderror(d,"\temail to xiphmont@mit.edu\n");
+      cderror(d,"\temail to paranoia@xiph.org\n");
     }
     return(1);
   case 0x01:
@@ -1416,7 +1416,7 @@ static int check_atapi(cdrom_drive *d){
     if(guess_atapi(d,0)!=d->is_atapi){
       cderror(d,"\tNOTE: Our ATAPI/SCSI guessing algorithm will detect the\n");
       cderror(d,"\tdrive type incorrectly on older kernels; please e-mail the\n");
-      cderror(d,"\toutput of 'cdparanoia -vQ' to xiphmont@mit.edu\n");
+      cderror(d,"\toutput of 'cdparanoia -vQ' to paranoia@xiph.org\n");
     }
     return(d->is_atapi);
   }
