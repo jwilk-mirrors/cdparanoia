@@ -59,7 +59,10 @@ static int look_for_dougg(cdrom_drive *d){
     cdmessage(d,buffer);
 
     cur=table*reserved;
-    cur=(cur>1024*128?1024*128:cur);
+
+    /* not too much; new kernels have trouble with DMA allocation, so
+       be more conservative: 32kB max until I test more thoroughly */
+    cur=(cur>1024*32?1024*32:cur);
     d->nsectors=cur/CD_FRAMESIZE_RAW;
     d->bigbuff=cur;
 
