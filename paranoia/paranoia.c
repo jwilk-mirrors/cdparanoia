@@ -815,12 +815,13 @@ static void verify_init_case(cdrom_paranoia *p,long beginword,
 	    ptr->buffer=NULL;
 	    ptr->size=0;
 	    release_p_block(ptr);
+	    return;
 	  }else{
 	    /* Ah, we're tacking data onto silence */
 	    ptr->verifyend=-1;
 	    ptr->verifybegin=-1;
 	    i_update_verified(root,ptr);
-	      
+	    return;
 	  }
 	}
       }

@@ -27,6 +27,9 @@
  *                       (suggested by Matija Nalis <mnalis@public.srce.hr>)
  * 
  *                       Played with making TOC less verbose.
+ *    4.04.98 - alpha 3: zillions of bugfixes, also added MMC and IDE_SCSI
+ *                       emulation support
+ *    4.05.98 - alpha 4: Segfault fix, cosmetic repairs
  *                       
  */
 
@@ -283,7 +286,7 @@ static void callback(long sector, int function){
   /* (== PROGRESS == [--+:---x-------------->           ] == 000000 == . ==) */
 
   char buffer[256];
-  static long c_sector=0;
+  static long c_sector=0,v_sector=0;
   static char dispcache[30]="                              ";
   static int last=0;
   static long lasttime=0;
@@ -302,6 +305,10 @@ static void callback(long sector, int function){
     aheadposition=((float)(c_sector-callbegin)/
 		   (callend-callbegin))*graph;
     
+    if(function==-2){
+      v_sector=sector;
+      return;
+    }
     if(function==-1){
       last=8;
       heartbeat='*';
@@ -355,9 +362,15 @@ static void callback(long sector, int function){
 	lasttime=test;
 	if(last>7)last=0;
 	
-	sprintf(buffer,
-		"\r  (== PROGRESS == [%s] == %06ld == %c ==)     ",
-		dispcache,c_sector,heartbeat);
+	if(v_sector==0)
+	  sprintf(buffer,
+		  "\r  (== PROGRESS == [%s] == ...... == %c ==)     ",
+		  dispcache,heartbeat);
+	
+	else
+	  sprintf(buffer,
+		  "\r  (== PROGRESS == [%s] == %06ld == %c ==)     ",
+		  dispcache,v_sector,heartbeat);
 	
 	if(aheadposition>=0 && aheadposition<graph && !(function==-1))
 	  buffer[aheadposition+20]='>';
@@ -493,6 +506,7 @@ int main(int argc,char *argv[]){
       break;
     case 'V':
       fprintf(stderr,VERSION);
+      fprintf(stderr,"\n\n");
       exit(0);
       break;
     case 'Q':
@@ -849,6 +863,8 @@ int main(int argc,char *argv[]){
 	    for(i=0;i<CD_FRAMESIZE_RAW/2;i++)readbuf[i]=swap16(readbuf[i]);
 	  }
 	  
+	  callback(cursor*(CD_FRAMESIZE_RAW/2)-1,-2);
+
 	  if(blocking_write(out,(char *)readbuf,CD_FRAMESIZE_RAW)){
 	    report2("Error writing output: %s",strerror(errno));
 	    exit(1);
