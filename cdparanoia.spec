@@ -3,7 +3,7 @@
 
 Name: cdparanoia
 Version: %{realver}
-Release: 7
+Release: 22
 License: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
@@ -101,13 +101,64 @@ fi
 %{_libdir}/*.a
 
 %changelog
+* Fri Jun 25 2004 Peter Jones <pjones@redhat.com> alpha9.8-22
+- take ownership of %{_includedir}/cdda
+- sync to mainline
+
+* Tue Jun 15 2004 Elliot Lee <sopwith@redhat.com>
+- rebuilt
+
+* Tue Mar 02 2004 Elliot Lee <sopwith@redhat.com>
+- rebuilt
+
+* Tue Feb 17 2004 Peter Jones <pjones@redhat.com> alpha9.8-20
+- take ownership of %{_includedir}/cdda
+
+* Fri Feb 13 2004 Elliot Lee <sopwith@redhat.com>
+- rebuilt
+
+* Wed Jun 04 2003 Elliot Lee <sopwith@redhat.com>
+- rebuilt
+
+* Tue May 20 2003 Peter Jones <pjones@redhat.com> alpha9.8-17
+- typo fix (g_fd -> fd)
+- add errno output
+
+* Tue May 06 2003 Peter Jones <pjones@redhat.com> alpha9.8-16
+- fix warnings on switches
+- use O_EXCL
+
+* Tue Feb 04 2003 Florian La Roche <Florian.LaRoche@redhat.de>
+- add symlinks to shared libs
+
+* Wed Jan 22 2003 Tim Powers <timp@redhat.com>
+- rebuilt
+
+* Wed Dec 25 2002 Tim Powers <timp@redhat.com> alpha9.8-13
+- fix %%install references in the changelog so that it will rebuild properly
+
+* Wed Dec 11 2002 Tim Powers <timp@redhat.com> alpha9.8-12
+- rebuild on all arches
+
+* Fri Jun 21 2002 Tim Powers <timp@redhat.com>
+- automated rebuild
+
+* Thu May 23 2002 Tim Powers <timp@redhat.com>
+- automated rebuild
+
+* Wed Apr  3 2002 Peter Jones <pjones@redhat.com> alpha9.8-8
+- don't strip, let rpm do that
+
+* Mon Feb 25 2002 Tim Powers <timp@redhat.com> alpha9.8-7
+- fix broken Obsoletes of cdparanoia-devel
+
 * Wed Jan  2 2002 Peter Jones <pjones@redhat.com> alpha9.8-7
 - minor cleanups of $RPM_BUILD_ROOT pruning
 
 * Thu Dec  6 2001 Peter Jones <pjones@redhat.com> alpha9.8-6
 - move includes to %{_includedir}/cdda/
-- add utils.h to %install
-- clean up %install some.
+- add utils.h to %%install
+- clean up %%install some.
 
 * Sun Nov  4 2001 Peter Jones <pjones@redhat.com> alpha9.8-5
 - make a -libs package which contains the .so files
