@@ -1,10 +1,13 @@
+%define ver	9.8
+%define realver	alpha%{ver}
+
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
 Name: cdparanoia
-Version: alpha9.8
-Release: 1
+Version: %{realver}
+Release: 2
 License: GPL
 Group: Applications/Multimedia
-Source: http://www.xiph.org/paranoia/download/%{name}-III-%{version}.src.tgz 
+Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
 Url: http://www.xiph.org/paranoia/index.html
 BuildRoot: %{_tmppath}/cdparanoia-%{version}-root
 
@@ -27,7 +30,7 @@ The cdparanoia-devel package contains the static libraries and header
 files needed for developing applications to read CD Digital Audio disks.
 
 %prep
-%setup -q -n %{name}-III-%{version}
+%setup -q -n %{name}-III-%{realver}
 
 %build
 rm -rf $RPM_BUILD_ROOT
@@ -77,6 +80,10 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.a
 
 %changelog
+* Wed Aug  1 2001 Peter Jones <pjones@redhat.com>
+- fix %post and %postun to only run ldconfig for devel packages
+- bump release
+
 * Wed Mar 28 2001 Peter Jones <pjones@redhat.com>
 - 9.8 release.
 
