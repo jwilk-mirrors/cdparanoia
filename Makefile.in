@@ -76,6 +76,10 @@ install:
 		$(LIBDIR)/libcdda_interface.so.0
 	ln -fs libcdda_interface.so.0.$(VERSION) \
 		$(LIBDIR)/libcdda_interface.so
+	ln -fs libcdda_paranoia.so.0.$(VERSION) \
+		$(LIBDIR)/libcdda_paranoia.so.0
+	ln -fs libcdda_paranoia.so.0.$(VERSION) \
+		$(LIBDIR)/libcdda_paranoia.so
 
 cdparanoia:	$(OFILES) $(LIBDEP)
 		$(LD) $(CFLAGS) $(LDFLAGS) $(OFILES) \
