@@ -137,6 +137,7 @@ static int Dummy (cdrom_drive *d,int Switch){
 static int verify_read_command(cdrom_drive *d){
   int i;
   size16 *buff=malloc(CD_FRAMESIZE_RAW);
+  int audioflag=0;
 
   cdmessage(d,"Verifying drive can read CDDA...\n");
 
@@ -147,6 +148,7 @@ static int verify_read_command(cdrom_drive *d){
       long firstsector=cdda_track_firstsector(d,i);
       long lastsector=cdda_track_lastsector(d,i);
       long sector=(firstsector+lastsector)>>1;
+      audioflag=1;
 
       if(d->read_audio(d,buff,sector,1)>0){
 	cdmessage(d,"\tExpected command set reads OK.\n");
@@ -158,6 +160,11 @@ static int verify_read_command(cdrom_drive *d){
   }
  
   d->enable_cdda(d,0);
+
+  if(!audioflag){
+    cdmessage(d,"\tCould not find any audio tracks on this disk.\n");
+    return(-403);
+  }
 
   cdmessage(d,"\n\tUnable to read any data; "
 	    "drive probably not CDDA capable.\n");

@@ -448,12 +448,12 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   if(!generic_device || !ioctl_device){
     if(generic_device){
       ioctl_device=scsi_match(generic_device,scsi_cdrom_prefixes,O_RDWR,
-			      O_RDONLY,
+			      O_RDONLY|O_NONBLOCK,
 			      "\t\tNo cdrom device found to match generic device %s",
 			      messagedest,messages);
     }else{
       generic_device=
-	scsi_match(ioctl_device,scsi_generic_prefixes,O_RDONLY,O_RDWR,
+	scsi_match(ioctl_device,scsi_generic_prefixes,O_RDONLY|O_NONBLOCK,O_RDWR,
 		   "\t\tNo generic SCSI device found to match CDROM device %s",
 		   messagedest,messages);
       if(!generic_device)	
