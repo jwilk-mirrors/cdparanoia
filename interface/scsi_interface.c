@@ -855,6 +855,15 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	cdmessage(d,b);
 	sprintf(b,"                 System error: %s\n",strerror(errno));
 	cdmessage(d,b);
+
+	fprintf(stderr,"scsi_read error: sector=%ld length=%ld retry=%d\n",
+		begin,sectors,retry_count);
+	fprintf(stderr,"                 Sense key: %x ASC: %x ASCQ: %x\n",
+		(int)(sg_hd->sense_buffer[2]&0xf),
+		(int)(sg_hd->sense_buffer[12]),
+		(int)(sg_hd->sense_buffer[13]));
+	fprintf(stderr,"                 Transport error: %s\n",strerror_tr[err]);
+	fprintf(stderr,"                 System error: %s\n",strerror(errno));
       }
 
       if(!d->error_retry)return(-7);
@@ -936,13 +945,12 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	break;
     }
     
-    if(retry_count>4)
-      if(sectors>1)sectors=sectors*3/4;
     retry_count++;
-    if(retry_count>MAX_RETRIES){
+    if(sectors==1 && retry_count>MAX_RETRIES){
       cderror(d,"007: Unknown, unrecoverable error reading data\n");
       return(-7);
     }
+    if(sectors>1)sectors=sectors/2;
     d->enable_cdda(d,0);
     d->enable_cdda(d,1);
 

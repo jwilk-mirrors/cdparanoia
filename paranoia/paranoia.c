@@ -430,7 +430,7 @@ static long i_iterate_stage2(cdrom_paranoia *p,v_fragment *v,
   return(0);
 }
 
-/* simple test for a root vector that ends in silence */
+/* simple test for a root vector that ends in silence*/
 static void i_silence_test(root_block *root){
   size16 *vec=rv(root);
   long end=re(root)-rb(root)-1;
@@ -462,6 +462,16 @@ static long i_silence_match(root_block *root, v_fragment *v,
   for(j=0;j<end;j++)if(vec[j]!=0)break;
   if(j<MIN_SILENCE_BOUNDARY)return(0);
   j+=fb(v);
+
+  /* is the new silent section ahead of the end of the old by <
+     p->dynoverlap? */
+  if(fb(v)>=re(root) && fb(v)-p->dynoverlap<re(root)){
+    /* extend the zeroed area of root */
+    long addto=fb(v)+MIN_SILENCE_BOUNDARY-re(root);
+    size16 vec[addto];
+    memset(vec,0,sizeof(vec));
+    c_append(rc(root),vec,addto);
+  }
 
   /* do we have an 'effortless' overlap? */
   begin=max(fb(v),root->silencebegin);
