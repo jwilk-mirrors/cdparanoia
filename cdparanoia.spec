@@ -27,7 +27,6 @@ damaged CDs.
 Summary: Development tools for libcdda_paranoia (Paranoia III).
 Group: Development/Libraries
 Requires: cdparanoia-libs = %{version}-%{release}
-Obsoletes: cdparanoia-devel
 
 %description -n cdparanoia-devel
 The cdparanoia-devel package contains the static libraries and header
