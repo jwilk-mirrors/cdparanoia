@@ -869,7 +869,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	  }
 	  if(d->report_all){
 	    char b[256];
-	    sprintf(b,"scsi_read: kernel couldn't alloc %d bytes.  "
+	    sprintf(b,"scsi_read: kernel couldn't alloc %ld bytes.  "
 		    "backing off...\n",sectors*CD_FRAMESIZE_RAW);
 	    
 	    cdmessage(d,b);
@@ -1427,7 +1427,7 @@ static int check_mmc(cdrom_drive *d){
       /* MMC style drive! */
       d->is_mmc=1;
       
-      if(b[1]>=4)
+      if(b[1]>=4){
 	if(b[5]&0x1){
 	  cdmessage(d,"\tDrive is MMC style\n");
 	  return(1);
@@ -1436,6 +1436,7 @@ static int check_mmc(cdrom_drive *d){
 	  cdmessage(d,"\tIt will likely not be able to read audio data.\n");
 	  return(1);
 	}
+      }
     }
   }
   

@@ -364,7 +364,7 @@ static void callback(long inpos, int function){
   static char heartbeat=' ';
   int position=0,aheadposition=0;
   static int overlap=0;
-  static printit=-1;
+  static int printit=-1;
 
   static int slevel=0;
   static int slast=0;
@@ -381,12 +381,14 @@ static void callback(long inpos, int function){
     osector=inpos;
     sector=inpos/CD_FRAMEWORDS;
     
-    if(printit==-1)
-      if(isatty(STDERR_FILENO))
+    if(printit==-1){
+      if(isatty(STDERR_FILENO)){
 	printit=1;
-      else
-      printit=0;
-    
+      }else{
+	printit=0;
+      }
+    }
+
     if(printit==1){  /* else don't bother; it's probably being 
 			redirected */
       position=((float)(sector-callbegin)/
@@ -408,22 +410,24 @@ static void callback(long inpos, int function){
 	if(position<graph && position>=0)
 	  switch(function){
 	  case PARANOIA_CB_VERIFY:
-	    if(stimeout>=30)
+	    if(stimeout>=30){
 	      if(overlap>CD_FRAMEWORDS)
 		slevel=2;
 	      else
 		slevel=1;
+	    }
 	    break;
 	  case PARANOIA_CB_READ:
 	    if(sector>c_sector)c_sector=sector;
 	    break;
 	    
 	  case PARANOIA_CB_FIXUP_EDGE:
-	    if(stimeout>=5)
+	    if(stimeout>=5){
 	      if(overlap>CD_FRAMEWORDS)
 		slevel=2;
 	      else
 		slevel=1;
+	    }
 	    if(dispcache[position]==' ') 
 	      dispcache[position]='-';
 	    break;
