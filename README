@@ -1,7 +1,7 @@
 cdparanoia release III alpha 9 README
-[March 19, 1998, updated October 21, 1998]
+[March 19, 1998, updated August 17, 1999]
 
-Monty <xiphmont@mit.edu>
+Monty <monty@xiph.org>
 
 This CDDA reader distribution ('cdparanoia') reads audio from the
 CDROM directly as data, with no analog step between, and writes the
@@ -10,7 +10,7 @@ data to a file or pipe as .wav, .aifc or as raw 16 bit linear PCM.
 These are installation notes; for lots of other cdparanoia related
 information, see:
 
-http://www.mit.edu/afs/sipb/user/xiphmont/cdparanoia/index.html
+http://www.xiph.org/paranoia/
 
 WARNING: (Danger! Danger!)
 ==========================
@@ -50,7 +50,7 @@ Requirements
 	(/dev/sg?) files in /dev. Most distributions already have the 
 	/dev/sg? files.
 
-3. A Linux 2.0.x or 2.1.x kernel
+3. A Linux 2.0.x, 2.1.x, 2.2.x or 2.3.x kernel
 
 ATAPI drives may be used either with the native IDE cdrom driver, or
 with IDE-SCSI host adaptor emulation.  Both work, but the SCSI
@@ -182,15 +182,9 @@ lots o' stuff on the website.
 Contacts
 ========
 
-The author of the original cdda2wav package is Heiko Eissfeldt; he can
-be contacted about cdda2wav at heiko@colossus.escape.de.  The 'common
-ancestry' of cdda2wav and cdparanoia diverged long ago, however; the
-no longer likely have any code whatsoever in common.  Don;t bug Heiko
-with Cdparanoia problems.
-
-I can be contacted at xiphmont@mit.edu.  The main distribution site
+I can be contacted at monty@xiph.org.  The main distribution site
 for cdparanoia (and the original Paranoia patches to cdda2wav) is
-http://www.mit.edu/afs/sipb/user/xiphmont/cdparanoia/
+http://www.xiph.org/paranoia/
 
 Happy hunting.  Be nice to copyrights.
 
