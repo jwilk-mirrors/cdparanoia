@@ -555,6 +555,24 @@ static long scsi_read_mmc2 (cdrom_drive *d, void *p, long begin,
   return(scsi_read_map(d,p,begin,sectors,i_read_mmc2));
 }
 
+/* Some drives, given an audio read command, return only 2048 bytes
+   of data as opposed to 2352 bytes.  Look for -1s at the end of the
+   single sector verification read */
+
+static int verify_2352_bytes(cdrom_drive *d){
+  if(d->clear_buff_via_bug){
+    long i,flag=0;
+    for(i=2100;i<2352;i++)
+      if(d->sg_buffer[i]!=(unsigned char)'\377'){
+	flag=1;
+	break;
+      }
+
+    if(!flag)return(0);
+  }
+  return(1);
+}
+
 /* So many different read commands, densities, features...
    Verify that our selected 'read' command actually reads 
    nonzero data, else search through other possibilities */
@@ -591,10 +609,12 @@ static int verify_read_command(cdrom_drive *d){
 	long sector=(firstsector+lastsector)>>1;
 	
 	if(d->read_audio(d,buff,sector,1)>0){
-	  cdmessage(d,"\tExpected command set reads OK.\n");
-	  d->enable_cdda(d,0);
-	  free(buff);
-	  return(0);
+	  if(verify_2352_bytes(d)){
+	    cdmessage(d,"\tExpected command set reads OK.\n");
+	    d->enable_cdda(d,0);
+	    free(buff);
+	    return(0);
+	  }
 	}
       }
     }
@@ -616,7 +636,7 @@ static int verify_read_command(cdrom_drive *d){
     
     /* loops:  
        density/enable no,  0x0/org,  0x04/org, 0x82/org
-       read command read_10 read_12 read_sony read_mmc read_nec */
+       read command read_10 read_12 read_sony read_mmc read_mmc2 read_nec */
     
 
     for(j=0;j>=0;j++){
@@ -635,10 +655,14 @@ static int verify_read_command(cdrom_drive *d){
 	rs="0xbe";
 	break;
       case 3:
+	d->read_audio=scsi_read_mmc2;
+	rs="be+f";
+	break;
+      case 4:
 	d->read_audio=scsi_read_nec;
 	rs="0xd4";
 	break;
-      case 4:
+      case 5:
 	d->read_audio=scsi_read_sony;
 	rs="0xd8";
 	j=-2;
@@ -684,18 +708,19 @@ static int verify_read_command(cdrom_drive *d){
 	      long sector=(firstsector+lastsector)>>1;
 	      
 	      if(d->read_audio(d,buff,sector,1)>0){
-		
-		cdmessage(d,"\r\tFound a potentially working command set:                  \n"
-			  "\t\tEnable/Density:");
-		cdmessage(d,es);
-		cdmessage(d,"  Read command:");
-		cdmessage(d,rs);
-		cdmessage(d,"\n\t\t(please email a copy of this "
-			  "output to xiphmont@mit.edu)\n");
-		
-		free(buff);
-		d->enable_cdda(d,0);
-		return(0);
+		if(verify_2352_bytes(d)){
+		  cdmessage(d,"\r\tFound a potentially working command set:                    \n"
+			    "\t\tEnable/Density:");
+		  cdmessage(d,es);
+		  cdmessage(d,"  Read command:");
+		  cdmessage(d,rs);
+		  cdmessage(d,"\n\t\t(please email a copy of this "
+			    "output to xiphmont@mit.edu)\n");
+		  
+		  free(buff);
+		  d->enable_cdda(d,0);
+		  return(0);
+		}
 	      }else
 		break;
 	    }

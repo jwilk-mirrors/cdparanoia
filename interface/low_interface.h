@@ -28,21 +28,21 @@
 
 /* some include file locations have changed with newer kernels */
 
-#if LINUX_VERSION_CODE < 0x20100
-
+#ifdef SBPCD_H
 #include <linux/sbpcd.h>
-#include <linux/ucdrom.h>
-
 #endif
 
-#if LINUX_VERSION_CODE > 0x10300 + 97
+#ifdef UCDROM_H
+#include <linux/ucdrom.h>
+#endif
+
+#ifndef CDROMAUDIOBUFSIZ      
+#define CDROMAUDIOBUFSIZ        0x5382 /* set the audio buffer size */
+#endif
+
 /* easiest as many dists don't make proper symlinks */
 #include <linux/../scsi/sg.h>
 #include <linux/../scsi/scsi.h>
-#else /* old stuff */
-#include <linux/../../drivers/scsi/sg.h>
-#include <linux/../../drivers/scsi/scsi.h>
-#endif
 
 #include <linux/cdrom.h>
 #include <linux/major.h>

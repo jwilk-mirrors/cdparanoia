@@ -340,7 +340,7 @@ static char *scsi_match(const char *device,char **prefixes,int perma,
 	
 	matchf=open(buffer,permb);
 	if(matchf!=-1){
-	  if(get_scsi_id(dev,&b)==0){
+	  if(get_scsi_id(matchf,&b)==0){
 	    if(a.bus==b.bus && a.id==b.id && a.lun==b.lun){
 	      close(matchf);
 	      close(dev);
@@ -543,16 +543,18 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 
   p = scsi_inquiry(d);
 
-  memcpy(d->inqbytes,p,4);
-  d->cdda_device_name=copystring(generic_device);
-  d->ioctl_device_name=copystring(ioctl_device);
-
   if (*p != TYPE_ROM && *p != TYPE_WORM) {
-    cderror(d,"Drive is neither a CDROM nor a WORM device\n");
+    idmessage(messagedest,messages,
+	      "\t\tDrive is neither a CDROM nor a WORM device\n",NULL);
     free(d->sg);
     free(d);
     return(NULL);
   }
+
+  d->drive_model=calloc(36,1);
+  memcpy(d->inqbytes,p,4);
+  d->cdda_device_name=copystring(generic_device);
+  d->ioctl_device_name=copystring(ioctl_device);
 
   d->drive_model=calloc(36,1);
   strscat(d->drive_model,p+8,8);

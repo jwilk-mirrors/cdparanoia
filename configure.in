@@ -60,11 +60,14 @@ if test -z "$SIZE32"; then
 	AC_MSG_ERROR(No 32 bit tupe found on this platform!)
 fi
 	
-AC_CHECK_HEADERS(fcntl.h limits.h sys/ioctl.h unistd.h)
+AC_CHECK_HEADERS(linux/sbpcd.h, SBPCD_H="-DSBPCD_H='1' ")
+AC_CHECK_HEADERS(linux/ucdrom.h, UCDROM_H="-DUCDROM_H='1' ")
 
 AC_PROG_MAKE_SET
 AC_C_CONST
 
+AC_SUBST(SBPCD_H)
+AC_SUBST(UCDROM_H)
 AC_SUBST(TYPESIZES)
 AC_SUBST(OPT)
 AC_SUBST(DEBUG)
