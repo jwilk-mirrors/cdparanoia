@@ -1,13 +1,10 @@
-%define ver	9.8
-%define realver	alpha%{ver}
-
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
 Name: cdparanoia
-Version: %{realver}
+Version: alpha9.8
 Release: 1
 License: GPL
 Group: Applications/Multimedia
-Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
+Source: http://www.xiph.org/paranoia/download/%{name}-III-%{version}.src.tgz 
 Url: http://www.xiph.org/paranoia/index.html
 BuildRoot: %{_tmppath}/cdparanoia-%{version}-root
 
@@ -30,7 +27,7 @@ The cdparanoia-devel package contains the static libraries and header
 files needed for developing applications to read CD Digital Audio disks.
 
 %prep
-%setup -q -n %{name}-III-%{realver}
+%setup -q -n %{name}-III-%{version}
 
 %build
 rm -rf $RPM_BUILD_ROOT
@@ -55,9 +52,13 @@ install -m 0755 interface/libcdda_interface.so.0.%{ver} \
 	$RPM_BUILD_ROOT%{_libdir}
 install -m 0755 interface/libcdda_interface.a $RPM_BUILD_ROOT%{_libdir}
 
-%post -p /sbin/ldconfig
+%post devel
+/sbin/ldconfig
 
-%postun -p /sbin/ldconfig
+%postun devel
+if [ "$1" -ge "1" ]; then
+  /sbin/ldconfig
+fi
 
 %clean
 rm -rf $RPM_BUILD_ROOT
