@@ -6,8 +6,10 @@
  * 
  ******************************************************************/
 
+#include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <pwd.h>
 #include <sys/stat.h>
@@ -19,16 +21,34 @@
 
 #define MAX_DEV_LEN 20 /* Safe because strings only come from below */
 /* must be absolute paths! */
-static char *scsi_cdrom_prefixes[3]={"/dev/scd","/dev/sr",NULL};
-static char *scsi_generic_prefixes[2]={"/dev/sg",NULL};
-static char *cdrom_devices[]={"/dev/cdrom","/dev/hd?","/dev/sg?",
-				"/dev/cdroms/cdrom?",
-				"/dev/cdu31a","/dev/cdu535",
-				"/dev/sbpcd","/dev/sbpcd?","/dev/sonycd",
-				"/dev/mcd","/dev/sjcd",
-				/* "/dev/aztcd", timeout is too long */
-				"/dev/cm206cd",
-				"/dev/gscd","/dev/optcd",NULL};
+static char *scsi_cdrom_prefixes[]={
+  "/dev/scd",
+  "/dev/sr",
+  NULL};
+static char *scsi_generic_prefixes[]={
+  "/dev/sg",
+  NULL};
+
+static char *devfs_scsi_test="/dev/scsi/";
+static char *devfs_scsi_cd="cd";
+static char *devfs_scsi_generic="generic";
+
+static char *cdrom_devices[]={
+  "/dev/cdrom",
+  "/dev/cdroms/cdrom?",
+  "/dev/hd?",
+  "/dev/sg?",
+  "/dev/cdu31a",
+  "/dev/cdu535",
+  "/dev/sbpcd",
+  "/dev/sbpcd?",
+  "/dev/sonycd",
+  "/dev/mcd",
+  "/dev/sjcd",
+  /* "/dev/aztcd", timeout is too long */
+  "/dev/cm206cd",
+  "/dev/gscd",
+  "/dev/optcd",NULL};
 
 /* Functions here look for a cdrom drive; full init of a drive type
    happens in interface.c */
@@ -108,36 +128,19 @@ cdrom_drive *cdda_identify(const char *device, int messagedest,char **messages){
 }
 
 char *test_resolve_symlink(const char *file,int messagedest,char **messages){
+  char resolved[PATH_MAX];
   struct stat st;
   if(lstat(file,&st)){
     idperror(messagedest,messages,"\t\tCould not stat %s",file);
     return(NULL);
   }
-  if(S_ISLNK(st.st_mode)){
-    char buf[1024];
-    int status=readlink(file,buf,1023);
-    if(status==-1){
-      idperror(messagedest,messages,"\t\tCould not resolve symlink %s",file);
-      return(NULL);
-    }
-    buf[status]=0;
 
-    /* Uh, oh Clem... them rustlers might be RELATIVE! */
-    if(buf[0]!='/'){
-      /* Yupper. */
-      char *ret=copystring(file);
-      char *pos=strrchr(ret,'/');
-      if(pos){
-	pos[1]='\0';
-	ret=catstring(ret,buf);
-	return(ret);
-      }
-      free(ret);
-    }
-    return(copystring(buf));
+  if(realpath(file,resolved))
+    return(strdup(resolved));
 
-  }
-  return(copystring(file));
+  idperror(messagedest,messages,"\t\tCould not resolve symlink %s",file);
+  return(NULL);
+
 }
 
 cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
@@ -305,12 +308,32 @@ static int get_scsi_id(int fd, scsiid *id){
 
 /* slightly wasteful, but a clean abstraction */
 static char *scsi_match(const char *device,char **prefixes,
+			char *devfs_test,
+			char *devfs_other,
 			char *prompt,int messagedest,char **messages){
   int dev=open(device,O_RDONLY|O_NONBLOCK);
   scsiid a,b;
 
   int i,j;
-  char buffer[80];
+  char buffer[200];
+
+  /* if we're running under /devfs, build the device name from the
+     device we already have */
+  if(!strncmp(device,devfs_test,strlen(devfs_test))){
+    char *pos;
+    strcpy(buffer,device);
+    pos=strrchr(buffer,'/');
+    if(pos){
+      int matchf;
+      sprintf(pos,"/%s",devfs_other);
+      matchf=open(buffer,O_RDONLY|O_NONBLOCK);
+      if(matchf!=-1){
+	close(matchf);
+	close(dev);
+	return(strdup(buffer));
+      }
+    }
+  }	
 
   /* get the host/id/lun */
   if(dev==-1){
@@ -485,11 +508,13 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
     if(generic_device){
       ioctl_device=
 	scsi_match(generic_device,scsi_cdrom_prefixes,
+		   devfs_scsi_test,devfs_scsi_cd,
 		   "\t\tNo cdrom device found to match generic device %s",
 		   messagedest,messages);
     }else{
       generic_device=
 	scsi_match(ioctl_device,scsi_generic_prefixes,
+		   devfs_scsi_test,devfs_scsi_generic,
 		   "\t\tNo generic SCSI device found to match CDROM device %s",
 		   messagedest,messages);
       if(!generic_device)	
