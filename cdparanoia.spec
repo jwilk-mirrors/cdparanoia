@@ -4,7 +4,7 @@
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
 Name: cdparanoia-III
 Version: %{realver}
-Release: 1
+Release: 2
 Copyright: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-%{realver}.src.tgz 
@@ -20,6 +20,14 @@ lies in its ability to handle a variety of hardware, including inexpensive
 drives prone to misalignment, frame jitter and loss of streaming during
 atomic reads.  Cdparanoia is also good at reading and repairing data from
 damaged CDs.
+
+%package devel
+Summary: Development tools for libcdda_paranoia (Paranoia III).
+Group: Development/Libraries
+
+%description devel
+The cdparanoia-devel package containts the static libraries and header
+files needed for developing applications to read CD Digital Audio disks.
 
 %prep
 %setup -q
@@ -54,15 +62,26 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 
-%doc README GPL
+%doc README GPL FAQ.txt
 /usr/bin/cdparanoia
 /usr/man/man1/cdparanoia.1
+/usr/lib/libcdda_paranoia.so.*
+/usr/lib/libcdda_interface.so.*
+
+%files devel
+%defattr(-,root,root)
+
 /usr/include/cdda_paranoia.h
-/usr/lib/libcdda_paranoia.*
+/usr/lib/libcdda_paranoia.a
 /usr/include/cdda_interface.h
-/usr/lib/libcdda_interface.*
+/usr/lib/libcdda_interface.a
 
 %changelog
+* Thu Dec 23 1999 Peter Jones <pjones@redhat.com>
+- update package to provide cdparanoia-alpha9.7-2.*.rpm and 
+  cdparanoia-devel-alpha9.7-2.*.rpm.  Also, URLs point at xiph.org
+  like they should.
+
 * Wed Dec 22 1999 Peter Jones <pjones@redhat.com>
 - updated package for alpha9.7, based on input from:
   Monty <xiphmont@xiph.org> 
