@@ -644,7 +644,8 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 
   /* It would seem some TOSHIBA CDROMs gets things wrong */
  
-  if (!strncmp (p + 8, "TOSHIBA", 7) &&
+  if (p &&
+      !strncmp (p + 8, "TOSHIBA", 7) &&
       !strncmp (p + 16, "CD-ROM", 6) &&
       p[0] == TYPE_DISK) {
     p[0] = TYPE_ROM;
