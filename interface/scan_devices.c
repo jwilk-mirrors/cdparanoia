@@ -567,7 +567,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 	      "\t\tDrive is neither a CDROM nor a WORM device\n",NULL);
     free(d->sg);
     free(d);
-    return(NULL);
+    goto cdda_identify_scsi_fail;
   }
 
   d->drive_model=calloc(36,1);

@@ -60,7 +60,10 @@ static int cooked_readtoc (cdrom_drive *d){
 /* Set operating speed */
 static int cooked_setspeed(cdrom_drive *d, int speed)
 {
-  return ioctl(d->ioctl_fd, CDROM_SELECT_SPEED, speed);
+  if(d->ioctl_fd!=-1)
+    return ioctl(d->ioctl_fd, CDROM_SELECT_SPEED, speed);
+  else
+    return 0;
 }
 
 
