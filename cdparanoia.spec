@@ -55,7 +55,7 @@ install -d $RPM_BUILD_ROOT%{_bindir}
 install -d $RPM_BUILD_ROOT%{_includedir}/cdda
 install -d $RPM_BUILD_ROOT%{_libdir}
 install -d $RPM_BUILD_ROOT%{_mandir}/man1
-install -m 0755 -s cdparanoia $RPM_BUILD_ROOT%{_bindir}
+install -m 0755 cdparanoia $RPM_BUILD_ROOT%{_bindir}
 install -m 0644 cdparanoia.1 $RPM_BUILD_ROOT%{_mandir}/man1/ 
 install -m 0644 utils.h paranoia/cdda_paranoia.h interface/cdda_interface.h \
 	$RPM_BUILD_ROOT%{_includedir}/cdda
