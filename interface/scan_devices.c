@@ -168,7 +168,7 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
     /* Yay, ATAPI... */
     /* Ping for CDROM-ness */
     
-    fd=open(device,O_RDONLY);
+    fd=open(device,O_RDONLY|O_NONBLOCK);
     if(fd==-1){
       idperror(messagedest,messages,"\t\tUnable to open %s",device);
       free(device);
@@ -238,7 +238,7 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
     return(NULL);
   }
 
-  if(fd==-1)fd=open(device,O_RDONLY);
+  if(fd==-1)fd=open(device,O_RDONLY|O_NONBLOCK);
   if(fd==-1){
     idperror(messagedest,messages,"\t\tUnable to open %s",device);
     free(device);
@@ -473,7 +473,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
     goto cdda_identify_scsi_fail;
   }
 
-  if(ioctl_device)i_fd=open(ioctl_device,O_RDONLY);
+  if(ioctl_device)i_fd=open(ioctl_device,O_RDONLY|O_NONBLOCK);
   g_fd=open(generic_device,O_RDWR|O_EXCL);
   
   if(ioctl_device && i_fd==-1)
