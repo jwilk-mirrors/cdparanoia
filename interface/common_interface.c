@@ -1,6 +1,6 @@
 /******************************************************************
  * CopyPolicy: GNU Public License 2 applies
- * Copyright (C) 1998 Monty xiphmont@mit.edu
+ * Copyright (C) 1998, 2002 Monty monty@xiph.org
  *
  * CDROM communication common to all interface methods is done here 
  * (mostly ioctl stuff, but not ioctls specific to the 'cooked'
@@ -168,7 +168,7 @@ int data_bigendianp(cdrom_drive *d){
 /************************************************************************/
 /* Here we fix up a couple of things that will never happen.  yeah,
    right.  The multisession stuff is from Hannu's code; it assumes it
-   knows the leasoud/leadin size. */
+   knows the leadoud/leadin size. */
 
 int FixupTOC(cdrom_drive *d,int tracks){
   struct cdrom_multisession ms_str;
@@ -223,7 +223,8 @@ int FixupTOC(cdrom_drive *d,int tracks){
       /* adjust end of last audio track to be in the first session */
       for (j = tracks-1; j >= 0; j--) {
 	if (j > 0 && !IS_AUDIO(d,j) && IS_AUDIO(d,j-1)) {
-	  if (d->disc_toc[j].dwStartSector > ms_str.addr.lba - 11400) 
+	  if ((d->disc_toc[j].dwStartSector > ms_str.addr.lba - 11400) &&
+	      (ms_str.addr.lba - 11400 > d->disc_toc[j-1].dwStartSector))
 	    d->disc_toc[j].dwStartSector = ms_str.addr.lba - 11400;
 	  break;
 	}
