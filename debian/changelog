@@ -1,3 +1,9 @@
+cdparanoia (3a9.8-1) unstable; urgency=low
+
+  * general updates for new kernel series
+
+ -- Monty <monty@xiph.org>  Tue, 27 Mar 2001 14:39:12 -0800
+
 cdparanoia (3a9.7-2) unstable; urgency=low
 
   * Added cdparanoia/utils.h to the dev-package.

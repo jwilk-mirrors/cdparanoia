@@ -1,10 +1,10 @@
-%define ver	9.7
+%define ver	9.8
 %define realver	alpha%{ver}
 
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
 Name: cdparanoia
 Version: %{realver}
-Release: 7
+Release: 8
 License: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 

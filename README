@@ -1,5 +1,5 @@
 cdparanoia release III alpha 9 README
-[March 19, 1998, updated December 13, 1999]
+[March 19, 1998, updated March 27, 2001]
 
 Monty <monty@xiph.org>
 
@@ -27,15 +27,15 @@ Requirements
    2d. SCSI cdrom support (optional)
    2e. kernel support for the generic SCSI interface and proper device 
 	(/dev/sg?) files in /dev. Most distributions already have the 
-	/dev/sg? files.
+	/dev/sg? files.  devfs [supported] sets this up automagically.
 
    For SCSI CDROM drives:
    2f. SCSI cdrom support (optional)
    2g. kernel support for the generic SCSI interface and proper device 
 	(/dev/sg?) files in /dev. Most distributions already have the 
-	/dev/sg? files.
+	/dev/sg? files.  devfs [supported] sets this up automagically.
 
-3. A Linux 2.0.x, 2.1.x, 2.2.x or 2.3.x kernel
+3. A Linux 2.2.x, 2.3.x or 2.4.x kernel 
 
 ATAPI drives may be used either with the native IDE cdrom driver, or
 with IDE-SCSI host adaptor emulation.  Both work, but the SCSI
@@ -43,13 +43,11 @@ emulation mode works much better for CDDA extraction.  Cdparanoia may
 also be able to identify and use unusual drives that report 'CDDA
 incapable' in native ATAPI mode.
 
-Linux 2.0.x only: Also, although a stock SCSI setup may work,
-performance will be better if linux/include/scsi/sg.h defines
-SG_BIG_BUFF to 65536.
-
 /proc filesystem support is no longer needed, although you'll
 certainly want to have it for other packages.  Cdparanoia does not
 require threading, IPC or sound card support.
+
+Devfs is fully supported as of 9.8, with or without devfsd.
 
 Compiling cdparanoia
 ==================
@@ -91,9 +89,10 @@ Cdparanoia web site at the URL given above.
 Additional installation notes
 =============================
 
-Most Linux setups already have performed the steps described below.
-The list is useful for doublechecking. (originally taken from Heiko's 
-cdda2wav README)
+Most Linux setups already have performed the steps described below,
+and devfs also provides all the necessary device entries
+automatically.  The list is useful for doublechecking on a non-devfs
+install. (originally taken from Heiko's cdda2wav README)
 
 (for SCSI devices)
 

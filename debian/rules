@@ -48,8 +48,8 @@ libcdparanoia0: install
 	dh_installdocs       -p$@ -P$(b)/$@ README
 	dh_installchangelogs -p$@ -P$(b)/$@ 
 	dh_movefiles         -p$@ -P$(b)/$@
-	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.7 libcdda_paranoia.so.0
-	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.7 libcdda_interface.so.0
+	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.8 libcdda_paranoia.so.0
+	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.8 libcdda_interface.so.0
 	dh_strip             -p$@ -P$(b)/$@ 
 	dh_compress          -p$@ -P$(b)/$@ 
 	dh_fixperms          -p$@ -P$(b)/$@ 
@@ -63,8 +63,8 @@ libcdparanoia0-dev: install
 	dh_installdocs       -p$@ -P$(b)/$@
 	dh_installchangelogs -p$@ -P$(b)/$@ 
 	dh_movefiles         -p$@ -P$(b)/$@
-	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.7 libcdda_paranoia.so
-	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.7 libcdda_interface.so
+	cd $(b)/$@/usr/lib/; ln -s libcdda_paranoia.so.0.9.8 libcdda_paranoia.so
+	cd $(b)/$@/usr/lib/; ln -s libcdda_interface.so.0.9.8 libcdda_interface.so
 	dh_strip             -p$@ -P$(b)/$@ 
 	dh_compress          -p$@ -P$(b)/$@ 
 	dh_fixperms          -p$@ -P$(b)/$@ 

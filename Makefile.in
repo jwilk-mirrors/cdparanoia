@@ -3,7 +3,7 @@
 # DO NOT EDIT BELOW! ##########################################################
 # (unless, of course, you know what you are doing :) ##########################
 
-VERSION=9.7
+VERSION=9.8
 VPATH=@srcdir@
 srcdir=@srcdir@
 
