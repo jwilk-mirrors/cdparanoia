@@ -16,28 +16,36 @@ LD=@CC@
 LDFLAGS=@LDFLAGS@ $(FLAGS)
 AR=@AR@
 RANLIB=@RANLIB@
-
+CPPFLAGS+=-D_REENTRANT
 
 OFILES = paranoia.o p_block.o overlap.o gap.o isort.o
 #TFILES = isort.t gap.t p_block.t paranoia.t
 
-LIBS = ../interface/cdda_interface.a -lm
+LIBS = ../interface/libcdda_interface.a -lm
 
-all: 
-	$(MAKE) cdda_paranoia.a CFLAGS="$(OPT)" 
+all: lib slib
 
 debug: 
-	$(MAKE) cdda_paranoia.a CFLAGS="$(DEBUG)"
+	$(MAKE) libcdda_paranoia.a CFLAGS="$(DEBUG)"
 
 lib:	
-	$(MAKE) cdda_paranoia.a CFLAGS="$(OPT)" 
+	$(MAKE) libcdda_paranoia.a CFLAGS="$(OPT)" 
+
+slib:	
+	$(MAKE) lessmessy
+	$(MAKE) libcdda_paranoia.so CFLAGS="$(OPT) -fpic" 
 
 #test:	$(TFILES)
 #
-	
-cdda_paranoia.a: 	$(OFILES)	
-		$(AR) -r cdda_paranoia.a $(OFILES)
-		$(RANLIB) cdda_paranoia.a
+
+libcdda_paranoia.a: 	$(OFILES)	
+	$(AR) -r libcdda_paranoia.a $(OFILES)
+	$(RANLIB) libcdda_paranoia.a
+
+libcdda_paranoia.so: 	$(OFILES)	
+	$(CC) -fpic -shared -o libcdda_paranoia.so.0.9.5 -Wl,-soname -Wl,libcdda_paranoia.so.0 $(OFILES)
+	[ -e libcdda_paranoia.so.0 ] || ln -s libcdda_paranoia.so.0.9.5 libcdda_paranoia.so.0
+	[ -e libcdda_paranoia.so ] || ln -s libcdda_paranoia.so.0.9.5 libcdda_paranoia.so
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<
@@ -46,9 +54,12 @@ cdda_paranoia.a: 	$(OFILES)
 	$(CC) -g -DTEST $(DEBUG) -o $@ $< $(LIBS)
 	$@
 
-clean:
-	-rm -f *.o *.a *.t core *~ 
+lessmessy:
+	-rm -f *.o  *.t core *~
 
-distclean:
-	-rm -f *.o *.a core *~ Makefile 
+clean: lessmessy
+	-rm -f  *.a *.so *.so.0 *.so.0.9.5 core
+
+distclean: clean
+	-rm -f Makefile 
 

@@ -16,32 +16,46 @@ LDFLAGS=@LDFLAGS@ $(FLAGS)
 AR=@AR@
 RANLIB=@RANLIB@
 LIBS = -lm
+CPPFLAGS+=-D_REENTRANT
 
 OFILES = scan_devices.o	common_interface.o cooked_interface.o interface.o\
 	scsi_interface.o smallft.o toc.o test_interface.o
 
-all: 
-	$(MAKE) cdda_interface.a CFLAGS="$(OPT)" 
+all: lib slib
 
 debug: 
-	$(MAKE) cdda_interface.a CFLAGS="$(DEBUG)"
+	$(MAKE) libcdda_interface.a CFLAGS="$(DEBUG)"
 
 lib:	
-	$(MAKE) cdda_interface.a CFLAGS="$(OPT)" 
+	$(MAKE) libcdda_interface.a CFLAGS="$(OPT)" 
+
+slib:	
+	$(MAKE) lessmessy
+	$(MAKE) libcdda_interface.so CFLAGS="$(OPT) -fpic" 
+	[ -e libcdda_interface.so.0 ] || ln -s libcdda_interface.so libcdda_interface.so.0
 
 test:	
-	$(MAKE) cdda_interface.a CFLAGS="$(DEBUG)"
+	$(MAKE) libcdda_interface.a CFLAGS="$(DEBUG)"
 	$(CC) $(DEBUG) -c test.c
-	$(LD) $(DEBUG) test.o $(LDFLAGS) -o cdda_test $(LIBS) cdda_interface.a
+	$(LD) $(DEBUG) test.o $(LDFLAGS) -o cdda_test $(LIBS) libcdda_interface.a
 
-cdda_interface.a: 	$(OFILES)	
-		$(AR) -r cdda_interface.a $(OFILES)
-		$(RANLIB) cdda_interface.a
+libcdda_interface.a: 	$(OFILES)	
+	$(AR) -r libcdda_interface.a $(OFILES)
+	$(RANLIB) libcdda_interface.a
+
+libcdda_interface.so: 	$(OFILES)	
+	$(CC) -fpic -shared -o libcdda_interface.so.0.9.5 -Wl,-soname -Wl,libcdda_interface.so.0 $(OFILES)
+	[ -e libcdda_interface.so.0 ] || ln -s libcdda_interface.so.0.9.5 libcdda_interface.so.0
+	[ -e libcdda_interface.so ] || ln -s libcdda_interface.so.0.9.5 libcdda_interface.so
+
 .c.o:
 	$(CC) $(CFLAGS) -c $<
 
-clean:
-	-rm -f *.o core *~ *.a *.out
+lessmessy:
+	-rm  -f *.o core *~ *.out
 
-distclean:
-	-rm -f *.o core *~ *.a *.out Makefile
+clean: lessmessy
+	-rm -f *.a *.so *.so.0 *.so.0.9.5
+
+distclean: clean
+	-rm -f  Makefile
