@@ -22,4 +22,7 @@ extern void i_analyze_rift_r(size16 *A,size16 *B,
 			     long aoffset, long boffset, 
 			     long *matchA,long *matchB,long *matchC);
 
+extern void analyze_rift_silence_f(size16 *A,size16 *B,long sizeA,long sizeB,
+				   long aoffset, long boffset,
+				   long *matchA, long *matchB);
 #endif

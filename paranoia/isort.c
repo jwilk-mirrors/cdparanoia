@@ -88,8 +88,8 @@ sort_link *sort_getmatch(sort_info *i,long post,long overlap,int value){
   
   post=max(0,min(i->size,post));
   i->val=value+32768;
-  i->lo=max(0,post-overlap);
-  i->hi=min(i->size,post+overlap);
+  i->lo=max(0,post-overlap);       /* absolute position */
+  i->hi=min(i->size,post+overlap); /* absolute position */
 
   ret=i->head[i->val];
   while(ret){

@@ -161,3 +161,29 @@ void i_analyze_rift_r(size16 *A,size16 *B,
     return;
   }
 }
+
+void  analyze_rift_silence_f(size16 *A,size16 *B,long sizeA,long sizeB,
+			     long aoffset, long boffset,
+			     long *matchA, long *matchB){
+  *matchA=-1;
+  *matchB=-1;
+
+  sizeA=min(sizeA,aoffset+MIN_WORDS_RIFT);
+  sizeB=min(sizeB,boffset+MIN_WORDS_RIFT);
+
+  while(aoffset<sizeA){
+    if(A[aoffset]!=A[aoffset-1]){
+      *matchA=0;
+      break;
+    }
+    aoffset++;
+  }
+
+  while(boffset<sizeB){
+    if(B[boffset]!=B[boffset-1]){
+      *matchB=0;
+      break;
+    }
+    boffset++;
+  }
+}

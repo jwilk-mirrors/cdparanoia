@@ -132,7 +132,7 @@ void offset_adjust_settings(cdrom_paranoia *p, void(*callback)(long,int)){
     }
   }
 
-  if(p->stage1.offpoints){
+  if(p->stage1.offpoints>=10){
     /* dynoverlap: we arbitrarily set it to 4x the running difference
        value, unless min/max are more */
 
@@ -166,15 +166,16 @@ void offset_adjust_settings(cdrom_paranoia *p, void(*callback)(long,int)){
 
 void offset_add_value(cdrom_paranoia *p,offsets *o,long value,
 			     void(*callback)(long,int)){
-  if(o->offpoints)
+  if(o->offpoints!=-1){
+
     o->offdiff+=abs(value);
-
-  o->offpoints++;
-  o->newpoints++;
-  o->offaccum+=value;
-  if(value<o->offmin)o->offmin=value;
-  if(value>o->offmax)o->offmax=value;
-
-  if(o->newpoints>=10)offset_adjust_settings(p,callback);
+    o->offpoints++;
+    o->newpoints++;
+    o->offaccum+=value;
+    if(value<o->offmin)o->offmin=value;
+    if(value>o->offmax)o->offmax=value;
+    
+    if(o->newpoints>=10)offset_adjust_settings(p,callback);
+  }
 }
 
