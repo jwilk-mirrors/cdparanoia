@@ -4,12 +4,13 @@
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
 Name: cdparanoia
 Version: %{realver}
-Release: 2
+Release: 4
 License: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
 Url: http://www.xiph.org/paranoia/index.html
 BuildRoot: %{_tmppath}/cdparanoia-%{version}-root
+Requires: cdparanoia-devel >= %{version}-0
 
 %description
 Cdparanoia (Paranoia III) reads digital audio directly from a CD, then
@@ -71,18 +72,22 @@ rm -rf $RPM_BUILD_ROOT
 %doc README GPL FAQ.txt
 %{_bindir}/*
 %{_mandir}/man1/*
-%{_libdir}/libcdda_paranoia.so.*
-%{_libdir}/libcdda_interface.so.*
 
 %files devel
 %defattr(-,root,root)
 %{_includedir}/*
-%{_libdir}/*.a
+%{_libdir}/*
 
 %changelog
+* Thu Aug  2 2001 Peter Jones <pjones@redhat.com>
+- bump the release not to conflict with on in the RH build tree :/
+- reverse devel dependency
+
 * Wed Aug  1 2001 Peter Jones <pjones@redhat.com>
 - fix %post and %postun to only run ldconfig for devel packages
-- bump release
+
+* Wed Jul 18 2001 Crutcher Dunnavant <crutcher@redhat.com>
+- devel now depends on package
 
 * Wed Mar 28 2001 Peter Jones <pjones@redhat.com>
 - 9.8 release.
