@@ -106,3 +106,4 @@ distclean:
 	-rm -f cdparanoia *~ config.* *.o *.wav *.aifc *.raw test.file \
 		Makefile verify_test core gmon.out
 
+.PHONY: all debug test lib slib install clean distclean
