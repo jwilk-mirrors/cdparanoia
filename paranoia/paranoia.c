@@ -169,9 +169,6 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
   long ret=0;
   char *already;
 
-  long matched=0;
-  long tried=0;
-
   if(searchsize<=0)return(0);
   
   already=calloc(isort_size(new->vector),sizeof(char));
@@ -179,8 +176,7 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
   while(step>0){
     long j;
     for(j=searchend-step;j>=searchbegin;j-=(step<<1)){
-      if(already[j-hardbegin]==0 && (new->flags[j-hardbegin]&6)==0)
-	tried++;
+      if(already[j-hardbegin]==0 && (new->flags[j-hardbegin]&6)==0){
 	if(try_sort_sync(p,old->vector,old->flags,new->vector,new->flags,
 			 j,&matchbegin,&matchend,&matchoffset,
 			 callback)==1){
@@ -190,7 +186,9 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
 	    long adjbegin=matchbegin-hardbegin;
 	    long adjend=matchend-hardbegin;
 	    
-	    if((new->flags[matchbegin-hardbegin]&1) ||
+	    if(matchbegin<=hardbegin ||
+	       matchbegin-matchoffset<=oldbegin ||
+	       (new->flags[matchbegin-hardbegin]&1) ||
 	       (old->flags[matchbegin-matchoffset-oldbegin]&1)){
 	      if(matchoffset)
 		(*callback)(matchbegin,PARANOIA_CB_FIXUP_EDGE);
@@ -207,7 +205,6 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
 	      (*callback)(matchend,PARANOIA_CB_FIXUP_ATOM);
 
 	    for(i=adjbegin;i<adjend;i++){
-	      if(!already[i])matched++;
 	      already[i]=1; /* mark verified */
 	    }
 
@@ -226,9 +223,9 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
 	       (matchend==hardend || matchend-matchoffset==oldend)){
 	      goto match_cleanup;
 	    }
-	    
 	  }
 	}
+      }
     }
     step>>=1;
   }
@@ -320,6 +317,10 @@ static long i_iterate_stage2(cdrom_paranoia *p,
 	  r->begin=matchbegin-offset;
 	  r->end=matchend-offset;
 	  r->offset=offset;
+
+	  if(offset)
+	    (*callback)(r->begin,PARANOIA_CB_FIXUP_EDGE);
+
 	  return(1);
 	  
 	}
@@ -871,8 +872,14 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
       }
       if(thisread!=0)anyflag=1;
       
-      if(flags)flags[sofar*CD_FRAMEWORDS]|=1;
-      
+      if(flags && sofar!=0){
+	/* Don't verify across overlaps that are too close to one
+           another */
+	int i=0;
+	for(i=-MIN_WORDS_OVERLAP/2;i<MIN_WORDS_OVERLAP/2;i++)
+	  flags[sofar*CD_FRAMEWORDS+i]|=1;
+      }
+
       p->lastread=adjread+secread;
       
       if(adjread+secread-1==p->current_lastsector)
@@ -963,7 +970,7 @@ size16 *paranoia_read(cdrom_paranoia *p, void(*callback)(long,int)){
 					     isort_begin(new->vector),
 					     end+isort_begin(new->vector),
 					     (new->lastsector && 
-					      f->begin+f->size==
+					      isort_begin(new->vector)+end==
 					      isort_end(new->vector)));
 	      }
 	      begin=end;

@@ -43,9 +43,10 @@ static int test_readtoc (cdrom_drive *d){
 
 static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
 
-  int bytes_so_far=0;
+  int bytes_so_far=0,rbytes;
   char *buffer=(char *)p;
   long bytestotal=sectors*CD_FRAMESIZE_RAW;
+  int jitter=4*(int)((drand48()-.5)*CD_FRAMESIZE_RAW/8);
  
   /*if(begin>=200 && begin<=220){
     errno=EIO;
@@ -53,44 +54,44 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
   }*/
 
   begin*=CD_FRAMESIZE_RAW;
-  while(bytes_so_far<bytestotal){
+  /*  while(bytes_so_far<bytestotal){
     long local_bytes=bytestotal-bytes_so_far;
-    long rbytes,bytes=(int)(CD_FRAMESIZE_RAW*drand48())*4;
-    int jitter=20*(int)((drand48()-.5)*CD_FRAMESIZE_RAW);
+    long rbytes,bytes=bytestotal;/*(int)(CD_FRAMESIZE_RAW*drand48())*4;*/
 
-    char *local_buf=buffer+bytes_so_far;
-    if(bytes>local_bytes)bytes=local_bytes;
+  /*    char *local_buf=buffer+bytes_so_far;
+    if(bytes>local_bytes)bytes=local_bytes;*/
 
-    /*    if(begin==0)jitter=0;*/
-    if(begin+bytes_so_far+jitter<0)jitter=0;
-
-    {
-      long seeki;
-      /*      long bound=23520;
-      long nextbound=begin+bytes_so_far+bound;
-      nextbound=nextbound-(nextbound%bound)+12;
-      
-      if(begin+bytes_so_far+bytes>nextbound){
-	bytes=nextbound-begin-bytes_so_far;
-      }*/
-     
-      /*      if(drand48()>.5){
-	seeki=begin+bytes_so_far+jitter-8;
-      }else{*/
-	seeki=begin+bytes_so_far+jitter+8;
-      
-
-      if(lseek(d->cdda_fd,seeki,SEEK_SET)<0){
-	return(bytes_so_far/CD_FRAMESIZE_RAW);
-      }
-
-      rbytes=read(d->cdda_fd,local_buf,bytes);
-      
-      bytes_so_far+=rbytes;
+  /*    if(begin==0)jitter=0;*/
+  if(begin+jitter<0)jitter=0;
+  
+  {
+    long seeki;
+    /*      long bound=23520;
+	    long nextbound=begin+bytes_so_far+bound;
+	    nextbound=nextbound-(nextbound%bound)+12;
+	    
+	    if(begin+bytes_so_far+bytes>nextbound){
+	    bytes=nextbound-begin-bytes_so_far;
+	    }*/
+    
+    /*      if(drand48()>.5){
+	    seeki=begin+bytes_so_far+jitter-8;
+	    }else{*/
+    seeki=begin+jitter+8;
+    
+    
+    if(lseek(d->cdda_fd,seeki,SEEK_SET)<0){
+      return(0);
     }
+    
+    rbytes=read(d->cdda_fd,buffer,bytestotal);
+    return(rbytes/CD_FRAMESIZE_RAW);
+    /*
+      bytes_so_far+=rbytes;
+      }*/
   }
   return(sectors);
-
+  
 }
 
 /* hook */
