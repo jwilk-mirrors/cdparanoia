@@ -7,7 +7,7 @@
  ******************************************************************/
 
 
-#define VERSION "cdparanoia III release 9.7 (October 8, 1999)\n"\
+#define VERSION "cdparanoia III release 9.pre7 (December 1, 1999)\n"\
                 "(C) 1999 Monty <monty@xiph.org> and Xiphophorus\n\n"\
 		"Report bugs to paranoia@xiph.org\n"\
 		"http://www.xiph.org/paranoia/\n"

@@ -449,7 +449,7 @@ static void i_silence_test(root_block *root){
 /* match into silence vectors at offset zero if at all possible.  This
    also must be called with vectors in ascending begin order in case
    there are nonzero islands */
-static long i_silence_match(root_block *root, v_fragment *v,int freeit,
+static long i_silence_match(root_block *root, v_fragment *v,
 			  void(*callback)(long,int)){
 
   cdrom_paranoia *p=v->p;
@@ -468,23 +468,29 @@ static long i_silence_match(root_block *root, v_fragment *v,int freeit,
   end=min(j,re(root));
   
   if(begin<end){
-    long voff=begin-fb(v);
 
-    if(voff)(*callback)(begin,PARANOIA_CB_FIXUP_EDGE);
-    if(end<re(root))(*callback)(end,PARANOIA_CB_FIXUP_EDGE);
+    /* don't use it unless it will extend... */
 
-    if(begin-rb(root)>0)c_remove(rc(root),begin-rb(root),-1);
-    c_append(rc(root),vec+voff,fs(v)-voff);
+    if(fe(v)>re(root)){
+      long voff=begin-fb(v);
+      
+      c_remove(rc(root),begin-rb(root),-1);
+      c_append(rc(root),vec+voff,fs(v)-voff);
+    }
     offset_add_value(p,&p->stage2,0,callback);
+
   }else{
     if(j<begin){
       /* OK, we'll have to force it a bit as the root is jittered
          forward */
       long voff=j-fb(v);
-      c_remove(rc(root),root->silencebegin-rb(root),-1);
-      c_append(rc(root),vec+voff,fs(v)-voff);
-      offset_add_value(p,&p->stage2,end-begin,callback);
 
+      /* don't use it unless it will extend... */
+      if(begin+fs(v)-voff>re(root)){
+	c_remove(rc(root),root->silencebegin-rb(root),-1);
+	c_append(rc(root),vec+voff,fs(v)-voff);
+      }
+      offset_add_value(p,&p->stage2,end-begin,callback);
     }else
       return(0);
   }
@@ -492,10 +498,13 @@ static long i_silence_match(root_block *root, v_fragment *v,int freeit,
   /* test the new root vector for ending in silence */
   root->silenceflag=0;
   i_silence_test(root);
+
+  if(v->lastsector)root->lastsector=1;
+  free_v_fragment(v);
   return(1);
 }
 
-static long i_stage2_each(root_block *root, v_fragment *v,int freeit,
+static long i_stage2_each(root_block *root, v_fragment *v,
 			  void(*callback)(long,int)){
 
   cdrom_paranoia *p=v->p;
@@ -684,7 +693,7 @@ static long i_stage2_each(root_block *root, v_fragment *v,int freeit,
 	    /* silence in fragment; lose it */
 	    
 	    if(l)i_cblock_destructor(l);
-	    if(freeit)free_v_fragment(v);
+	    free_v_fragment(v);
 	    return(1);
 
 	  }else{
@@ -736,14 +745,14 @@ static long i_stage2_each(root_block *root, v_fragment *v,int freeit,
 	}
       }
       if(l)i_cblock_destructor(l);
-      if(freeit)free_v_fragment(v);
+      free_v_fragment(v);
       return(1);
       
     }else{
       /* D'oh.  No match.  What to do with the fragment? */
       if(fe(v)+dynoverlap<re(root) && !root->silenceflag){
 	/* It *should* have matched.  No good; free it. */
-	if(freeit)free_v_fragment(v);
+	free_v_fragment(v);
       }
       /* otherwise, we likely want this for an upcoming match */
       /* we don't free the sort info (if it was collected) */
@@ -828,7 +837,7 @@ static int i_stage2(cdrom_paranoia *p,long beginword,long endword,
 	      ret++;
 	    }
 	  }else{
-	    if(i_stage2_each(root,first,1,callback)){
+	    if(i_stage2_each(root,first,callback)){
 	      ret++;
 	      flag=1;
 	    }
@@ -837,12 +846,12 @@ static int i_stage2(cdrom_paranoia *p,long beginword,long endword,
       }
 
       /* silence handling */
-      if(p->root.silenceflag){
+      if(!flag && p->root.silenceflag){
 	for(count=0;count<active;count++){
 	  first=list[count];
 	  if(first->one){
 	    if(rv(root)!=NULL){
-	      if(i_silence_match(root,first,1,callback)){
+	      if(i_silence_match(root,first,callback)){
 		ret++;
 		flag=1;
 	      }

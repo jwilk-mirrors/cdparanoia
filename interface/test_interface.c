@@ -11,12 +11,12 @@
 #include "utils.h"
 
 /* Build which test model? */
-#undef  CDDA_TEST_OK
+#define  CDDA_TEST_OK
 #undef  CDDA_TEST_JITTER_SMALL
 #undef  CDDA_TEST_JITTER_LARGE
 #undef  CDDA_TEST_JITTER_MASSIVE
 #undef  CDDA_TEST_FRAG_SMALL
-#define CDDA_TEST_FRAG_LARGE
+#undef  CDDA_TEST_FRAG_LARGE
 #undef  CDDA_TEST_FRAG_MASSIVE
 #undef  CDDA_TEST_BOGUS_BYTES
 #undef  CDDA_TEST_DROPDUPE_BYTES
@@ -24,7 +24,7 @@
 #undef  CDDA_TEST_UNDERRUN
 
 #undef  CDDA_TEST_ALLJITTER
-#define  CDDA_TEST_SOMEJITTER
+#undef  CDDA_TEST_SOMEJITTER
 #undef CDDA_TEST_SEEKJITTER
 
 static int test_readtoc (cdrom_drive *d){
