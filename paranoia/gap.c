@@ -171,6 +171,9 @@ void  analyze_rift_silence_f(size16 *A,size16 *B,long sizeA,long sizeB,
   sizeA=min(sizeA,aoffset+MIN_WORDS_RIFT);
   sizeB=min(sizeB,boffset+MIN_WORDS_RIFT);
 
+  aoffset++;
+  boffset++;
+
   while(aoffset<sizeA){
     if(A[aoffset]!=A[aoffset-1]){
       *matchA=0;
