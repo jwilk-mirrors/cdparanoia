@@ -65,6 +65,8 @@ install -m 0755 paranoia/libcdda_paranoia.so.0.%{ver} \
 install -m 0755 paranoia/libcdda_paranoia.a interface/libcdda_interface.a \
 	$RPM_BUILD_ROOT%{_libdir}
 
+/sbin/ldconfig -n $RPM_BUILD_ROOT/%{_libdir}
+
 pushd $RPM_BUILD_ROOT%{_libdir}
 ln -s libcdda_paranoia.so.0.%{ver} libcdda_paranoia.so
 ln -s libcdda_interface.so.0.%{ver} libcdda_interface.so
