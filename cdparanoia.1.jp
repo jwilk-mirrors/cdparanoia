@@ -1,517 +1,354 @@
 .TH CDPARANOIA 1
-.\"0 .SH NAME
-.SH $BL>A0(B
-.\"0 cdparanoia (Paranoia release III) \- an audio CD reading utility which includes extra data verification features
-cdparanoia (Paranoia release III) \- $B%*!<%G%#%*(B CD $BFI$_<h$j%f!<%F%#%j%F%#!#FCJL$J%G!<%?>H9g5!G=$r;}$D!#(B
-.\"0 .SH DATE
-.SH $BF|IU(B
-.\"0 version III release alpha 9 (03 Dec 1998)
-$B%P!<%8%g%s(BIII $B%j%j!<%9&A(B9 (03 Dec 1998)
-.\"0 .SH SYNOPSIS
-.SH $B=q<0(B
+.\" Translated Sun Aug 22 18:02:41 JST 1999
+.\"         by FUJIWARA Teruyoshi <fujiwara@linux.or.jp>
+.SH Ì¾Á°
+cdparanoia (Paranoia release III) \- ¥ª¡¼¥Ç¥£¥ª CD ÆÉ¤ß¼è¤ê¥æ¡¼¥Æ¥£¥ê¥Æ¥£¡£ÆÃÊÌ¤Ê¥Ç¡¼¥¿¾È¹çµ¡Ç½¤ò»ý¤Ä¡£
+.SH ÆüÉÕ
+¥Ð¡¼¥¸¥ç¥óIII ¥ê¥ê¡¼¥¹¦Á9.6 (17 Aug 1999)
+.SH ½ñ¼°
 .B cdparanoia
 .RB [ options ]
 .B span 
 .RB [ outfile ]
-.\"0 .SH DESCRIPTION
-.SH $B@bL@(B
-.\"0 .B cdparanoia
-.\"0 retrieves audio tracks from CDDA capable CDROM drives.  The data can
-.\"0 be saved to a file or directed to standard output in WAV, AIFF, AIFF-C
-.\"0 or raw format.  Most ATAPI, SCSI and several proprietary CDROM drive
-.\"0 makes are supported;
+.SH ÀâÌÀ
 .B cdparanoia
-$B$O(B CD-DA $B5!G=$r;}$D(B CD-ROM $B%I%i%$%V$+$i%*!<%G%#%*%H%i%C%/$r<h$j=P$7$^(B
-$B$9!#$3$N%G!<%?$O(B WAV, AIFF, AIFF-C, raw $B7A<0$G%U%!%$%k$K%;!<%V$9$k$3$H(B
-$B$d!"I8=`=PNO$KAw$k$3$H$,$G$-$^$9!#$[$H$s$I$N(B ATAPI, SCSI, $B%a!<%+!<FH<+(B
-$B$N(B CD-ROM $B%I%i%$%V$,%5%]!<%H$5$l$F$$$^$9!#(B
-.\"0 .B cdparanoia
-.\"0 can determine if the target drive is CDDA capable.
+¤Ï CD-DA µ¡Ç½¤ò»ý¤Ä CD-ROM ¥É¥é¥¤¥Ö¤«¤é¥ª¡¼¥Ç¥£¥ª¥È¥é¥Ã¥¯¤ò¼è¤ê½Ð¤·¤Þ
+¤¹¡£¤³¤Î¥Ç¡¼¥¿¤Ï WAV, AIFF, AIFF-C, raw ·Á¼°¤Ç¥Õ¥¡¥¤¥ë¤Ë¥»¡¼¥Ö¤¹¤ë¤³¤È
+¤ä¡¢É¸½à½ÐÎÏ¤ËÁ÷¤ë¤³¤È¤¬¤Ç¤­¤Þ¤¹¡£¤Û¤È¤ó¤É¤Î ATAPI, SCSI, ¥á¡¼¥«¡¼ÆÈ¼«
+¤Î CD-ROM ¥É¥é¥¤¥Ö¤¬¥µ¥Ý¡¼¥È¤µ¤ì¤Æ¤¤¤Þ¤¹¡£
 .B cdparanoia
-$B$OBP>]$N%I%i%$%V$,(B CD-DA $B5!G=$r;}$C$F$$$k$+$I$&$+$rH=JL$G$-$^$9!#(B
+¤ÏÂÐ¾Ý¤Î¥É¥é¥¤¥Ö¤¬ CD-DA µ¡Ç½¤ò»ý¤Ã¤Æ¤¤¤ë¤«¤É¤¦¤«¤òÈ½ÊÌ¤Ç¤­¤Þ¤¹¡£
 .P
-.\"0 In addition to simple reading, 
-.\"0 .B cdparanoia
-.\"0 adds extra-robust data verification, synchronization, error handling
-.\"0 and scratch reconstruction capability.
-$BC1=c$JFI$_<h$j$@$1$G$J$/!"(B
+Ã±½ã¤ÊÆÉ¤ß¼è¤ê¤À¤±¤Ç¤Ê¤¯¡¢
 .B cdparanoia
-$B$OFCJL$K4h7r$J%G!<%?>H9g5!G=!"F14|5!G=!"%(%i!<=hM}5!G=!"GKB;%G!<%?$N:F(B
-$B9=@.5!G=$r;}$C$F$$$^$9!#(B
-.\"0 .SH OPTIONS
-.SH $B%*%W%7%g%s(B
+¤ÏÆÃÊÌ¤Ë´è·ò¤Ê¥Ç¡¼¥¿¾È¹çµ¡Ç½¡¢Æ±´üµ¡Ç½¡¢¥¨¥é¡¼½èÍýµ¡Ç½¡¢ÇËÂ»¥Ç¡¼¥¿¤ÎºÆ
+¹½À®µ¡Ç½¤ò»ý¤Ã¤Æ¤¤¤Þ¤¹¡£
+.SH ¥ª¥×¥·¥ç¥ó
 
 .TP
 .B \-v --verbose
-.\"0 Be absurdly verbose about the autosensing and reading process. Good
-.\"0 for setup and debugging.
-$B<+F08!=P$HFI$_<h$j$N=hM}$K$D$$$F!"$P$+$P$+$7$$$[$I>iD9$JI=<($r9T$$$^$9!#(B
-$B@_Dj$d%G%P%C%0$N:]$KJXMx$G$9!#(B
+¼«Æ°¸¡½Ð¤ÈÆÉ¤ß¼è¤ê¤Î½èÍý¤Ë¤Ä¤¤¤Æ¡¢¤Ð¤«¤Ð¤«¤·¤¤¤Û¤É¾éÄ¹¤ÊÉ½¼¨¤ò¹Ô¤¤¤Þ¤¹¡£
+ÀßÄê¤ä¥Ç¥Ð¥Ã¥°¤ÎºÝ¤ËÊØÍø¤Ç¤¹¡£
 
 .TP
 .B \-q --quiet
-.\"0 Do not print any progress or error information during the reading process.
-$BFI$_<h$j=hM}$NESCf$K!"?J9T>u67$d%(%i!<>pJs$rA4$/I=<($7$^$;$s!#(B
+ÆÉ¤ß¼è¤ê½èÍý¤ÎÅÓÃæ¤Ë¡¢¿Ê¹Ô¾õ¶·¤ä¥¨¥é¡¼¾ðÊó¤òÁ´¤¯É½¼¨¤·¤Þ¤»¤ó¡£
 
 .TP
 .B \-e --stderr-progress
-.\"0 Force output of progress information to stderr (for wrapper scripts).
-$B?J9T>u67$r(B($B%i%C%Q%9%/%j%W%H$N$?$a$K(B)$BI8=`%(%i!<=PNO$K=PNO$7$^$9!#(B
+¿Ê¹Ô¾õ¶·¤ò(¥é¥Ã¥Ñ¥¹¥¯¥ê¥×¥È¤Î¤¿¤á¤Ë)É¸½à¥¨¥é¡¼½ÐÎÏ¤Ë½ÐÎÏ¤·¤Þ¤¹¡£
 
 .TP
 .B \-V --version
-.\"0 Print the program version and quit.
-$B%W%m%0%i%`$N%P!<%8%g%s$rI=<($7$F=*N;$7$^$9!#(B
+¥×¥í¥°¥é¥à¤Î¥Ð¡¼¥¸¥ç¥ó¤òÉ½¼¨¤·¤Æ½ªÎ»¤·¤Þ¤¹¡£
 
 .TP
 .B \-Q --query
-.\"0 Perform CDROM drive autosense, query and print the CDROM table of
-.\"0 contents, then quit.
-CD-ROM $B%I%i%$%V$N<+F08!=P$r9T$$!"(BCD-ROM $B$N(B TOC $B$NLd$$9g$o$;$HI=<($r9T(B
-$B$$!"=*N;$7$^$9!#(B
+CD-ROM ¥É¥é¥¤¥Ö¤Î¼«Æ°¸¡½Ð¤ò¹Ô¤¤¡¢CD-ROM ¤Î TOC ¤ÎÌä¤¤¹ç¤ï¤»¤ÈÉ½¼¨¤ò¹Ô
+¤¤¡¢½ªÎ»¤·¤Þ¤¹¡£
 
 .TP
 .B \-s --search-for-drive
-.\"0 Forces a complete search for a cdrom drive, even if the /dev/cdrom link exists.
-$B$?$H$((B /dev/cdrom $B$N%j%s%/$,B8:_$7$F$$$F$b!"(BCD-ROM $B%I%i%$%V$N40A4$J(B
-$B8!:w$r9T$$$^$9!#(B
+¤¿¤È¤¨ /dev/cdrom ¤Î¥ê¥ó¥¯¤¬Â¸ºß¤·¤Æ¤¤¤Æ¤â¡¢CD-ROM ¥É¥é¥¤¥Ö¤Î´°Á´¤Ê
+¸¡º÷¤ò¹Ô¤¤¤Þ¤¹¡£
 
 .TP
 .B \-h --help
-.\"0 Print a brief synopsis of 
-.\"0 .B cdparanoia 
-.\"0 usage and options.
 .B cdparanoia 
-$B$N;H$$J}$H%*%W%7%g%s$r4JC1$J@bL@$r=PNO$7$^$9!#(B
+¤Î»È¤¤Êý¤È¥ª¥×¥·¥ç¥ó¤ò´ÊÃ±¤ÊÀâÌÀ¤ò½ÐÎÏ¤·¤Þ¤¹¡£
 
 .TP
 .B \-p --output-raw
-.\"0 Output headerless data as raw 16 bit PCM data with interleaved samples in host byte order.  To force little or big endian byte order, use 
-.\"0 .B \-r 
-.\"0 or 
-.\"0 .B \-R
-.\"0 as described below.
-$B%X%C%@L5$7$N%G!<%?$r%[%9%H$N%P%$%H=g$G!"%$%s%?%j!<%V=hM}$r;\$7$?(B
-$B%5%s%W%k2;@<$r4^$`(B raw $B7A<0$N(B 16 $B%S%C%H(B PCM $B%G!<%?$H$7$F=PNO$7$^$9!#(B
-$B%P%$%H=g$H$7$F%j%H%k%(%s%G%#%"%s$"$k$$$O%S%C%0%(%s%G%#%"%s$r;XDj$9$k$K(B
-$B$O!"8e=R$N(B
+¥Ø¥Ã¥ÀÌµ¤·¤Î¥Ç¡¼¥¿¤ò¥Û¥¹¥È¤Î¥Ð¥¤¥È½ç¤Ç¡¢¥¤¥ó¥¿¥ê¡¼¥Ö½èÍý¤ò»Ü¤·¤¿
+¥µ¥ó¥×¥ë²»À¼¤ò´Þ¤à raw ·Á¼°¤Î 16 ¥Ó¥Ã¥È PCM ¥Ç¡¼¥¿¤È¤·¤Æ½ÐÎÏ¤·¤Þ¤¹¡£
+¥Ð¥¤¥È½ç¤È¤·¤Æ¥ê¥È¥ë¥¨¥ó¥Ç¥£¥¢¥ó¤¢¤ë¤¤¤Ï¥Ó¥Ã¥°¥¨¥ó¥Ç¥£¥¢¥ó¤ò»ØÄê¤¹¤ë¤Ë
+¤Ï¡¢¸å½Ò¤Î
 .B \-r 
-$B$^$?$O(B
+¤Þ¤¿¤Ï
 .B \-R
-$B%*%W%7%g%s$r;H$C$F$/$@$5$$!#(B
+¥ª¥×¥·¥ç¥ó¤ò»È¤Ã¤Æ¤¯¤À¤µ¤¤¡£
 
 .TP
 .B \-r --output-raw-little-endian
-.\"0 Output headerless data as raw 16 bit PCM data with interleaved samples in LSB first byte order.
-$B%X%C%@L5$7$N%G!<%?$r(B LSB first $B$N%P%$%H=g$G!"%$%s%?%j!<%V=hM}$r;\$7$?(B
-$B%5%s%W%k2;@<$r4^$`(B raw $B7A<0$N(B 16 $B%S%C%H(B PCM $B%G!<%?$H$7$F=PNO$7$^$9!#(B
+¥Ø¥Ã¥ÀÌµ¤·¤Î¥Ç¡¼¥¿¤ò LSB first ¤Î¥Ð¥¤¥È½ç¤Ç¡¢¥¤¥ó¥¿¥ê¡¼¥Ö½èÍý¤ò»Ü¤·¤¿
+¥µ¥ó¥×¥ë²»À¼¤ò´Þ¤à raw ·Á¼°¤Î 16 ¥Ó¥Ã¥È PCM ¥Ç¡¼¥¿¤È¤·¤Æ½ÐÎÏ¤·¤Þ¤¹¡£
 
 .TP
 .B \-R --output-raw-big-endian
-.\"0 Output headerless data as raw 16 bit PCM data with interleaved samples in MSB first byte order.
-$B%X%C%@L5$7$N%G!<%?$r(B MSB first $B$N%P%$%H=g$G!"%$%s%?%j!<%V=hM}$r;\$7$?(B
-$B%5%s%W%k2;@<$r4^$`(B raw $B7A<0$N(B 16 $B%S%C%H(B PCM $B%G!<%?$H$7$F=PNO$7$^$9!#(B
+¥Ø¥Ã¥ÀÌµ¤·¤Î¥Ç¡¼¥¿¤ò MSB first ¤Î¥Ð¥¤¥È½ç¤Ç¡¢¥¤¥ó¥¿¥ê¡¼¥Ö½èÍý¤ò»Ü¤·¤¿
+¥µ¥ó¥×¥ë²»À¼¤ò´Þ¤à raw ·Á¼°¤Î 16 ¥Ó¥Ã¥È PCM ¥Ç¡¼¥¿¤È¤·¤Æ½ÐÎÏ¤·¤Þ¤¹¡£
 
 .TP
 .B \-w --output-wav
-.\"0 Output data in Micro$oft RIFF WAV format (note that WAV data is always
-.\"0 LSB first byte order).
-$B%G!<%?$r(B Micro$oft $B$N(B RIFF WAV $B7A<0$G=PNO$7$^$9(B(WAV $B%G!<%?$N%P%$%H=g$O(B
-$BI,$:(B LSB first $B$G$"$kE@$KCm0U(B)$B!#(B
+¥Ç¡¼¥¿¤ò Micro$oft ¤Î RIFF WAV ·Á¼°¤Ç½ÐÎÏ¤·¤Þ¤¹(WAV ¥Ç¡¼¥¿¤Î¥Ð¥¤¥È½ç¤Ï
+É¬¤º LSB first ¤Ç¤¢¤ëÅÀ¤ËÃí°Õ)¡£
 
 .TP
 .B \-f --output-aiff
-.\"0 Output data in Apple AIFF format (note that AIFC data is
-.\"0 always in MSB first byte order).
-$B%G!<%?$r(B Apple $B$N(B AIFF $B7A<0$G=PNO$7$^$9(B(AIFC $B%G!<%?$N%P%$%H=g$OI,$:(B 
-MSB first $B$G$"$kE@$KCm0U(B)$B!#(B
+¥Ç¡¼¥¿¤ò Apple ¤Î AIFF ·Á¼°¤Ç½ÐÎÏ¤·¤Þ¤¹(AIFC ¥Ç¡¼¥¿¤Î¥Ð¥¤¥È½ç¤ÏÉ¬¤º 
+MSB first ¤Ç¤¢¤ëÅÀ¤ËÃí°Õ)¡£
 
 .TP
 .B \-a --output-aifc
-.\"0 Output data in uncompressed Apple AIFF-C format (note that AIFF-C data is
-.\"0 always in MSB first byte order).
-$B%G!<%?$rL505=L(B $B$N(B Apple AIFF-C $B7A<0$G=PNO$7$^$9(B(AIFF-C $B%G!<%?$N%P%$%H(B
-$B=g$OI,$:(B MSB first $B$G$"$kE@$KCm0U(B)$B!#(B
-
-.TP
-.BI "\-i --output-info " file
-.\"0 Output a log file containing autosensing information, events during
-.\"0 the reading process, locations of fixups and detected scratches, and
-.\"0 general statistics.
-$B%I%i%$%V$N<+F08!=P$K4X$9$k>pJs!"FI$_<h$j=hM}Cf$K5/$-$?$G$-$4$H!"D{@5$N(B
-$B0LCV$d=}$r8!=P$7$?0LCV!"0lHLE*$J>uBV$,=q$+$l$?%m%0%U%!%$%k$r=PNO$7$^$9!#(B
+¥Ç¡¼¥¿¤òÌµ°µ½Ì ¤Î Apple AIFF-C ·Á¼°¤Ç½ÐÎÏ¤·¤Þ¤¹(AIFF-C ¥Ç¡¼¥¿¤Î¥Ð¥¤¥È
+½ç¤ÏÉ¬¤º MSB first ¤Ç¤¢¤ëÅÀ¤ËÃí°Õ)¡£
 
 .TP
 .BI "\-B --batch "
-.\"0 Cdda2wav-style batch output flag; cdparanoia will split the output
-.\"0 into multiple files at track boundaries.  Output file names are
-.\"0 prepended with 'track#.'
-cdda2wav $B7A<0$N%P%C%A=PNO$r9T$$$^$9!#(Bcdparanoia $B$O=PNO$r%H%i%C%/6-3&$G(B
-$BJ#?t%U%!%$%k$KJ,3d$7$^$9!#=PNO%U%!%$%k$N%U%!%$%kL>$N@hF,ItJ,$O!"(B'track($BHV9f(B)' 
-$B$H$J$j$^$9!#(B
+cdda2wav ·Á¼°¤Î¥Ð¥Ã¥Á½ÐÎÏ¤ò¹Ô¤¤¤Þ¤¹¡£cdparanoia ¤Ï½ÐÎÏ¤ò¥È¥é¥Ã¥¯¶­³¦¤Ç
+Ê£¿ô¥Õ¥¡¥¤¥ë¤ËÊ¬³ä¤·¤Þ¤¹¡£½ÐÎÏ¥Õ¥¡¥¤¥ë¤Î¥Õ¥¡¥¤¥ëÌ¾¤ÎÀèÆ¬ÉôÊ¬¤Ï¡¢'track(ÈÖ¹æ)' 
+¤È¤Ê¤ê¤Þ¤¹¡£
 
 .TP
 .B \-c --force-cdrom-little-endian
-.\"0 Some CDROM drives misreport their endianness (or do not report it at
-.\"0 all); it's possible that cdparanoia will guess wrong.  Use
-.\"0 .B \-c
-.\"0 to force cdparanoia to treat the drive as a little endian device.
-$B0lIt$N(B CD-ROM $B$O4V0c$C$?%(%s%G%#%"%s$rJs9p$7$^$9(B($B$"$k$$$O%(%s%G%#%"%s(B
-$B$K4X$9$k>pJs$rA4$/Js9p$7$^$;$s(B)$B!#$=$N$?$a!"(Bcdparanoia $B$,%(%s%G%#%"%s$r(B
-$B4V0c$($k$3$H$,$"$j$^$9!#%I%i%$%V$r%j%H%k%(%s%G%#%"%s$N%G%P%$%9$H$7$F(B
-cdparanoia $B$K07$o$;$k$K$O!"(B
+°ìÉô¤Î CD-ROM ¤Ï´Ö°ã¤Ã¤¿¥¨¥ó¥Ç¥£¥¢¥ó¤òÊó¹ð¤·¤Þ¤¹(¤¢¤ë¤¤¤Ï¥¨¥ó¥Ç¥£¥¢¥ó
+¤Ë´Ø¤¹¤ë¾ðÊó¤òÁ´¤¯Êó¹ð¤·¤Þ¤»¤ó)¡£¤½¤Î¤¿¤á¡¢cdparanoia ¤¬¥¨¥ó¥Ç¥£¥¢¥ó¤ò
+´Ö°ã¤¨¤ë¤³¤È¤¬¤¢¤ê¤Þ¤¹¡£¥É¥é¥¤¥Ö¤ò¥ê¥È¥ë¥¨¥ó¥Ç¥£¥¢¥ó¤Î¥Ç¥Ð¥¤¥¹¤È¤·¤Æ
+cdparanoia ¤Ë°·¤ï¤»¤ë¤Ë¤Ï¡¢
 .B \-c
-$B%*%W%7%g%s$r;H$$$^$9!#(B
+¥ª¥×¥·¥ç¥ó¤ò»È¤¤¤Þ¤¹¡£
 
 .TP
 .B \-C --force-cdrom-big-endian
-.\"0 As above but force cdparanoia to treat the drive as a big endian device.
-$BA0$N%*%W%7%g%s$N5U$G!"%G%P%$%9$r%S%C%0%(%s%G%#%"%s$N%G%P%$%9$H$7$F(B
-cdparanoia $B$K07$o$;$^$9!#(B
+Á°¤Î¥ª¥×¥·¥ç¥ó¤ÎµÕ¤Ç¡¢¥Ç¥Ð¥¤¥¹¤ò¥Ó¥Ã¥°¥¨¥ó¥Ç¥£¥¢¥ó¤Î¥Ç¥Ð¥¤¥¹¤È¤·¤Æ
+cdparanoia ¤Ë°·¤ï¤»¤Þ¤¹¡£
 
 .TP
 .BI "\-n --force-default-sectors " n
-.\"0 Force the interface backend to do atomic reads of 
-.\"0 .B n
-.\"0 sectors per read.  This number can be misleading; the kernel will often
-.\"0 split read requests into multiple atomic reads (the automated Paranoia
-.\"0 code is aware of this) or allow reads only wihin a restricted size
-.\"0 range. 
-$B%$%s%?%U%'!<%9$N%P%C%/%(%s%I$,9T$&:G>.C10L$NFI$_<h$j$r!"(B
-1 $B2s$NFI$_<h$j$4$H$K(B
+¥¤¥ó¥¿¥Õ¥§¡¼¥¹¤Î¥Ð¥Ã¥¯¥¨¥ó¥É¤¬¹Ô¤¦ºÇ¾®Ã±°Ì¤ÎÆÉ¤ß¼è¤ê¤ò¡¢
+1 ²ó¤ÎÆÉ¤ß¼è¤ê¤´¤È¤Ë
 .B n
-$B%;%/%?$H$7$^$9!#$3$N?t$OLdBj$r5/$3$9$*$=$l$,$"$j$^$9!#%+!<%M%k$OB?$/$N(B
-$B>l9g!"FI$_<h$jMW5a$r:G>.C10L$NFI$_<h$j(B(cdparanoia $B$K$h$k<+F0=hM}$O$3$l(B
-$B$KBP1~$7$F$$$^$9(B)$BJ#?t8D$KJ,3d$9$k$+!"@)8B$5$l$?Bg$-$5$NHO0O$G$7$+(B
-$BFI$_<h$j$r5v2D$7$^$;$s!#(B
-.\"0 .B This option should generally not be used.
-.B $BIaDL$O$3$N%*%W%7%g%s$r;H$&$Y$-$G$O$"$j$^$;$s!#(B
+¥»¥¯¥¿¤È¤·¤Þ¤¹¡£¤³¤Î¿ô¤ÏÌäÂê¤òµ¯¤³¤¹¤ª¤½¤ì¤¬¤¢¤ê¤Þ¤¹¡£¥«¡¼¥Í¥ë¤ÏÂ¿¤¯¤Î
+¾ì¹ç¡¢ÆÉ¤ß¼è¤êÍ×µá¤òºÇ¾®Ã±°Ì¤ÎÆÉ¤ß¼è¤ê(cdparanoia ¤Ë¤è¤ë¼«Æ°½èÍý¤Ï¤³¤ì
+¤ËÂÐ±þ¤·¤Æ¤¤¤Þ¤¹)Ê£¿ô¸Ä¤ËÊ¬³ä¤¹¤ë¤«¡¢À©¸Â¤µ¤ì¤¿Âç¤­¤µ¤ÎÈÏ°Ï¤Ç¤·¤«
+ÆÉ¤ß¼è¤ê¤òµö²Ä¤·¤Þ¤»¤ó¡£
+.B ÉáÄÌ¤Ï¤³¤Î¥ª¥×¥·¥ç¥ó¤ò»È¤¦¤Ù¤­¤Ç¤Ï¤¢¤ê¤Þ¤»¤ó¡£
 
 .TP
 .BI "\-d --force-cdrom-device " device
-.\"0 Force the interface backend to read from
-.\"0 .B device
-.\"0 rather than the first readable CDROM drive it finds.  This can be used
-.\"0 to specify devices of any valid interface type (ATAPI, SCSI or
-.\"0 proprietary).
-$B%$%s%?%U%'!<%9$N%P%C%/%(%s%I$K$h$kFI$_<h$j$r!":G=i$K8+$D$1$?FI$_<h$j2D(B
-$BG=$J(B CD-ROM $B%I%i%$%V$G$O$J$/!";XDj$7$?(B
+¥¤¥ó¥¿¥Õ¥§¡¼¥¹¤Î¥Ð¥Ã¥¯¥¨¥ó¥É¤Ë¤è¤ëÆÉ¤ß¼è¤ê¤ò¡¢ºÇ½é¤Ë¸«¤Ä¤±¤¿ÆÉ¤ß¼è¤ê²Ä
+Ç½¤Ê CD-ROM ¥É¥é¥¤¥Ö¤Ç¤Ï¤Ê¤¯¡¢»ØÄê¤·¤¿
 .B device
-$B$+$i9T$&$h$&$K$7$^$9!#$3$N%*%W%7%g%s$G$O!"MxMQ2DG=$G$"$kG$0U$N(B
-$B%$%s%?%U%'!<%9(B(ATAPI, SCSI, $B%a!<%+!<FH<+(B)$B$r;}$D%G%P%$%9$r;XDj$9$k$3$H(B
-$B$,$G$-$^$9!#(B
+¤«¤é¹Ô¤¦¤è¤¦¤Ë¤·¤Þ¤¹¡£¤³¤Î¥ª¥×¥·¥ç¥ó¤Ç¤Ï¡¢ÍøÍÑ²ÄÇ½¤Ç¤¢¤ëÇ¤°Õ¤Î
+¥¤¥ó¥¿¥Õ¥§¡¼¥¹(ATAPI, SCSI, ¥á¡¼¥«¡¼ÆÈ¼«)¤ò»ý¤Ä¥Ç¥Ð¥¤¥¹¤ò»ØÄê¤¹¤ë¤³¤È
+¤¬¤Ç¤­¤Þ¤¹¡£
 
 .TP
 .BI "\-g --force-generic-device " device
-.\"0 This option is used along with
-.\"0 .B \-d
-.\"0 when one wants explicit control in setting both the SCSI cdrom and
-.\"0 generic devices seperately. This option is only useful on
-.\"0 non-standard SCSI setups.
-$B$3$N%*%W%7%g%s$O!"(BSCSI CD-ROM $B$HHFMQ%G%P%$%9$N@_Dj$rL@<(E*$KJL!9$K@)8f(B
-$B$7$?$$;~$K(B
+¤³¤Î¥ª¥×¥·¥ç¥ó¤Ï¡¢SCSI CD-ROM ¤ÈÈÆÍÑ¥Ç¥Ð¥¤¥¹¤ÎÀßÄê¤òÌÀ¼¨Åª¤ËÊÌ¡¹¤ËÀ©¸æ
+¤·¤¿¤¤»þ¤Ë
 .B \-d
-$B%*%W%7%g%s$HAH$_9g$o$;$F;H$$$^$9!#$3$N%*%W%7%g%s$,LrN)$D$N$O!"(BSCSI $B$N(B
-$B@_Dj$,I8=`$H0[$J$k>l9g$@$1$G$9!#(B
+¥ª¥×¥·¥ç¥ó¤ÈÁÈ¤ß¹ç¤ï¤»¤Æ»È¤¤¤Þ¤¹¡£¤³¤Î¥ª¥×¥·¥ç¥ó¤¬ÌòÎ©¤Ä¤Î¤Ï¡¢SCSI ¤Î
+ÀßÄê¤¬É¸½à¤È°Û¤Ê¤ë¾ì¹ç¤À¤±¤Ç¤¹¡£
+
+.TP
+.BI "\-S --force-read-speed " number
+CD ¥É¥é¥¤¥Ö¤«¤é¤ÎÆÉ¤ß¹þ¤ßÂ®ÅÙ¤òÀßÄê¤¹¤ë¤Ë¤Ï¡¢¤³¤Î¥ª¥×¥·¥ç¥ó¤òÌÀ¼¨Åª¤Ë
+»È¤Ã¤Æ¤¯¤À¤µ¤¤(¥É¥é¥¤¥Ö¤¬ÂÐ±þ¤·¤Æ¤¤¤ë¾ì¹ç)¡£¤³¤Î¥ª¥×¥·¥ç¥ó¤òÍÑ¤¤¤ë¤È¡¢
+¥Ç¥£¥¹¥¯¤¬ÃÙ¤¤¾ì¹ç¤ä¥á¥â¥ê¤¬¾¯¤Ê¤¤¾ì¹ç¤Ëµ¯¤³¤ë¥¢¥ó¥À¡¼¥é¥ó¤ò¸º¤é¤¹¤³¤È
+¤¬¤Ç¤­¤Þ¤¹¡£
 
 .TP
 .B \-Z --disable-paranoia
-.\"0 Disable 
-.\"0 .b all
-.\"0 data verification and correction features.  When using -Z, cdparanoia
-.\"0 reads data exactly as would cdda2wav with an overlap setting of zero.
-$B%G!<%?>H9g$HD{@55!G=$r(B
-.b $BA4$F(B
-$BL58z$K$7$^$9!#(B-Z $B%*%W%7%g%s$rMQ$$$k$H!"(Bcdparanoia $B$O(B
-$B%*!<%P!<%i%C%W$N@_Dj$,(B 0 $B$G$"$k(B cdda2wav $B$HA4$/F1$8$h$&$K%G!<%?$N(B
-$BFI$_<h$j$r9T$$$^$9!#(B
-.\"0 This option implies that 
-.\"0 .b \-W \-X 
-.\"0 and
-.\"0 .B \-Y
-.\"0 are active, but is 
-.\"0 .B not 
-.\"0 equivalent to 
-.\"0 .B \-Z \-W \-X \-Y
-.\"0 as the 
-.\"0 .B \-W
-.\"0 through
-.\"0 .B \-Z
-.\"0 options specify layered levels of verification.  The last specified
-.\"0 option takes precedence.
-$B$3$N%*%W%7%g%s$r;XDj$9$k$H(B
+¥Ç¡¼¥¿¾È¹ç¤ÈÄûÀµµ¡Ç½¤ò
+.b Á´¤Æ
+Ìµ¸ú¤Ë¤·¤Þ¤¹¡£-Z ¥ª¥×¥·¥ç¥ó¤òÍÑ¤¤¤ë¤È¡¢cdparanoia ¤Ï
+¥ª¡¼¥Ð¡¼¥é¥Ã¥×¤ÎÀßÄê¤¬ 0 ¤Ç¤¢¤ë cdda2wav ¤ÈÁ´¤¯Æ±¤¸¤è¤¦¤Ë¥Ç¡¼¥¿¤Î
+ÆÉ¤ß¼è¤ê¤ò¹Ô¤¤¤Þ¤¹¡£
+¤³¤Î¥ª¥×¥·¥ç¥ó¤ò»ØÄê¤¹¤ë¤È
 .B \-W ,
 .B \-X ,
 .B \-Y
-$B%*%W%7%g%s$bM-8z$K$J$j$^$9$,!"(B
+¥ª¥×¥·¥ç¥ó¤âÍ­¸ú¤Ë¤Ê¤ê¤Þ¤¹¤¬¡¢
 .B \-Z \-W \-X \-Y
-$B$HA4$/F1$8$G$O(B
-.B $B$"$j$^$;$s!#(B
-$B$J$<$J$i!"(B
+¤ÈÁ´¤¯Æ±¤¸¤Ç¤Ï
+.B ¤¢¤ê¤Þ¤»¤ó¡£
+¤Ê¤¼¤Ê¤é¡¢
 .B \-W
-$B$+$i(B
+¤«¤é
 .B \-Z
-$B$^$G$N%*%W%7%g%s$K$h$j>H9g$N%l%Y%k$,3,AXE*$KJQ$o$k$+$i$G$9!#<B:]$KM-8z(B
-$B$K$J$k$N$O:G8e$K;XDj$7$?%*%W%7%g%s$@$1$G$9!#(B
+¤Þ¤Ç¤Î¥ª¥×¥·¥ç¥ó¤Ë¤è¤ê¾È¹ç¤Î¥ì¥Ù¥ë¤¬³¬ÁØÅª¤ËÊÑ¤ï¤ë¤«¤é¤Ç¤¹¡£¼ÂºÝ¤ËÍ­¸ú
+¤Ë¤Ê¤ë¤Î¤ÏºÇ¸å¤Ë»ØÄê¤·¤¿¥ª¥×¥·¥ç¥ó¤À¤±¤Ç¤¹¡£
 
 .TP
 .B \-Y --disable-extra-paranoia
-.\"0 Disables intra-read data verification; only overlap checking at read
-.\"0 boundaries is performed.
-$BFI$_<h$C$?%G!<%?$NCf4V$K$*$1$k%G!<%?>H9g$r9T$$$^$;$s!#$D$^$j!"(B
-$B%G!<%?$NFI$_<h$j6-3&$K$*$1$k%*!<%P!<%i%C%WItJ,$N%A%'%C%/$7$+9T$$$^$;$s!#(B
+ÆÉ¤ß¼è¤Ã¤¿¥Ç¡¼¥¿¤ÎÃæ´Ö¤Ë¤ª¤±¤ë¥Ç¡¼¥¿¾È¹ç¤ò¹Ô¤¤¤Þ¤»¤ó¡£¤Ä¤Þ¤ê¡¢
+¥Ç¡¼¥¿¤ÎÆÉ¤ß¼è¤ê¶­³¦¤Ë¤ª¤±¤ë¥ª¡¼¥Ð¡¼¥é¥Ã¥×ÉôÊ¬¤Î¥Á¥§¥Ã¥¯¤·¤«¹Ô¤¤¤Þ¤»¤ó¡£
 
 .TP
 .B \-X --disable-scratch-detection
-.\"0 Neither look for scratches nor perform scratch-tolerant synchronization during verification. With
-.\"0 .B \-X
-.\"0 specified, a scratched disc will cause cdparanoia to abort its read.
-$B>H9g$NESCf$G$O=}$NC5::$b9T$o$:!"=}$KBP$7$F4h7r$JF14|=hM}$b9T$$$^$;$s!#(B
+¾È¹ç¤ÎÅÓÃæ¤Ç¤Ï½ý¤ÎÃµºº¤â¹Ô¤ï¤º¡¢½ý¤ËÂÐ¤·¤Æ´è·ò¤ÊÆ±´ü½èÍý¤â¹Ô¤¤¤Þ¤»¤ó¡£
 .B \-X
-$B%*%W%7%g%s$r;XDj$7$?>l9g!"=}$D$$$?(B CD $B$rM?$($k$H(B cdparanoia $B$OFI$_<h$j(B
-$B$N<:GT$r5/$3$7$^$9!#(B
+¥ª¥×¥·¥ç¥ó¤ò»ØÄê¤·¤¿¾ì¹ç¡¢½ý¤Ä¤¤¤¿ CD ¤òÍ¿¤¨¤ë¤È cdparanoia ¤ÏÆÉ¤ß¼è¤ê
+¤Î¼ºÇÔ¤òµ¯¤³¤·¤Þ¤¹¡£
 
 .TP
 .B \-W --disable-scratch-repair
-.\"0 Detect and hold sync across scratches, but do not attempt any repair of damaged data.  If an info file is in use
-.\"0 .RB ( \-i )
-.\"0 log the frame positions of all scratches.
-$B=}$r8!=P$7!"F14|$rJ]$D=hM}$r9T$$$^$9!#$?$@$72u$l$?%G!<%?$N=$I|$O9T$$$^(B
-$B$;$s!#%m%0%U%!%$%k$N=PNO$r9T$&$H(B(
+½ý¤ò¸¡½Ð¤·¡¢Æ±´ü¤òÊÝ¤Ä½èÍý¤ò¹Ô¤¤¤Þ¤¹¡£¤¿¤À¤·²õ¤ì¤¿¥Ç¡¼¥¿¤Î½¤Éü¤Ï¹Ô¤¤¤Þ
+¤»¤ó¡£¥í¥°¥Õ¥¡¥¤¥ë¤Î½ÐÎÏ¤ò¹Ô¤¦¤È(
 .RB \-i
-$B%*%W%7%g%s(B)$B!"A4$F$N=}$N%U%l!<%`0LCV$,%m%0%U%!%$%k$K=PNO$5$l$^$9!#(B
+¥ª¥×¥·¥ç¥ó)¡¢Á´¤Æ¤Î½ý¤Î¥Õ¥ì¡¼¥à°ÌÃÖ¤¬¥í¥°¥Õ¥¡¥¤¥ë¤Ë½ÐÎÏ¤µ¤ì¤Þ¤¹¡£
 
-.\"0 .SH OUTPUT SMILIES
-.SH $B=PNO$5$l$k4iJ8;z(B
+.SH ½ÐÎÏ¤µ¤ì¤ë´éÊ¸»ú
 .TP
 .B
   :-)   
-.\"0 Normal operation, low/no jitter
-$B@5>oF0:n!#%8%C%?$O>/$J$$$+!"A4$/$J$$(B
+Àµ¾ïÆ°ºî¡£¥¸¥Ã¥¿¤Ï¾¯¤Ê¤¤¤«¡¢Á´¤¯¤Ê¤¤
 .TP
 .B
   :-|   
-.\"0 Normal operation, considerable jitter
-$B@5>oF0:n!#%8%C%?$O5vMFHO0O(B
+Àµ¾ïÆ°ºî¡£¥¸¥Ã¥¿¤ÏµöÍÆÈÏ°Ï
 .TP
 .B
   :-/   
-.\"0 Read drift
-$BFI$_<h$j$G%I%j%U%H$,H/@8(B
+ÆÉ¤ß¼è¤ê¤Ç¥É¥ê¥Õ¥È¤¬È¯À¸
 .TP
 .B
   :-P   
-.\"0 Unreported loss of streaming in atomic read operation
-$B:G>.C10L$NFI$_<h$jA`:n$K$*$$$F!"Js9p$5$l$F$$$J$$B;<:$,%9%H%j!<%_%s%0$K$"$k(B
+ºÇ¾®Ã±°Ì¤ÎÆÉ¤ß¼è¤êÁàºî¤Ë¤ª¤¤¤Æ¡¢Êó¹ð¤µ¤ì¤Æ¤¤¤Ê¤¤Â»¼º¤¬¥¹¥È¥ê¡¼¥ß¥ó¥°¤Ë¤¢¤ë
 .TP
 .B
   8-|   
-.\"0 Finding read problems at same point during reread; hard to correct
-$B7+$jJV$7$FFI$_<h$j$r9T$C$?$,!"F1$80LCV$GLdBj$,5/$-$?!#=$@5$O:$Fq$G$"$k(B
+·«¤êÊÖ¤·¤ÆÆÉ¤ß¼è¤ê¤ò¹Ô¤Ã¤¿¤¬¡¢Æ±¤¸°ÌÃÖ¤ÇÌäÂê¤¬µ¯¤­¤¿¡£½¤Àµ¤Ïº¤Æñ¤Ç¤¢¤ë
 .TP
 .B
   :-0   
-.\"0 SCSI/ATAPI transport error
-SCSI/ATAPI $B$N%G!<%?E>Aw%(%i!<(B
+SCSI/ATAPI ¤Î¥Ç¡¼¥¿Å¾Á÷¥¨¥é¡¼
 .TP
 .B
   :-(   
-.\"0 Scratch detected
-$B=}$,8!=P$5$l$?(B
+½ý¤¬¸¡½Ð¤µ¤ì¤¿
 .TP
 .B
   ;-(   
-.\"0 Gave up trying to perform a correction
-$B%G!<%?$ND{@5$r$"$-$i$a$?(B
+¥Ç¡¼¥¿¤ÎÄûÀµ¤ò¤¢¤­¤é¤á¤¿
 .TP
 .B
   :^D   
-.\"0 Finished extracting
-$BFI$_<h$j=*N;(B
+ÆÉ¤ß¼è¤ê½ªÎ»
 
-.\"0 .SH PROGRESS BAR SYMBOLS
-.SH $B?J9TI=<($N0UL#(B
+.SH ¿Ê¹ÔÉ½¼¨¤Î°ÕÌ£
 .TP
 .B
-.\"0 <space> 
-<$B%9%Z!<%9(B> 
-.\"0 No corrections needed
-$BD{@5$OITMW(B
+<¥¹¥Ú¡¼¥¹> 
+ÄûÀµ¤ÏÉÔÍ×
 .TP
 .B
    -    
-.\"0 Jitter correction required
-$B%8%C%?$ND{@5$,I,MW(B
+¥¸¥Ã¥¿¤ÎÄûÀµ¤¬É¬Í×
 .TP
 .B
    +    
-.\"0 Unreported loss of streaming/other error in read
-$BJs9p$5$l$F$$$J$$B;<:$,%9%H%j!<%_%s%0$K$"$k!#$"$k$$$OJL$N%(%i!<$,FI$_<h$j(B
-$B;~$KH/@8$7$?(B
+Êó¹ð¤µ¤ì¤Æ¤¤¤Ê¤¤Â»¼º¤¬¥¹¥È¥ê¡¼¥ß¥ó¥°¤Ë¤¢¤ë¡£¤¢¤ë¤¤¤ÏÊÌ¤Î¥¨¥é¡¼¤¬ÆÉ¤ß¼è¤ê
+»þ¤ËÈ¯À¸¤·¤¿
 .TP
 .B
    !  
-.\"0 Errors found after stage 1 correction; the drive is making the
-.\"0 same error through multiple re-reads, and cdparanoia is having trouble
-.\"0 detecting them.
-$B%9%F!<%8(B 1 $BD{@5$N8e$K%(%i!<$,8+$D$+$C$?!#FI$_<h$j$rJ#?t2s7+$jJV$7$F$b(B
-$BF1$8%(%i!<$,H/@8$7!"(Bcdparanoia $B$O$=$N%(%i!<$r$&$^$/8!=P$G$-$J$$!#(B
+¥¹¥Æ¡¼¥¸ 1 ÄûÀµ¤Î¸å¤Ë¥¨¥é¡¼¤¬¸«¤Ä¤«¤Ã¤¿¡£ÆÉ¤ß¼è¤ê¤òÊ£¿ô²ó·«¤êÊÖ¤·¤Æ¤â
+Æ±¤¸¥¨¥é¡¼¤¬È¯À¸¤·¡¢cdparanoia ¤Ï¤½¤Î¥¨¥é¡¼¤ò¤¦¤Þ¤¯¸¡½Ð¤Ç¤­¤Ê¤¤¡£
 .TP
 .B
    e    
-.\"0 SCSI/ATAPI transport error (corrected)
-SCSI/ATAPI $B$N%G!<%?E>Aw%(%i!<(B($BD{@5:Q$_(B)
+SCSI/ATAPI ¤Î¥Ç¡¼¥¿Å¾Á÷¥¨¥é¡¼(ÄûÀµºÑ¤ß)
 .TP
 .B
    V    
-.\"0 Uncorrected error/skip
-$BD{@5$G$-$J$$%(%i!<(B/$B%G!<%?$N%9%-%C%W(B
+ÄûÀµ¤Ç¤­¤Ê¤¤¥¨¥é¡¼/¥Ç¡¼¥¿¤Î¥¹¥­¥Ã¥×
 
-.\"0 .SH SPAN ARGUMENT
-.SH $B0z$-?t(B 'span' 
+.SH °ú¤­¿ô 'span' 
 
-.\"0 The span argument specifies which track, tracks or subsections of
-.\"0 tracks to read.  This argument is required. 
-$B0z$-?t(B span $B$O!"FI$_<h$j$r9T$&%H%i%C%/$^$?$O%H%i%C%/$N0lIt$r;XDj$7$^$9!#(B
-$B$3$N0z$-?t$OI,$:I,MW$G$9!#(B
-.\"0 .B NOTE:
-.B $BCm0U(B:
-.\"0 Unless the span is a simple number, it's generally a good idea to
-.\"0 quote the span argument to protect it from the shell.
-span $B$,C1$J$k?t;z$G$J$1$l$P!"%7%'%k$,0z$-?t(B span $B$rE83+$7$F$7$^$o$J$$(B
-$B$h$&$K%/%)!<%H$9$k$N$,IaDL$G$7$g$&!#(B
+°ú¤­¿ô span ¤Ï¡¢ÆÉ¤ß¼è¤ê¤ò¹Ô¤¦¥È¥é¥Ã¥¯¤Þ¤¿¤Ï¥È¥é¥Ã¥¯¤Î°ìÉô¤ò»ØÄê¤·¤Þ¤¹¡£
+¤³¤Î°ú¤­¿ô¤ÏÉ¬¤ºÉ¬Í×¤Ç¤¹¡£
+.B Ãí°Õ:
+span ¤¬Ã±¤Ê¤ë¿ô»ú¤Ç¤Ê¤±¤ì¤Ð¡¢¥·¥§¥ë¤¬°ú¤­¿ô span ¤òÅ¸³«¤·¤Æ¤·¤Þ¤ï¤Ê¤¤
+¤è¤¦¤Ë¥¯¥©¡¼¥È¤¹¤ë¤Î¤¬ÉáÄÌ¤Ç¤·¤ç¤¦¡£
 .P
-.\"0 The span argument may be a simple track number or an offset/span
-.\"0 specification.  The syntax of an offset/span takes the rough form:
-$B0z$-?t(B span $B$O!"C1$J$k%H%i%C%/HV9f$+!"%*%U%;%C%H$H%9%Q%s$NAH9g$;$N;XDj(B
-$B$H$J$j$^$9!#%*%U%;%C%H$H%9%Q%s$NAH9g$;$r;XDj$9$kJ}K!$O!"$@$$$?$$0J2<$N(B
-$B$h$&$K$J$j$^$9(B:
+°ú¤­¿ô span ¤Ï¡¢Ã±¤Ê¤ë¥È¥é¥Ã¥¯ÈÖ¹æ¤«¡¢¥ª¥Õ¥»¥Ã¥È¤È¥¹¥Ñ¥ó¤ÎÁÈ¹ç¤»¤Î»ØÄê
+¤È¤Ê¤ê¤Þ¤¹¡£¥ª¥Õ¥»¥Ã¥È¤È¥¹¥Ñ¥ó¤ÎÁÈ¹ç¤»¤ò»ØÄê¤¹¤ëÊýË¡¤Ï¡¢¤À¤¤¤¿¤¤°Ê²¼¤Î
+¤è¤¦¤Ë¤Ê¤ê¤Þ¤¹:
 .P
 1[ww:xx:yy.zz]-2[aa:bb:cc.dd] 
 .P
-.\"0 Here, 1 and 2 are track numbers; the numbers in brackets provide a
-.\"0 finer grained offset within a particular track. [aa:bb:cc.dd] is in
-.\"0 hours/minutes/seconds/sectors format. Zero fields need not be
-.\"0 specified: [::20], [:20], [20], [20.], etc, would be interpreted as
-.\"0 twenty seconds, [10:] would be ten minutes, [.30] would be thirty
-.\"0 sectors (75 sectors per second).
-$B$3$3$G(B 1 $B$H(B 2 $B$O%H%i%C%/HV9f$G$9!#3Q3g8L$NCf$N?tCM$O!";XDj$5$l$?%H%i%C%/(B
-$B$K$*$1$k!"$h$j:Y$+$$%*%U%;%C%H;XDj$G$9!#(B[aa:bb:cc.dd] $B$O(B
-$B!V;~4V(B/$BJ,(B/$BIC(B/$B%;%/%?!W$N7A<0$G$9!#CM$,(B 0 $B$G$"$k%U%#!<%k%I$O;XDj$7$J$/$F(B
-$B$b9=$$$^$;$s!#$D$^$j(B [::20], [:20], [20], [20.] $BEy$O(B 20 $BIC$H2r<a$5$l!"(B
-[10:] $B$O(B 10 $BIC$H2r<a$5$l!"(B[.30] $B$O(B 30 $B%;%/%?$H2r<a$5$l$^$9(B(75 $B%;%/%?$G(B 
-1 $BIC$G$9(B)$B!#(B
+¤³¤³¤Ç 1 ¤È 2 ¤Ï¥È¥é¥Ã¥¯ÈÖ¹æ¤Ç¤¹¡£³Ñ³ç¸Ì¤ÎÃæ¤Î¿ôÃÍ¤Ï¡¢»ØÄê¤µ¤ì¤¿¥È¥é¥Ã¥¯
+¤Ë¤ª¤±¤ë¡¢¤è¤êºÙ¤«¤¤¥ª¥Õ¥»¥Ã¥È»ØÄê¤Ç¤¹¡£[aa:bb:cc.dd] ¤Ï
+¡Ö»þ´Ö/Ê¬/ÉÃ/¥»¥¯¥¿¡×¤Î·Á¼°¤Ç¤¹¡£ÃÍ¤¬ 0 ¤Ç¤¢¤ë¥Õ¥£¡¼¥ë¥É¤Ï»ØÄê¤·¤Ê¤¯¤Æ
+¤â¹½¤¤¤Þ¤»¤ó¡£¤Ä¤Þ¤ê [::20], [:20], [20], [20.] Åù¤Ï 20 ÉÃ¤È²ò¼á¤µ¤ì¡¢
+[10:] ¤Ï 10 ÉÃ¤È²ò¼á¤µ¤ì¡¢[.30] ¤Ï 30 ¥»¥¯¥¿¤È²ò¼á¤µ¤ì¤Þ¤¹(75 ¥»¥¯¥¿¤Ç 
+1 ÉÃ¤Ç¤¹)¡£
 .P
-.\"0 When only a single offset is supplied, it is interpreted as a starting
-.\"0 offset and ripping will continue to the end of he track.  If a single
-.\"0 offset is preceeded or followed by a hyphen, the implicit missing
-.\"0 offset is taken to be the start or end of the disc, respectively. Thus:
-$B%*%U%;%C%H$r(B 1 $B$D$7$+;XDj$7$J$1$l$P!"$3$l$O3+;O0LCV$N%*%U%;%C%H$rI=$7!"(B
-$B5[$$=P$7$O$=$N%H%i%C%/$N=*$o$j$^$G9T$o$l$^$9!#%*%U%;%C%H$,(B 1 $B$D$@$1$"(B
-$B$j!"$=$NA08e$K%O%$%U%s(B(-)$B$,$"$k>l9g$K$O!">JN,$5$l$F$$$k%*%U%;%C%H$O(B
-$B%G%#%9%/$N@hF,$"$k$$$OKvHx$H$7$F2r<a$5$l$^$9!#Nc$r0J2<$K<($7$^$9(B:
+¥ª¥Õ¥»¥Ã¥È¤ò 1 ¤Ä¤·¤«»ØÄê¤·¤Ê¤±¤ì¤Ð¡¢¤³¤ì¤Ï³«»Ï°ÌÃÖ¤Î¥ª¥Õ¥»¥Ã¥È¤òÉ½¤·¡¢
+µÛ¤¤½Ð¤·¤Ï¤½¤Î¥È¥é¥Ã¥¯¤Î½ª¤ï¤ê¤Þ¤Ç¹Ô¤ï¤ì¤Þ¤¹¡£¥ª¥Õ¥»¥Ã¥È¤¬ 1 ¤Ä¤À¤±¤¢
+¤ê¡¢¤½¤ÎÁ°¸å¤Ë¥Ï¥¤¥Õ¥ó(-)¤¬¤¢¤ë¾ì¹ç¤Ë¤Ï¡¢¾ÊÎ¬¤µ¤ì¤Æ¤¤¤ë¥ª¥Õ¥»¥Ã¥È¤Ï
+¥Ç¥£¥¹¥¯¤ÎÀèÆ¬¤¢¤ë¤¤¤ÏËöÈø¤È¤·¤Æ²ò¼á¤µ¤ì¤Þ¤¹¡£Îã¤ò°Ê²¼¤Ë¼¨¤·¤Þ¤¹:
 
 .TP
 .B  1:[20.35]    
-.\"0 Specifies ripping from track 1, second 20, sector 35 to the end of
-.\"0 track 1.
-$B%H%i%C%/(B 1 $B$N(B 20 $BIC!"(B35 $B%;%/%?$N0LCV$+$i!"%H%i%C%/(B 1 $B$NKvHx$^$G$r5[$$(B
-$B=P$7$^$9!#(B
+¥È¥é¥Ã¥¯ 1 ¤Î 20 ÉÃ¡¢35 ¥»¥¯¥¿¤Î°ÌÃÖ¤«¤é¡¢¥È¥é¥Ã¥¯ 1 ¤ÎËöÈø¤Þ¤Ç¤òµÛ¤¤
+½Ð¤·¤Þ¤¹¡£
 .TP
 .B 1:[20.35]-   
-.\"0 Specifies ripping from 1[20.35] to the end of the disc
-1[20.35] $B$N0LCV$+$i%G%#%9%/$NKvHx$^$G$r5[$$=P$7$^$9!#(B
+1[20.35] ¤Î°ÌÃÖ¤«¤é¥Ç¥£¥¹¥¯¤ÎËöÈø¤Þ¤Ç¤òµÛ¤¤½Ð¤·¤Þ¤¹¡£
 .TP
 .B \-2           
-.\"0 Specifies ripping from the beginning of the disc up to (and including) track 2
-$B%G%#%9%/$N@hF,$+$i%H%i%C%/(B 2 $B$^$G(B($B%H%i%C%/(B 2 $B$b4^$_$^$9(B)$B$r5[$$=P$7$^$9!#(B
+¥Ç¥£¥¹¥¯¤ÎÀèÆ¬¤«¤é¥È¥é¥Ã¥¯ 2 ¤Þ¤Ç(¥È¥é¥Ã¥¯ 2 ¤â´Þ¤ß¤Þ¤¹)¤òµÛ¤¤½Ð¤·¤Þ¤¹¡£
 .TP
 .B \-2:[30.35]   
-.\"0 Specifies ripping from the beginning of the disc up to 2:[30.35]
-$B%G%#%9%/$N@hF,$+$i(B 2:[30.35] $B$N0LCV$^$G5[$$=P$7$^$9!#(B
+¥Ç¥£¥¹¥¯¤ÎÀèÆ¬¤«¤é 2:[30.35] ¤Î°ÌÃÖ¤Þ¤ÇµÛ¤¤½Ð¤·¤Þ¤¹¡£
 .TP
 .B 2-4          
-.\"0 Specifies ripping from the beginning of track two to the end of track 4.
-$B%H%i%C%/(B 2 $B$N@hF,$+$i%H%i%C%/(B 4 $B$NKvHx$^$G$r5[$$=P$7$^$9!#(B
+¥È¥é¥Ã¥¯ 2 ¤ÎÀèÆ¬¤«¤é¥È¥é¥Ã¥¯ 4 ¤ÎËöÈø¤Þ¤Ç¤òµÛ¤¤½Ð¤·¤Þ¤¹¡£
 .P
-.\"0 Again, don't forget to protect square brackets and preceeding hyphens from
-.\"0 the shell.
-$B7+$jJV$7$K$J$j$^$9$,!"3Q3g8L$*$h$SC18l$N@hF,$K$"$k%O%$%U%s$OI,$:%/%)!<%H(B
-$B$7$F!"%7%'%k$KE83+$5$l$J$$$h$&$K$7$F$/$@$5$$!#(B
+·«¤êÊÖ¤·¤Ë¤Ê¤ê¤Þ¤¹¤¬¡¢³Ñ³ç¸Ì¤ª¤è¤ÓÃ±¸ì¤ÎÀèÆ¬¤Ë¤¢¤ë¥Ï¥¤¥Õ¥ó¤ÏÉ¬¤º¥¯¥©¡¼¥È
+¤·¤Æ¡¢¥·¥§¥ë¤ËÅ¸³«¤µ¤ì¤Ê¤¤¤è¤¦¤Ë¤·¤Æ¤¯¤À¤µ¤¤¡£
 
-.\"0 .SH EXAMPLES
-.SH $B;XDjNc(B
+.SH »ØÄêÎã
 
-.\"0 A few examples, protected from the shell:
-$B%/%)!<%H$b4^$a$?;XDjNc$r$$$/$D$+<($7$^$9(B:
+¥¯¥©¡¼¥È¤â´Þ¤á¤¿»ØÄêÎã¤ò¤¤¤¯¤Ä¤«¼¨¤·¤Þ¤¹:
 .TP
-.\"0 Query only with exhaustive search for a drive and full reporting of autosense:
-$B%I%i%$%V$ND4::$@$1$rE0DlE*$K9T$$!"<+F08!=P$N7k2L$rA4$FJs9p$7$^$9(B:
+¥É¥é¥¤¥Ö¤ÎÄ´ºº¤À¤±¤òÅ°ÄìÅª¤Ë¹Ô¤¤¡¢¼«Æ°¸¡½Ð¤Î·ë²Ì¤òÁ´¤ÆÊó¹ð¤·¤Þ¤¹:
 .P
        cdparanoia -vsQ
 .TP
-.\"0 Extract an entire disc, putting each track in a seperate file:
-$B%G%#%9%/A4BN$r5[$$=P$7$^$9!#$=$l$>$l$N%H%i%C%/$OJL!9$N%U%!%$%k$K$7$^$9(B:
+¥Ç¥£¥¹¥¯Á´ÂÎ¤òµÛ¤¤½Ð¤·¤Þ¤¹¡£¤½¤ì¤¾¤ì¤Î¥È¥é¥Ã¥¯¤ÏÊÌ¡¹¤Î¥Õ¥¡¥¤¥ë¤Ë¤·¤Þ¤¹:
 .P
        cdparanoia -B "1-"
 .TP
-.\"0 Extract from track 1, time 0:30.12 to 1:10.00:
-$B%H%i%C%/(B 1 $B$N;~9o(B 0:30.12 $B$+$i;~9o(B 1:10.00 $B$^$G$r5[$$=P$7$^$9(B:
+¥È¥é¥Ã¥¯ 1 ¤Î»þ¹ï 0:30.12 ¤«¤é»þ¹ï 1:10.00 ¤Þ¤Ç¤òµÛ¤¤½Ð¤·¤Þ¤¹:
 .P
        cdparanoia "1[:30.12]-1[1:10]"
 .TP
-.\"0 Extract one minute from track 1, starting at time 0:30.12:
-$B%H%i%C%/(B 1 $B$N;~9o(B 0:30.12 $B$+$i(B 1 $BJ,4V$N%G!<%?$r5[$$=P$7$^$9(B:
+¥È¥é¥Ã¥¯ 1 ¤Î»þ¹ï 0:30.12 ¤«¤é 1 Ê¬´Ö¤Î¥Ç¡¼¥¿¤òµÛ¤¤½Ð¤·¤Þ¤¹:
 .P
        cdparanoia "1[:30.12]-[1:00]"
 
-.\"0 .SH OUTPUT
-.SH $B=PNO(B
+.SH ½ÐÎÏ
 
-.\"0 The output file argument is optional; if it is not specified,
-.\"0 cdparanoia will output samples to one of
-.\"0 .BR cdda.wav ", " cdda.aifc ", or " cdda.raw
-.\"0 depending on whether 
-.\"0 .BR \-w ", " \-a ", " \-r " or " \-R " is used (" \-w 
-.\"0 is the implicit default).  The output file argument of 
-.\"0 .B \-
-.\"0 specifies standard output; all data formats may be piped. 
-$B=PNO%U%!%$%k$r;XDj$9$k0z$-?t$O>JN,2DG=$G$9!#;XDj$5$l$F$$$J$1$l$P!"(B
-cdparanoia $B$O%5%s%W%k2;@<$r(B
+½ÐÎÏ¥Õ¥¡¥¤¥ë¤ò»ØÄê¤¹¤ë°ú¤­¿ô¤Ï¾ÊÎ¬²ÄÇ½¤Ç¤¹¡£»ØÄê¤µ¤ì¤Æ¤¤¤Ê¤±¤ì¤Ð¡¢
+cdparanoia ¤Ï¥µ¥ó¥×¥ë²»À¼¤ò
 .BR cdda.wav ", " cdda.aifc ", " cdda.raw
-$B$N$$$:$l$+$K=PNO$7$^$9!#$I$N%U%!%$%k$K=PNO$5$l$k$N$+$O!"%*%W%7%g%s(B
+¤Î¤¤¤º¤ì¤«¤Ë½ÐÎÏ¤·¤Þ¤¹¡£¤É¤Î¥Õ¥¡¥¤¥ë¤Ë½ÐÎÏ¤µ¤ì¤ë¤Î¤«¤Ï¡¢¥ª¥×¥·¥ç¥ó
 .BR \-w ", " \-a ", " \-r "," \-R
-$B$N$&$A$$$:$l$r;H$&$+$K$h$C$F7h$^$j$^$9(B($B2?$b;XDj$7$J$1$l$P(B
+¤Î¤¦¤Á¤¤¤º¤ì¤ò»È¤¦¤«¤Ë¤è¤Ã¤Æ·è¤Þ¤ê¤Þ¤¹(²¿¤â»ØÄê¤·¤Ê¤±¤ì¤Ð
 .BR \-w 
-$B$,%G%U%)%k%HCM$G$9(B)$B!#=PNO%U%!%$%k$r;XDj$9$k0z$-?t$,(B
+¤¬¥Ç¥Õ¥©¥ë¥ÈÃÍ¤Ç¤¹)¡£½ÐÎÏ¥Õ¥¡¥¤¥ë¤ò»ØÄê¤¹¤ë°ú¤­¿ô¤¬
 .B \-
-$B$J$i$P!"=PNO$OI8=`=PNO$KBP$7$F9T$o$l$^$9!#$I$N%G!<%?7A<0$G$b%Q%$%W$KAw(B
-$B$k$3$H$,$G$-$^$9!#(B
+¤Ê¤é¤Ð¡¢½ÐÎÏ¤ÏÉ¸½à½ÐÎÏ¤ËÂÐ¤·¤Æ¹Ô¤ï¤ì¤Þ¤¹¡£¤É¤Î¥Ç¡¼¥¿·Á¼°¤Ç¤â¥Ñ¥¤¥×¤ËÁ÷
+¤ë¤³¤È¤¬¤Ç¤­¤Þ¤¹¡£
 
-.\"0 .SH ACKNOWLEDGEMENTS
-.SH $B<U<-(B
-.\"0 Cdparanoia sprang from and once drew heavily from the interface of
-.\"0 Heiko Eissfeldt's (heiko@colossus.escape.de) 'cdda2wav'
-.\"0 package. Cdparanoia would not have happened without it.
-cdparanoia $B$N4p$H$J$C$?$N$O(B Heiko Eissfeldt $B$5$s(B
-(heiko@colossus.escape.de)$B$,:n@.$7$?(B 'cdda2wav' $B%Q%C%1!<%8$G$"$j!"(B
-$B0JA0$O(B cdparanoia $B$N%$%s%?%U%'!<%9$NBgItJ,$O(B cdda2wav $B$+$i$b$i$C$F$-$?(B
-$B$b$N$G$7$?!#(Bcdda2wav $B$,$J$1$l$P!"(Bcdparanoia $B$,:n$i$l$k$3$H$O$J$+$C$?$G(B
-$B$7$g$&!#(B
+.SH ¼Õ¼­
+cdparanoia ¤Î´ð¤È¤Ê¤Ã¤¿¤Î¤Ï Heiko Eissfeldt ¤µ¤ó
+(heiko@colossus.escape.de)¤¬ºîÀ®¤·¤¿ 'cdda2wav' ¥Ñ¥Ã¥±¡¼¥¸¤Ç¤¢¤ê¡¢
+°ÊÁ°¤Ï cdparanoia ¤Î¥¤¥ó¥¿¥Õ¥§¡¼¥¹¤ÎÂçÉôÊ¬¤Ï cdda2wav ¤«¤é¤â¤é¤Ã¤Æ¤­¤¿
+¤â¤Î¤Ç¤·¤¿¡£cdda2wav ¤¬¤Ê¤±¤ì¤Ð¡¢cdparanoia ¤¬ºî¤é¤ì¤ë¤³¤È¤Ï¤Ê¤«¤Ã¤¿¤Ç
+¤·¤ç¤¦¡£
 .P
-.\"0 Joerg Schilling has also contributed SCSI expertise through his
-.\"0 generic SCSI transport library.
-Joerg Schilling $B$5$s$,:n@.$7$?HFMQ(B SCSI $B%G!<%?E>Aw%i%$%V%i%j$+$i!"(BSCSI 
-$B$N@lLgCN<1$rB?$/3X$P$;$F$$$?$@$-$^$7$?!#(B
-
-.\"0 .SH AUTHOR
-.SH $B:n<T(B
-Monty <xiphmont@mit.edu>
+Joerg Schilling ¤µ¤ó¤¬ºîÀ®¤·¤¿ÈÆÍÑ SCSI ¥Ç¡¼¥¿Å¾Á÷¥é¥¤¥Ö¥é¥ê¤«¤é¡¢SCSI 
+¤ÎÀìÌçÃÎ¼±¤òÂ¿¤¯³Ø¤Ð¤»¤Æ¤¤¤¿¤À¤­¤Þ¤·¤¿¡£
 .P
-.\"0 Cdparanoia's homepage may be found at:
-cdparanoia $B$N%[!<%`%Z!<%8$O0J2<$N>l=j$K$"$j$^$9(B:
+.SH ºî¼Ô
+Monty <monty@xiph.org>
+.P
+cdparanoia ¤Î¥Û¡¼¥à¥Ú¡¼¥¸¤Ï°Ê²¼¤Î¾ì½ê¤Ë¤¢¤ê¤Þ¤¹:
 .P
 .ce 
-http://www.mit.edu/afs/sipb/user/xiphmont/cdparanoia/index.html
-
-
+http://www.xiph.org/paranoia/
