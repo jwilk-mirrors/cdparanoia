@@ -42,8 +42,8 @@
 #define CDROMAUDIOBUFSIZ        0x5382 /* set the audio buffer size */
 #endif
 
-#include <linux/scsi/sg.h>
-#include <linux/scsi/scsi.h>
+#include <scsi/sg.h>
+#include <scsi/scsi.h>
 
 #include <linux/cdrom.h>
 #include <linux/major.h>
