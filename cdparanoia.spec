@@ -93,6 +93,7 @@ fi
 
 %files -n cdparanoia-devel
 %defattr(-,root,root)
+%{_includedir}/cdda/
 %{_includedir}/cdda/*
 %{_libdir}/*.a
 
