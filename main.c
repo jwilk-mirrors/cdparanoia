@@ -801,10 +801,6 @@ int main(int argc,char *argv[]){
   else
     cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_FORGETIT);
 
-  if(force_cdrom_speed!=-1){
-    cdda_speed_set(d,force_cdrom_speed);
-  }
-
   /* possibly force hand on endianness of drive, sector request size */
   if(force_cdrom_endian!=-1){
     d->bigendianp=force_cdrom_endian;
@@ -860,6 +856,10 @@ int main(int argc,char *argv[]){
   default:
     report("\nUnable to open disc.");
     exit(1);
+  }
+
+  if(force_cdrom_speed!=-1){
+    cdda_speed_set(d,force_cdrom_speed);
   }
 
   /* Dump the TOC */
