@@ -1150,7 +1150,7 @@ int main(int argc,char *argv[]){
 	skipped_flag=0;
 	while(cursor<=batch_last){
 	  /* read a sector */
-	  size16 *readbuf=paranoia_read(p,callback);
+	  int16_t *readbuf=paranoia_read(p,callback);
 	  char *err=cdda_errors(d);
 	  char *mes=cdda_messages(d);
 

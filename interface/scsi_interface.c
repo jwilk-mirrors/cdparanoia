@@ -603,7 +603,7 @@ static int scsi_read_toc (cdrom_drive *d){
 /* a contribution from Boris for IMS cdd 522 */
 /* check this for ACER/Creative/Foo 525,620E,622E, etc? */
 static int scsi_read_toc2 (cdrom_drive *d){
-  unsigned int32_t foo,bar;
+  u_int32_t foo,bar;
 
   int i;
   unsigned tracks;
@@ -1040,7 +1040,7 @@ static int verify_read_command(cdrom_drive *d){
 		       long sectors);
   unsigned char density;
   
-  size16 *buff=malloc(CD_FRAMESIZE_RAW);
+  int16_t *buff=malloc(CD_FRAMESIZE_RAW);
 
   cdmessage(d,"Verifying CDDA command set...\n");
 
@@ -1254,7 +1254,7 @@ static int verify_read_command(cdrom_drive *d){
 }
 
 static void check_fua_bit(cdrom_drive *d){
-  size16 *buff=malloc(CD_FRAMESIZE_RAW);
+  int16_t *buff=malloc(CD_FRAMESIZE_RAW);
   long i;
 
   if(d->read_audio==scsi_read_mmc)return;

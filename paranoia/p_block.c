@@ -202,14 +202,14 @@ void recover_cache(cdrom_paranoia *p){
 
 }
 
-size16 *v_buffer(v_fragment *v){
+int16_t *v_buffer(v_fragment *v){
   if(!v->one)return(NULL);
   if(!cv(v->one))return(NULL);
   return(v->vector);
 }
 
 /* alloc a c_block not on a cache list */
-c_block *c_alloc(size16 *vector,long begin,long size){
+c_block *c_alloc(int16_t *vector,long begin,long size){
   c_block *c=calloc(1,sizeof(c_block));
   c->vector=vector;
   c->begin=begin;
@@ -222,18 +222,18 @@ void c_set(c_block *v,long begin){
 }
 
 /* pos here is vector position from zero */
-void c_insert(c_block *v,long pos,size16 *b,long size){
+void c_insert(c_block *v,long pos,int16_t *b,long size){
   int vs=cs(v);
   if(pos<0 || pos>vs)return;
 
   if(v->vector)
-    v->vector=realloc(v->vector,sizeof(size16)*(size+vs));
+    v->vector=realloc(v->vector,sizeof(int16_t)*(size+vs));
   else
-    v->vector=malloc(sizeof(size16)*size);
+    v->vector=malloc(sizeof(int16_t)*size);
   
   if(pos<vs)memmove(v->vector+pos+size,v->vector+pos,
-		       (vs-pos)*sizeof(size16));
-  memcpy(v->vector+pos,b,size*sizeof(size16));
+		       (vs-pos)*sizeof(int16_t));
+  memcpy(v->vector+pos,b,size*sizeof(int16_t));
 
   v->size+=size;
 }
@@ -246,29 +246,29 @@ void c_remove(c_block *v,long cutpos,long cutsize){
   if(cutsize<1)return;
 
   memmove(v->vector+cutpos,v->vector+cutpos+cutsize,
-            (vs-cutpos-cutsize)*sizeof(size16));
+            (vs-cutpos-cutsize)*sizeof(int16_t));
   
   v->size-=cutsize;
 }
 
-void c_overwrite(c_block *v,long pos,size16 *b,long size){
+void c_overwrite(c_block *v,long pos,int16_t *b,long size){
   int vs=cs(v);
 
   if(pos<0)return;
   if(pos+size>vs)size=vs-pos;
 
-  memcpy(v->vector+pos,b,size*sizeof(size16));
+  memcpy(v->vector+pos,b,size*sizeof(int16_t));
 }
 
-void c_append(c_block *v, size16 *vector, long size){
+void c_append(c_block *v, int16_t *vector, long size){
   int vs=cs(v);
 
   /* update the vector */
   if(v->vector)
-    v->vector=realloc(v->vector,sizeof(size16)*(size+vs));
+    v->vector=realloc(v->vector,sizeof(int16_t)*(size+vs));
   else
-    v->vector=malloc(sizeof(size16)*size);
-  memcpy(v->vector+vs,vector,sizeof(size16)*size);
+    v->vector=malloc(sizeof(int16_t)*size);
+  memcpy(v->vector+vs,vector,sizeof(int16_t)*size);
 
   v->size+=size;
 }

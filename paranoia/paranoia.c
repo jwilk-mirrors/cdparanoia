@@ -77,7 +77,7 @@ static inline long rs(root_block *root){
   return(cs(root->vector));
 }
 
-static inline size16 *rv(root_block *root){
+static inline int16_t *rv(root_block *root){
   if(!root)return(NULL);
   if(!root->vector)return(NULL);
   return(cv(root->vector));
@@ -87,7 +87,7 @@ static inline size16 *rv(root_block *root){
 
 /**** matching and analysis code *****************************************/
 
-static inline long i_paranoia_overlap(size16 *buffA,size16 *buffB,
+static inline long i_paranoia_overlap(int16_t *buffA,int16_t *buffB,
 			       long offsetA, long offsetB,
 			       long sizeA,long sizeB,
 			       long *ret_begin, long *ret_end){
@@ -107,7 +107,7 @@ static inline long i_paranoia_overlap(size16 *buffA,size16 *buffB,
   return(endA-beginA);
 }
 
-static inline long i_paranoia_overlap2(size16 *buffA,size16 *buffB,
+static inline long i_paranoia_overlap2(int16_t *buffA,int16_t *buffB,
 				       char *flagsA,char *flagsB,
 				       long offsetA, long offsetB,
 				       long sizeA,long sizeB,
@@ -432,7 +432,7 @@ static long i_iterate_stage2(cdrom_paranoia *p,v_fragment *v,
 
 /* simple test for a root vector that ends in silence*/
 static void i_silence_test(root_block *root){
-  size16 *vec=rv(root);
+  int16_t *vec=rv(root);
   long end=re(root)-rb(root)-1;
   long j;
   
@@ -453,7 +453,7 @@ static long i_silence_match(root_block *root, v_fragment *v,
 			  void(*callback)(long,int)){
 
   cdrom_paranoia *p=v->p;
-  size16 *vec=fv(v);
+  int16_t *vec=fv(v);
   long end=fs(v),begin;
   long j;
 
@@ -468,7 +468,7 @@ static long i_silence_match(root_block *root, v_fragment *v,
   if(fb(v)>=re(root) && fb(v)-p->dynoverlap<re(root)){
     /* extend the zeroed area of root */
     long addto=fb(v)+MIN_SILENCE_BOUNDARY-re(root);
-    size16 vec[addto];
+    int16_t vec[addto];
     memset(vec,0,sizeof(vec));
     c_append(rc(root),vec,addto);
   }
@@ -549,9 +549,9 @@ static long i_stage2_each(root_block *root, v_fragment *v,
 	long beginL=begin+offset;
 
 	if(l==NULL){
-	  size16 *buff=malloc(fs(v)*sizeof(size16));
+	  int16_t *buff=malloc(fs(v)*sizeof(int16_t));
 	  l=c_alloc(buff,fb(v),fs(v));
-	  memcpy(buff,fv(v),fs(v)*sizeof(size16));
+	  memcpy(buff,fv(v),fs(v)*sizeof(int16_t));
 	}
 
 	i_analyze_rift_r(rv(root),cv(l),
@@ -639,9 +639,9 @@ static long i_stage2_each(root_block *root, v_fragment *v,
 	long endL=end+offset;
 	
 	if(l==NULL){
-	  size16 *buff=malloc(fs(v)*sizeof(size16));
+	  int16_t *buff=malloc(fs(v)*sizeof(int16_t));
 	  l=c_alloc(buff,fb(v),fs(v));
-	  memcpy(buff,fv(v),fs(v)*sizeof(size16));
+	  memcpy(buff,fv(v),fs(v)*sizeof(int16_t));
 	}
 
 	i_analyze_rift_f(rv(root),cv(l),
@@ -726,7 +726,7 @@ static long i_stage2_each(root_block *root, v_fragment *v,
 	long sizeA=rs(root);
 	long sizeB;
 	long vecbegin;
-	size16 *vector;
+	int16_t *vector;
 	  
 	if(l){
 	  sizeB=cs(l);
@@ -785,8 +785,8 @@ static int i_init_root(root_block *root, v_fragment *v,long begin,
     }
 
     {
-      size16 *buff=malloc(fs(v)*sizeof(size16));
-      memcpy(buff,fv(v),fs(v)*sizeof(size16));
+      int16_t *buff=malloc(fs(v)*sizeof(int16_t));
+      memcpy(buff,fv(v),fs(v)*sizeof(int16_t));
       root->vector=c_alloc(buff,fb(v),fs(v));
     }    
 
@@ -971,7 +971,7 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
       gend=min(gend+OVERLAP_ADJ,cend);
 
       if(rv(root)==NULL){
-	size16 *buff=malloc(cs(graft));
+	int16_t *buff=malloc(cs(graft));
 	memcpy(buff,cv(graft),cs(graft));
 	rc(root)=c_alloc(buff,cb(graft),cs(graft));
       }else{
@@ -986,7 +986,7 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
 
   /* No?  Fine.  Great.  Write in some zeroes :-P */
   {
-    void *temp=calloc(CD_FRAMESIZE_RAW,sizeof(size16));
+    void *temp=calloc(CD_FRAMESIZE_RAW,sizeof(int16_t));
 
     if(rv(root)==NULL){
       rc(root)=c_alloc(temp,post,CD_FRAMESIZE_RAW);
@@ -1059,7 +1059,7 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
   long driftcomp=(float)p->dyndrift/CD_FRAMEWORDS+.5;
   c_block *new=NULL;
   root_block *root=&p->root;
-  size16 *buffer=NULL;
+  int16_t *buffer=NULL;
   char *flags=NULL;
   long sofar;
   long dynoverlap=(p->dynoverlap+CD_FRAMEWORDS-1)/CD_FRAMEWORDS; 
@@ -1188,7 +1188,7 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
 /* The returned buffer is *not* to be freed by the caller.  It will
    persist only until the next call to paranoia_read() for this p */
 
-size16 *paranoia_read(cdrom_paranoia *p, void(*callback)(long,int)){
+int16_t *paranoia_read(cdrom_paranoia *p, void(*callback)(long,int)){
 
   long beginword=p->cursor*(CD_FRAMEWORDS);
   long endword=beginword+CD_FRAMEWORDS;

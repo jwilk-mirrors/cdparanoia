@@ -136,7 +136,7 @@ static int Dummy (cdrom_drive *d,int Switch){
 
 static int verify_read_command(cdrom_drive *d){
   int i;
-  size16 *buff=malloc(CD_FRAMESIZE_RAW);
+  int16_t *buff=malloc(CD_FRAMESIZE_RAW);
   int audioflag=0;
 
   cdmessage(d,"Verifying drive can read CDDA...\n");

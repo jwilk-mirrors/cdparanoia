@@ -105,7 +105,7 @@ long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
 	
 	if(d->bigendianp!=bigendianp()){
 	  int i;
-	  unsigned size16 *p=(unsigned size16 *)buffer;
+	  u_int16_t *p=(u_int16_t *)buffer;
 	  long els=sectors*CD_FRAMESIZE_RAW/2;
 	  
 	  for(i=0;i<els;i++)p[i]=swap16(p[i]);
