@@ -15,6 +15,7 @@
 #define MIN_SECTOR_EPSILON  128     /* words */
 #define MIN_SECTOR_BACKUP    16     /* sectors */
 #define JIGGLE_MODULO        15     /* sectors */
+#define MIN_SILENCE_BOUNDARY 1024   /* 16 bit words */
 
 #define min(x,y) ((x)>(y)?(y):(x))
 #define max(x,y) ((x)<(y)?(y):(x))
@@ -116,6 +117,8 @@ typedef struct root_block{
   struct cdrom_paranoia *p;
 
   c_block *vector; /* doesn't use any sorting */
+  int silenceflag;
+  long silencebegin;
 } root_block;
 
 typedef struct offsets{

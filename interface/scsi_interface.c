@@ -219,7 +219,9 @@ static int handle_scsi_cmd(cdrom_drive *d,
 
     FD_ZERO(&fdset);
     FD_SET(d->cdda_fd,&fdset);
-    tv.tv_sec=5;
+    tv.tv_sec=60; /* Increased to 1m for plextor, as the drive will
+                     try to get through rough spots on its own and
+                     this can take time 19991129 */
     tv.tv_usec=0;
 
     while(1){
@@ -255,7 +257,9 @@ static int handle_scsi_cmd(cdrom_drive *d,
 
     FD_ZERO(&rset);
     FD_SET(d->cdda_fd,&rset);
-    tv.tv_sec=15;
+    tv.tv_sec=60; /* Increased to 1m for plextor, as the drive will
+                     try to get through rough spots on its own and
+                     this can take time 19991129 */
     tv.tv_usec=0;
 
     while(1){

@@ -22,10 +22,20 @@ BINDIR=@bindir@
 MANDIR=@mandir@
 INCLUDEDIR=@includedir@
 LIBDIR=@libdir@
-LIBS = -lm
 PWD = $(shell pwd)
 
 OFILES = main.o report.o header.o buffering_write.o
+
+export STATIC 
+ifeq ($(STATIC),TRUE)
+	LIBS = interface/libcdda_interface.a paranoia/libcdda_paranoia.a \
+		-static -lm
+	LIBDEP = interface/libcdda_interface.a paranoia/libcdda_paranoia.a
+else
+	LIBS = -lcdda_interface -lcdda_paranoia -lm
+	LIBDEP = interface/libcdda_interface.so paranoia/libcdda_paranoia.so
+endif
+
 
 all: 	
 	cd interface && $(MAKE) all
@@ -36,7 +46,7 @@ all:
 debug:  
 	cd interface && $(MAKE) debug
 	cd paranoia && $(MAKE) debug
-	$(MAKE) cdparanoia CFLAGS="$(DEBUG)" 
+	$(MAKE) cdparanoia CFLAGS="$(DEBUG)" STATIC=TRUE
 
 test:	
 	cd interface && $(MAKE) all
@@ -60,10 +70,10 @@ install:
 	$(INSTALL) -p -m 0644 $(srcdir)/interface/libcdda_interface.so.0.9.5 $(LIBDIR)
 	$(INSTALL) -p -m 0644 $(srcdir)/interface/libcdda_interface.a $(LIBDIR)
 
-cdparanoia:	$(OFILES) slib
+cdparanoia:	$(OFILES) $(LIBDEP)
 		$(LD) $(CFLAGS) $(LDFLAGS) $(OFILES) \
 		-L$(PWD)/paranoia -L$(PWD)/interface \
-		-lcdda_paranoia -lcdda_interface -o cdparanoia $(LIBS)
+		-o cdparanoia $(LIBS)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

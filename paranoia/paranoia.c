@@ -9,10 +9,10 @@
 /* immediate todo:: */
 /* Allow disabling of root fixups? */ 
 /* Dupe bytes are creeping into cases that require greater overlap
-   *than a single fragment can provide.  We need to check against a
-   *larger area* (+/-32 sectors of root?) to better eliminate
-   *dupes. Of course this leads to other problems... Is it actually a
-   *practically solvable problem? */
+   than a single fragment can provide.  We need to check against a
+   larger area* (+/-32 sectors of root?) to better eliminate
+   dupes. Of course this leads to other problems... Is it actually a
+   practically solvable problem? */
 /* Bimodal overlap distributions break us. */
 /* scratch detection/tolerance not implemented yet */
 
@@ -36,13 +36,13 @@
 
 /***************************************************************
 
-  Silence case continues to dog us; let's try the following to put the
-  damned thing to rest (stage 2 mods only):
+  Silence.  "It's BAAAAAAaaack."
 
-  a) at root fixup stage: past the rift is one silence and the other
-     signal?  Believe the signal.
-  b) if signal is in root, truncate the fragment.  if the signal is in
-     the fragment, truncate root
+  audio is now treated as great continents of values floating on a
+  mantle of molten silence.  Silence is not handled by basic
+  verification at all; we simply anchor sections of nonzero audio to a
+  position and fill in everything else as silence.  We also note the
+  audio that interfaces with silence; an edge must be 'wet'.
 
   **************************************************************/
 
@@ -179,9 +179,9 @@ static inline long do_const_sync(c_block *A,
   return(0);
 }
 
-/* post is w.r.t. B.  9.3 is a bit different; in stage one, we post
-   from new.  In stage 2 we post from root. Begin, end, offset count
-   from B's frame of reference */
+/* post is w.r.t. B.  in stage one, we post from old.  In stage 2 we
+   post from root. Begin, end, offset count from B's frame of
+   reference */
 
 static inline long try_sort_sync(cdrom_paranoia *p,
 				 sort_info *A,char *Aflags,
@@ -247,18 +247,18 @@ static inline void stage1_matched(c_block *old,c_block *new,
      (new->flags[newadjbegin]&1) ||
      (old->flags[oldadjbegin]&1)){
     if(matchoffset)
-      (*callback)(matchbegin,PARANOIA_CB_FIXUP_EDGE);
+      if(callback)(*callback)(matchbegin,PARANOIA_CB_FIXUP_EDGE);
   }else
-    (*callback)(matchbegin,PARANOIA_CB_FIXUP_ATOM);
+    if(callback)(*callback)(matchbegin,PARANOIA_CB_FIXUP_ATOM);
   
   if(matchend-matchoffset>=ce(new) ||
      (new->flags[newadjend]&1) ||
      matchend>=ce(old) ||
      (old->flags[oldadjend]&1)){
     if(matchoffset)
-      (*callback)(matchend,PARANOIA_CB_FIXUP_EDGE);
+      if(callback)(*callback)(matchend,PARANOIA_CB_FIXUP_EDGE);
   }else
-    (*callback)(matchend,PARANOIA_CB_FIXUP_ATOM);
+    if(callback)(*callback)(matchend,PARANOIA_CB_FIXUP_ATOM);
   
   /* Mark the verification flags.  Don't mark the first or
      last OVERLAP/2 elements so that overlapping fragments
@@ -304,7 +304,19 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
 		       callback)==1){
 	
 	matched+=matchend-matchbegin;
-	stage1_matched(old,new,matchbegin,matchend,matchoffset,callback);
+
+	/* purely cosmetic: if we're matching zeros, don't use the
+           callback because they will appear to be all skewed */
+	{
+	  long j=matchbegin-cb(old);
+	  long end=matchend-cb(old);
+	  for(;j<end;j++)if(cv(old)[j]!=0)break;
+	  if(j<end){
+	    stage1_matched(old,new,matchbegin,matchend,matchoffset,callback);
+	  }else{
+	    stage1_matched(old,new,matchbegin,matchend,matchoffset,NULL);
+	  }
+	}
 	ret++;
 	if(matchend-1>j)j=matchend-1;
       }
@@ -366,8 +378,8 @@ typedef struct sync_result {
   long end;
 } sync_result;
 
-static long i_iterate_stage2(cdrom_paranoia *p,
-			     v_fragment *v,int multi,
+/* do *not* match using zero posts */
+static long i_iterate_stage2(cdrom_paranoia *p,v_fragment *v,
 			     sync_result *r,void(*callback)(long,int)){
   root_block *root=&(p->root);
   long matchbegin=-1,matchend=-1,offset;
@@ -382,17 +394,13 @@ static long i_iterate_stage2(cdrom_paranoia *p,
 
   (*callback)(fb(v),PARANOIA_CB_VERIFY);
 
-  /* just a bit of v unless multi; determine the correct area */
+  /* just a bit of v; determine the correct area */
   fbv=max(fb(v),rb(root)-p->dynoverlap);
-  /* stage 2 silence handling mod A,B */
-  if(!multi){
-    /* we want to avoid zeroes */
-    while(fbv<fe(v) && fv(v)[fbv-fb(v)]==0)fbv++;
-    if(fbv==fe(v))return(0);
-    fev=min(min(fbv+256,re(root)+p->dynoverlap),fe(v));
-  }else{
-    fev=min(re(root)+p->dynoverlap,fe(v));
-  }
+
+  /* we want to avoid zeroes */
+  while(fbv<fe(v) && fv(v)[fbv-fb(v)]==0)fbv++;
+  if(fbv==fe(v))return(0);
+  fev=min(min(fbv+256,re(root)+p->dynoverlap),fe(v));
   
   {
     /* spread the search area a bit.  We post from root, so containment
@@ -403,15 +411,13 @@ static long i_iterate_stage2(cdrom_paranoia *p,
     long j;
     
     sort_setup(i,fv(v),&fb(v),fs(v),fbv,fev);
-    
     for(j=searchbegin;j<searchend;j+=23){
-      if(!multi)
-	while(j<searchend && rv(root)[j-rb(root)]==0)j++;
+      while(j<searchend && rv(root)[j-rb(root)]==0)j++;
       if(j==searchend)break;
-     
+
       if(try_sort_sync(p,i,NULL,rc(root),j,
 		       &matchbegin,&matchend,&offset,callback)){
-
+	
 	r->begin=matchbegin;
 	r->end=matchend;
 	r->offset=-offset;
@@ -424,8 +430,72 @@ static long i_iterate_stage2(cdrom_paranoia *p,
   return(0);
 }
 
-static long i_stage2_each(root_block *root, v_fragment *v,
-			  int freeit,int multi,
+/* simple test for a root vector that ends in silence */
+static void i_silence_test(root_block *root){
+  size16 *vec=rv(root);
+  long end=re(root)-rb(root)-1;
+  long j;
+  
+  for(j=end-1;j>=0;j--)if(vec[j]!=0)break;
+  if(j<0 || end-j>MIN_SILENCE_BOUNDARY){
+    if(j<0)j=0;
+    root->silenceflag=1;
+    root->silencebegin=rb(root)+j;
+    if(root->silencebegin<root->returnedlimit)
+      root->silencebegin=root->returnedlimit;
+  }
+}
+
+/* match into silence vectors at offset zero if at all possible.  This
+   also must be called with vectors in ascending begin order in case
+   there are nonzero islands */
+static long i_silence_match(root_block *root, v_fragment *v,int freeit,
+			  void(*callback)(long,int)){
+
+  cdrom_paranoia *p=v->p;
+  size16 *vec=fv(v);
+  long end=fs(v),begin;
+  long j;
+
+  /* does this vector begin wet? */
+  if(end<MIN_SILENCE_BOUNDARY)return(0);
+  for(j=0;j<end;j++)if(vec[j]!=0)break;
+  if(j<MIN_SILENCE_BOUNDARY)return(0);
+  j+=fb(v);
+
+  /* do we have an 'effortless' overlap? */
+  begin=max(fb(v),root->silencebegin);
+  end=min(j,re(root));
+  
+  if(begin<end){
+    long voff=begin-fb(v);
+
+    if(voff)(*callback)(begin,PARANOIA_CB_FIXUP_EDGE);
+    if(end<re(root))(*callback)(end,PARANOIA_CB_FIXUP_EDGE);
+
+    if(begin-rb(root)>0)c_remove(rc(root),begin-rb(root),-1);
+    c_append(rc(root),vec+voff,fs(v)-voff);
+    offset_add_value(p,&p->stage2,0,callback);
+  }else{
+    if(j<begin){
+      /* OK, we'll have to force it a bit as the root is jittered
+         forward */
+      long voff=j-fb(v);
+      c_remove(rc(root),root->silencebegin-rb(root),-1);
+      c_append(rc(root),vec+voff,fs(v)-voff);
+      offset_add_value(p,&p->stage2,end-begin,callback);
+
+    }else
+      return(0);
+  }
+
+  /* test the new root vector for ending in silence */
+  root->silenceflag=0;
+  i_silence_test(root);
+  return(1);
+}
+
+static long i_stage2_each(root_block *root, v_fragment *v,int freeit,
 			  void(*callback)(long,int)){
 
   cdrom_paranoia *p=v->p;
@@ -438,7 +508,7 @@ static long i_stage2_each(root_block *root, v_fragment *v,
   }else{
     sync_result r;
 
-    if(i_iterate_stage2(p,v,multi,&r,callback)){
+    if(i_iterate_stage2(p,v,&r,callback)){
 
       long begin=r.begin-rb(root);
       long end=r.end-rb(root);
@@ -659,6 +729,8 @@ static long i_stage2_each(root_block *root, v_fragment *v,
 	  if(sizeB-offset-end)c_append(rc(root),vector+end+offset,
 					 sizeB-offset-end);
 	  
+	  i_silence_test(root);
+
 	  /* add offset into dynoverlap stats */
 	  offset_add_value(p,&p->stage2,offset+vecbegin-rb(root),callback);
 	}
@@ -669,7 +741,7 @@ static long i_stage2_each(root_block *root, v_fragment *v,
       
     }else{
       /* D'oh.  No match.  What to do with the fragment? */
-      if(fe(v)+dynoverlap<re(root)){
+      if(fe(v)+dynoverlap<re(root) && !root->silenceflag){
 	/* It *should* have matched.  No good; free it. */
 	if(freeit)free_v_fragment(v);
       }
@@ -698,6 +770,9 @@ static int i_init_root(root_block *root, v_fragment *v,long begin,
       memcpy(buff,fv(v),fs(v)*sizeof(size16));
       root->vector=c_alloc(buff,fb(v),fs(v));
     }    
+
+    i_silence_test(root);
+
     return(1);
   }else
     return(0);
@@ -710,13 +785,17 @@ static int vsort(const void *a,const void *b){
 static int i_stage2(cdrom_paranoia *p,long beginword,long endword,
 			  void(*callback)(long,int)){
 
-  int flag=1,multi=0,ret=0;
+  int flag=1,ret=0;
   root_block *root=&(p->root);
 
 #ifdef NOISY
   fprintf(stderr,"Fragments:%ld\n",p->fragments->active);
   fflush(stderr);
 #endif
+
+  /* even when the 'silence flag' is lit, we try to do non-silence
+     matching in the event that there are still audio vectors with
+     content to be sunk before the silence */
 
   while(flag){
     /* loop through all the current fragments */
@@ -732,8 +811,13 @@ static int i_stage2(cdrom_paranoia *p,long beginword,long endword,
 
     flag=0;
     if(count){
+      /* sorted in ascending order of beginning */
       qsort(list,active,sizeof(v_fragment *),&vsort);
       
+      /* we try a nonzero based match even if in silent mode in
+	 the case that there are still cached vectors to sink
+	 behind continent->ocean boundary */
+
       for(count=0;count<active;count++){
 	first=list[count];
 	if(first->one){
@@ -744,22 +828,28 @@ static int i_stage2(cdrom_paranoia *p,long beginword,long endword,
 	      ret++;
 	    }
 	  }else{
-	    if(i_stage2_each(root,first,1,multi,callback)){
+	    if(i_stage2_each(root,first,1,callback)){
 	      ret++;
 	      flag=1;
-	      multi=0;
 	    }
 	  }
 	}
       }
-    }
-    if(!flag){
-      if(!multi){
-	multi=1;
-	flag=1;
+
+      /* silence handling */
+      if(p->root.silenceflag){
+	for(count=0;count<active;count++){
+	  first=list[count];
+	  if(first->one){
+	    if(rv(root)!=NULL){
+	      if(i_silence_match(root,first,1,callback)){
+		ret++;
+		flag=1;
+	      }
+	    }
+	  }
+	}
       }
-    }else{
-      multi=0;
     }
   }
   return(ret);
