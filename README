@@ -48,11 +48,8 @@ To build the cdparanoia utility:
 
 	./configure
 	make all
-and as root
-	make install
-
-This will compile cdparanoia and copy the binary to /usr/local/bin
-and the man page to /usr/local/man/man1 (defaults).
+	
+This will compile cdparanoia; there's no automated install yet, sorry.
 
 Unlike cdda2wav, cdparanoia is smart enough to find CDROM drives
 and the appropriate interfaces automatically; if you have only one
@@ -61,8 +58,7 @@ more than one CDROM drive and cdparanoia finds the wrong one,
 you'll need to tell it which device to use on the command line (see
 the man page and Troubleshooting below).
 
-
-To build the cdparanoia.a library:
+To build the cdda_interface.a and cdda_paranoia.a libraries:
 
 	./configure
 	make lib

@@ -19,6 +19,15 @@
  *
  * last changes:
  *   22.01.98 - first version
+ *   15.02.98 - alpha 2: juggled two includes from interface/low_interface.h
+ *                       that move contents in Linux 2.1
+ *
+ *                       Linked status bar to isatty to avoid it appearing
+ *                       in a redirected file.
+ *                       (suggested by Matija Nalis <mnalis@public.srce.hr>)
+ * 
+ *                       Played with making TOC less verbose.
+ *                       
  */
 
 #include <stdio.h>
@@ -165,9 +174,9 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
 
 static void display_toc(cdrom_drive *d){
   int i;
-  report("\nTable of contents (audio tracks only):\n"
-	 "track        length               begin                  flags\n"
-	 "============================================================================");
+  report("Table of contents (audio tracks only):\n"
+	 "track        length               begin        copy pre ch\n"
+	 "===========================================================");
   
   for(i=1;i<=d->tracks;i++)
     if(cdda_track_audiop(d,i)){
@@ -177,13 +186,13 @@ static void display_toc(cdrom_drive *d){
       long off=cdda_track_lastsector(d,i)-sec+1;
       
       sprintf(buffer,
-	      "%3d.  %7ld [%02d:%02d.%02d]  %7ld [%02d:%02d.%02d]  %s, %s, %s",
+	      "%3d.  %7ld [%02d:%02d.%02d]  %7ld [%02d:%02d.%02d]  %s %s %s",
 	      i,
 	      off,(int)(off/(60*75)),(int)((off/75)%60),(int)(off%75),
 	      sec,(int)(sec/(60*75)),(int)((sec/75)%60),(int)(sec%75),
-	      cdda_track_copyp(d,i)?"copy OK":"no copy",
-	      cdda_track_preemp(d,i)?"preemp":"no preemp",
-	      cdda_track_channels(d,i)==2?"2 channels":"4 channels");
+	      cdda_track_copyp(d,i)?"  OK":"  no",
+	      cdda_track_preemp(d,i)?" yes":"  no",
+	      cdda_track_channels(d,i)==2?" 2":" 4");
       report(buffer);
     }
   report("");
@@ -281,67 +290,71 @@ static void callback(long sector, int function){
 
   sector/=CD_FRAMESIZE_RAW/2;
 
-  position=((float)(sector-callbegin)/
-		    (callend-callbegin))*graph;
-
-  if(function==PARANOIA_CB_READ)if(sector>c_sector)c_sector=sector;
-
-  aheadposition=((float)(c_sector-callbegin)/
-		 (callend-callbegin))*graph;
-
-
-  if(position<graph && position>=0)
-    switch(function){
-    case PARANOIA_CB_FIXUP_EDGE:
-      if(dispcache[position]==' ') 
-	dispcache[position]='-';
+  if(isatty(STDERR_FILENO)){  /* else don;t bother; it's probably being 
+				 redirected */
+    position=((float)(sector-callbegin)/
+	      (callend-callbegin))*graph;
+    
+    aheadposition=((float)(c_sector-callbegin)/
+		   (callend-callbegin))*graph;
+    
+    
+    if(position<graph && position>=0)
+      switch(function){
+      case PARANOIA_CB_VERIFY:
+	if(sector>c_sector)c_sector=sector;
+	break;
+      case PARANOIA_CB_FIXUP_EDGE:
+	if(dispcache[position]==' ') 
+	  dispcache[position]='-';
+	break;
+      case PARANOIA_CB_FIXUP_ATOM:
+	if(dispcache[position]==' ' ||
+	   dispcache[position]=='-')
+	  dispcache[position]='+';
+	break;
+      case PARANOIA_CB_SKIP:
+	dispcache[position]='X';
+	break;
+      }
+    
+    switch(last){
+    case 0:
+      heartbeat=' ';
       break;
-    case PARANOIA_CB_FIXUP_ATOM:
-      if(dispcache[position]==' ' ||
-	 dispcache[position]=='-')
-	dispcache[position]='+';
+    case 1:case 7:
+      heartbeat='.';
+    break;
+    case 2:case 6:
+      heartbeat='o';
       break;
-    case PARANOIA_CB_SKIP:
-      dispcache[position]='X';
+    case 3:case 5:  
+      heartbeat='0';
+      break;
+    case 4:
+      heartbeat='O';
       break;
     }
-
-  switch(last){
-  case 0:
-    heartbeat=' ';
-    break;
-  case 1:case 7:
-    heartbeat='.';
-    break;
-  case 2:case 6:
-    heartbeat='o';
-    break;
-  case 3:case 5:  
-    heartbeat='0';
-    break;
-  case 4:
-    heartbeat='O';
-    break;
-  }
-  
-  if(!quiet){
-    long test;
-    gettimeofday(&thistime,NULL);
-    test=thistime.tv_sec*10+thistime.tv_usec/100000;
     
-    if(lasttime!=test){
-      last++;
-      lasttime=test;
-      if(last>7)last=0;
-
-      sprintf(buffer,
-	      "\r  (== PROGRESS == [%s] == %06ld == %c ==)     ",
-	      dispcache,c_sector,heartbeat);
+    if(!quiet){
+      long test;
+      gettimeofday(&thistime,NULL);
+      test=thistime.tv_sec*10+thistime.tv_usec/100000;
       
-      if(aheadposition>=0 && aheadposition<graph)
-	buffer[aheadposition+20]='>';
-      
-      fprintf(stderr,buffer);
+      if(lasttime!=test){
+	last++;
+	lasttime=test;
+	if(last>7)last=0;
+	
+	sprintf(buffer,
+		"\r  (== PROGRESS == [%s] == %06ld == %c ==)     ",
+		dispcache,c_sector,heartbeat);
+	
+	if(aheadposition>=0 && aheadposition<graph)
+	  buffer[aheadposition+20]='>';
+	
+	fprintf(stderr,buffer);
+      }
     }
   }
 }

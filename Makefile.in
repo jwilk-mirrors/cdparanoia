@@ -27,8 +27,7 @@ debug:
 	$(MAKE) target CFLAGS="$(DEBUG)" 
 	$(MAKE) tests CFLAGS="$(OPT)"
 
-tests:	generate_test.o verify_test.o
-	$(LD) $(CFLAGS) $(LDFLAGS) generate_test.o -o generate_test
+tests:	verify_test.o
 	$(LD) $(CFLAGS) $(LDFLAGS) verify_test.o -o verify_test
 
 lib:	
@@ -45,11 +44,11 @@ clean:
 	cd interface && $(MAKE) clean
 	cd paranoia && $(MAKE) clean
 	-rm -f cdparanoia *~ config.* *.o *.wav *.aifc *.raw \
-		verify_test generate_test core gmon.out
+		verify_test core gmon.out
 
 distclean:
 	cd interface && $(MAKE) distclean
 	cd paranoia && $(MAKE) distclean
 	-rm -f cdparanoia *~ config.* *.o *.wav *.aifc *.raw test.file \
-	Makefile verify_test generate_test core gmon.out
+	Makefile verify_test core gmon.out
  
