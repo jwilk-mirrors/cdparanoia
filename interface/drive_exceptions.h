@@ -1,7 +1,8 @@
 extern int scsi_enable_cdda(cdrom_drive *,int);
 extern long scsi_read_mmc(cdrom_drive *,void *,long,long);
 extern long scsi_read_mmc2(cdrom_drive *,void *,long,long);
-extern long scsi_read_D4(cdrom_drive *,void *,long,long);
+extern long scsi_read_D4_10(cdrom_drive *,void *,long,long);
+extern long scsi_read_D4_12(cdrom_drive *,void *,long,long);
 extern long scsi_read_D8(cdrom_drive *,void *,long,long);
 extern long scsi_read_28(cdrom_drive *,void *,long,long);
 extern long scsi_read_A8(cdrom_drive *,void *,long,long);
@@ -55,7 +56,7 @@ static exception scsi_list[]={
   {"PLEXTOR",                     -1,   0,            NULL,        NULL,  0,0},
   {"SONY",                        -1,   0,            NULL,        NULL,  0,0},
 
-  {"NEC",                         -1,   0,            NULL,scsi_read_D4, 0,0},
+  {"NEC",                         -1,   0,           NULL,scsi_read_D4_10,0,0},
 
   {NULL,0,0,NULL,NULL,0}};
 
