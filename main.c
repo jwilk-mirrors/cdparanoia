@@ -376,7 +376,7 @@ static void callback(long inpos, int function){
   int graph=30;
   char buffer[256];
   static long c_sector=0,v_sector=0;
-  static char dispcache[30]="                              ";
+  static char dispcache[]="                              ";
   static int last=0;
   static long lasttime=0;
   long sector,osector=0;
@@ -901,7 +901,7 @@ int main(int argc,char *argv[]){
     report("\nUnable to open disc.  Is there an audio CD in the drive?");
     exit(1);
   case -6:
-    report("\nCdparanoia could not find a way to read audio from this drive.");
+    report("\ncdparanoia could not find a way to read audio from this drive.");
     exit(1);
   case 0:
     break;
