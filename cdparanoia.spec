@@ -3,7 +3,7 @@
 
 Name: cdparanoia
 Version: %{realver}
-Release: 5
+Release: 6
 License: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
@@ -46,31 +46,30 @@ applications which read CD Digital Audio disks.
 
 %build
 rm -rf $RPM_BUILD_ROOT
-%configure
+%configure --includedir=%{_includedir}/cdda
 make  
 
 %install
 rm -rf $RPM_BUILD_ROOT
 
 install -d $RPM_BUILD_ROOT%{_bindir}
-install -d $RPM_BUILD_ROOT%{_includedir}
+install -d $RPM_BUILD_ROOT%{_includedir}/cdda
 install -d $RPM_BUILD_ROOT%{_libdir}
 install -d $RPM_BUILD_ROOT%{_mandir}/man1
 install -m 0755 -s cdparanoia $RPM_BUILD_ROOT%{_bindir}
 install -m 0644 cdparanoia.1 $RPM_BUILD_ROOT%{_mandir}/man1/ 
-install -m 0644 paranoia/cdda_paranoia.h $RPM_BUILD_ROOT%{_includedir}
+install -m 0644 utils.h paranoia/cdda_paranoia.h interface/cdda_interface.h \
+	$RPM_BUILD_ROOT%{_includedir}/cdda
 install -m 0755 paranoia/libcdda_paranoia.so.0.%{ver} \
+	interface/libcdda_interface.so.0.%{ver} \
 	$RPM_BUILD_ROOT%{_libdir}
-install -m 0755 paranoia/libcdda_paranoia.a $RPM_BUILD_ROOT%{_libdir}
-install -m 0644 interface/cdda_interface.h $RPM_BUILD_ROOT%{_includedir}
-install -m 0755 interface/libcdda_interface.so.0.%{ver} \
+install -m 0755 paranoia/libcdda_paranoia.a interface/libcdda_interface.a \
 	$RPM_BUILD_ROOT%{_libdir}
-install -m 0755 interface/libcdda_interface.a $RPM_BUILD_ROOT%{_libdir}
 
-(	cd $RPM_BUILD_ROOT%{_libdir} ; 
-	ln -s libcdda_paranoia.so.0.%{ver} libcdda_paranoia.so ; 
-	ln -s libcdda_interface.so.0.%{ver} libcdda_interface.so
-)
+pushd $RPM_BUILD_ROOT%{_libdir}
+ln -s libcdda_paranoia.so.0.%{ver} libcdda_paranoia.so
+ln -s libcdda_interface.so.0.%{ver} libcdda_interface.so
+popd
 
 %post -n cdparanoia-libs
 /sbin/ldconfig
@@ -95,10 +94,15 @@ rm -rf $RPM_BUILD_ROOT
 
 %files -n cdparanoia-devel
 %defattr(-,root,root)
-%{_includedir}/*
+%{_includedir}/cdda/*
 %{_libdir}/*.a
 
 %changelog
+* Thu Dec  6 2001 Peter Jones <pjones@redhat.com> alpha9.8-6
+- move includes to %{_includedir}/cdda/
+- add utils.h to %install
+- clean up %install some.
+
 * Sun Nov  4 2001 Peter Jones <pjones@redhat.com> alpha9.8-5
 - make a -libs package which contains the .so files
 - make the cdparanoia dependancy towards that, not -devel
