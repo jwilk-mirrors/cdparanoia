@@ -45,8 +45,9 @@ applications which read CD Digital Audio disks.
 
 %build
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
+export OPT="${CFLAGS:-%optflags}"
 %configure --includedir=%{_includedir}/cdda
-make  
+make OPT="$OPT"
 
 %install
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
