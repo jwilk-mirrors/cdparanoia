@@ -4,7 +4,7 @@
 Summary: A Compact Disc Digital Audio (CDDA) extraction tool (or ripper).
 Name: cdparanoia
 Version: %{realver}
-Release: 8
+Release: 1
 License: GPL
 Group: Applications/Multimedia
 Source: http://www.xiph.org/paranoia/download/%{name}-III-%{realver}.src.tgz 
@@ -76,6 +76,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.a
 
 %changelog
+* Wed Mar 28 2001 Peter Jones <pjones@redhat.com>
+- 9.8 release.
+
 * Tue Feb 27 2001 Karsten Hopp <karsten@redhat.de>
 - fix spelling error in description
 
