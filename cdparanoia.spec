@@ -44,6 +44,7 @@ applications which read CD Digital Audio disks.
 %setup -q -n %{name}-III-%{realver}
 
 %build
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 %configure --includedir=%{_includedir}/cdda
 make  
 
