@@ -26,7 +26,7 @@
 typedef struct TOC {	/* structure of table of contents */
   unsigned char bFlags;
   unsigned char bTrack;
-  size32 dwStartSector;
+  int32_t dwStartSector;
 } TOC;
 
 /* interface types */

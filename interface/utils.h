@@ -13,11 +13,11 @@ static inline int bigendianp(void){
   return(1);
 }
 
-static inline size32 swap32(size32 x){
-  return((((unsigned size32)x & 0x000000ffU) << 24) | 
-	 (((unsigned size32)x & 0x0000ff00U) <<  8) | 
-	 (((unsigned size32)x & 0x00ff0000U) >>  8) | 
-	 (((unsigned size32)x & 0xff000000U) >> 24));
+static inline int32_t swap32(int32_t x){
+  return((((unsigned int32_t)x & 0x000000ffU) << 24) | 
+	 (((unsigned int32_t)x & 0x0000ff00U) <<  8) | 
+	 (((unsigned int32_t)x & 0x00ff0000U) >>  8) | 
+	 (((unsigned int32_t)x & 0xff000000U) >> 24));
 }
 
 static inline size16 swap16(size16 x){
@@ -27,7 +27,7 @@ static inline size16 swap16(size16 x){
 
 #if BYTE_ORDER == LITTLE_ENDIAN
 
-static inline size32 be32_to_cpu(size32 x){
+static inline int32_t be32_to_cpu(int32_t x){
   return(swap32(x));
 }
 
@@ -35,7 +35,7 @@ static inline size16 be16_to_cpu(size16 x){
   return(swap16(x));
 }
 
-static inline size32 le32_to_cpu(size32 x){
+static inline int32_t le32_to_cpu(int32_t x){
   return(x);
 }
 
@@ -45,7 +45,7 @@ static inline size16 le16_to_cpu(size16 x){
 
 #else
 
-static inline size32 be32_to_cpu(size32 x){
+static inline int32_t be32_to_cpu(int32_t x){
   return(x);
 }
 
@@ -53,7 +53,7 @@ static inline size16 be16_to_cpu(size16 x){
   return(x);
 }
 
-static inline size32 le32_to_cpu(size32 x){
+static inline int32_t le32_to_cpu(int32_t x){
   return(swap32(x));
 }
 
@@ -64,11 +64,11 @@ static inline size16 le16_to_cpu(size16 x){
 
 #endif
 
-static inline size32 cpu_to_be32(size32 x){
+static inline int32_t cpu_to_be32(int32_t x){
   return(be32_to_cpu(x));
 }
 
-static inline size32 cpu_to_le32(size32 x){
+static inline int32_t cpu_to_le32(int32_t x){
   return(le32_to_cpu(x));
 }
 

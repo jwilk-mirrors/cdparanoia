@@ -603,7 +603,7 @@ static int scsi_read_toc (cdrom_drive *d){
 /* a contribution from Boris for IMS cdd 522 */
 /* check this for ACER/Creative/Foo 525,620E,622E, etc? */
 static int scsi_read_toc2 (cdrom_drive *d){
-  unsigned size32 foo,bar;
+  unsigned int32_t foo,bar;
 
   int i;
   unsigned tracks;
