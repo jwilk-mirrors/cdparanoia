@@ -95,7 +95,7 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
     if(chars>0){
       offset[chars]='\0';
       track=atoi(offset);
-      if(track<1 || track>d->tracks){
+      if(track<0 || track>d->tracks){ /*take track 0 as pre-gap of 1st track*/
 	char buffer[256];
 	sprintf(buffer,"Track #%ld does not exist.",track);
 	report(buffer);
@@ -245,12 +245,16 @@ VERSION"\n"
 
 "  -c --force-cdrom-little-endian  : force treating drive as little endian\n"
 "  -C --force-cdrom-big-endian     : force treating drive as big endian\n"
-"  -n --force-default-sectors  <n> : force default number of sectors in read\n"
+"  -n --force-default-sectors <n>  : force default number of sectors in read\n"
 "                                    to n sectors\n"
+"  -o --force-search-overlap  <n>  : force minimum overlap search during\n"
+"                                    verification to n sectors\n"
 "  -d --force-cdrom-device   <dev> : use specified device; disallow \n"
 "                                    autosense\n"
 "  -g --force-generic-device <dev> : use specified generic scsi device\n\n"
 
+"  -z --never-skip                 : never accept any less than perfect\n"
+"                                    data reconstruction (don't allow 'V's)\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
 "  -Y --disable-extra-paranoia     : only do cdda2wav-style overlap checking\n"
 "  -X --disable-scratch-detection  : do not look for scratches\n"
@@ -271,6 +275,7 @@ VERSION"\n"
 "<space> No corrections needed\n"
 "   -    Jitter correction required\n"
 "   +    Unreported loss of streaming/other error in read\n"
+"   !    Errors are getting through stage 1 but corrected in stage2\n"
 "   e    SCSI/ATAPI transport error (corrected)\n"
 "   V    Uncorrected error/skip\n\n"
 
@@ -324,7 +329,8 @@ long callbegin;
 long callend;
 long callscript=0;
 
-static char *callback_strings[14]={"finished",
+static char *callback_strings[15]={"wrote",
+                                   "finished",
 				   "read",
 				   "verify",
 				   "jitter",
@@ -342,7 +348,7 @@ static char *callback_strings[14]={"finished",
 static void callback(long inpos, int function){
   /*
 
- (== PROGRESS == [--+:---x-------------->           | 007218 01 ] == :-) . ==) 
+ (== PROGRESS == [--+!---x-------------->           | 007218 01 ] == :-) . ==) 
 
  */
 
@@ -366,7 +372,7 @@ static void callback(long inpos, int function){
   
   if(callscript)
     fprintf(stderr,"##: %d [%s] @ %ld\n",
-	    function,(function>=-1&&function<=13?callback_strings[function+1]:
+	    function,(function>=-2&&function<=13?callback_strings[function+2]:
 		      ""),inpos);
 
   if(!quiet){
@@ -447,6 +453,10 @@ static void callback(long inpos, int function){
 	  case PARANOIA_CB_FIXUP_DROPPED:
 	  case PARANOIA_CB_FIXUP_DUPED:
 	    slevel=5;
+	    if(dispcache[position]==' ' ||
+	       dispcache[position]=='-' ||
+	       dispcache[position]=='+')
+	      dispcache[position]='!';
 	    break;
 	  }
     
@@ -539,7 +549,7 @@ static void callback(long inpos, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:d:g:prRwafvqVQhZYXWBi:";
+const char *optstring = "escCn:o:d:g:prRwafvqVQhZzYXWBi:";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -547,6 +557,7 @@ struct option options [] = {
 	{"force-cdrom-little-endian",no_argument,NULL,'c'},
 	{"force-cdrom-big-endian",no_argument,NULL,'C'},
 	{"force-default-sectors",required_argument,NULL,'n'},
+	{"force-search-overlap",required_argument,NULL,'o'},
 	{"force-cdrom-device",required_argument,NULL,'d'},
 	{"force-generic-device",required_argument,NULL,'g'},
 	{"output-raw",no_argument,NULL,'p'},
@@ -567,6 +578,7 @@ struct option options [] = {
 	{"disable-scratch-repair",no_argument,NULL,'W'},
 	{"disable-fragmentation",no_argument,NULL,'F'},
 	{"output-info",required_argument,NULL,'i'},
+	{"never-skip",no_argument,NULL,'z'},
 
 	{NULL,0,NULL,0}
 };
@@ -594,6 +606,7 @@ static void cleanup(void){
 int main(int argc,char *argv[]){
   int force_cdrom_endian=-1;
   int force_cdrom_sectors=-1;
+  int force_cdrom_overlap=-1;
   char *force_cdrom_device=NULL;
   char *force_generic_device=NULL;
   char *span=NULL;
@@ -602,7 +615,8 @@ int main(int argc,char *argv[]){
   int query_only=0;
   int batch=0;
 
-  int paranoia_mode=PARANOIA_MODE_FULL; /* full paranoia */
+  /* full paranoia, but allow skipping */
+  int paranoia_mode=PARANOIA_MODE_FULL^PARANOIA_MODE_NEVERSKIP; 
 
   char *info_file=NULL;
   int out;
@@ -625,6 +639,9 @@ int main(int argc,char *argv[]){
       break;
     case 'n':
       force_cdrom_sectors=atoi(optarg);
+      break;
+    case 'o':
+      force_cdrom_overlap=atoi(optarg);
       break;
     case 'd':
       if(force_cdrom_device)free(force_cdrom_device);
@@ -687,9 +704,13 @@ int main(int argc,char *argv[]){
     case 'Z':
       paranoia_mode=PARANOIA_MODE_DISABLE; 
       break;
+    case 'z':
+      paranoia_mode|=PARANOIA_MODE_NEVERSKIP; 
+      break;
     case 'Y':
-      paranoia_mode=PARANOIA_MODE_OVERLAP; /* cdda2wav style overlap 
+      paranoia_mode|=PARANOIA_MODE_OVERLAP; /* cdda2wav style overlap 
 						check only */
+      paranoia_mode&=~PARANOIA_MODE_VERIFY;
       break;
     case 'X':
       paranoia_mode&=~(PARANOIA_MODE_SCRATCH|PARANOIA_MODE_REPAIR);
@@ -781,7 +802,7 @@ int main(int argc,char *argv[]){
   }
   if(force_cdrom_sectors!=-1){
     if(force_cdrom_sectors<0 || force_cdrom_sectors>100){
-      report("Default sector read size must be 1<= n <= 10\n");
+      report("Default sector read size must be 1<= n <= 100\n");
       cdda_close(d);
       d=NULL;
       exit(1);
@@ -793,6 +814,20 @@ int main(int argc,char *argv[]){
       report(buffer);
       d->nsectors=force_cdrom_sectors;
       d->bigbuff=force_cdrom_sectors*CD_FRAMESIZE_RAW;
+    }
+  }
+  if(force_cdrom_overlap!=-1){
+    if(force_cdrom_overlap<0 || force_cdrom_overlap>75){
+      report("Search overlap sectors must be 0<= n <=75\n");
+      cdda_close(d);
+      d=NULL;
+      exit(1);
+    }
+    {
+      char buffer[256];
+      sprintf(buffer,"Forcing search overlap to %d sectors; "
+	      "ignoring autosense",force_cdrom_overlap);
+      report(buffer);
     }
   }
 
@@ -916,7 +951,8 @@ int main(int argc,char *argv[]){
       long cursor;
       p=paranoia_init(d);
       paranoia_modeset(p,paranoia_mode);
-      
+      if(force_cdrom_overlap!=-1)paranoia_overlapset(p,force_cdrom_overlap);
+
       if(verbose)
 	cdda_verbose_set(d,CDDA_MESSAGE_LOGIT,CDDA_MESSAGE_LOGIT);
       else
@@ -1074,7 +1110,7 @@ int main(int argc,char *argv[]){
 	    for(i=0;i<CD_FRAMESIZE_RAW/2;i++)readbuf[i]=swap16(readbuf[i]);
 	  }
 	  
-	  callback(cursor*(CD_FRAMESIZE_RAW/2)-1,-2);
+	  callback(cursor*(CD_FRAMEWORDS)-1,-2);
 
 	  if(blocking_write(out,(char *)readbuf,CD_FRAMESIZE_RAW)){
 	    report2("Error writing output: %s",strerror(errno));

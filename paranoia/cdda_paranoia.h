@@ -31,6 +31,7 @@
 #define PARANOIA_MODE_OVERLAP     4
 #define PARANOIA_MODE_SCRATCH     8
 #define PARANOIA_MODE_REPAIR      16
+#define PARANOIA_MODE_NEVERSKIP   32
 
 #ifndef CDP_COMPILE
 typedef void cdrom_paranoia;
@@ -41,5 +42,6 @@ extern void paranoia_modeset(cdrom_paranoia *p,int mode);
 extern long paranoia_seek(cdrom_paranoia *p,long seek,int mode);
 extern size16 *paranoia_read(cdrom_paranoia *p,void(*callback)(long,int));
 extern void paranoia_free(cdrom_paranoia *p);
+extern void paranoia_overlapset(cdrom_paranoia *p,long overlap);
 
 #endif

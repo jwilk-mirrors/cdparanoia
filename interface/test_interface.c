@@ -10,36 +10,16 @@
 #include "low_interface.h"
 #include "utils.h"
 
-/* Testing times:
-
-                        6        7        8       9.2      9.3
-   OK                         0:02.66* 0:03.15  0:03.11  0:04.98
-   JITTER_SMALL               0:53.40  0:51.97  0:27.97  0:10.15
-   JITTER_LARGE      0:06.24           5:50.29  2:44.22  0:15.42
-   JITTER_MASSIVE    0:42.19                   10:58.97  0:42.81
-   FRAG_SMALL        0:04.84                    0:33.40  0:12.31
-   FRAG_LARGE        0:07.68                    3:14.69  0:19.35
-   FRAG_MASSIVE      failure                   34:16.89  2:43.02
-   BOGUS_BYTES
-   DROPDUPE_BYTES    0:19.53* 0:27.91  0:23.54  1:35.97  0:18.78
-   SCRATCH           1:07.96*                            0:16.13
-   UNDERRUN          0:06.81# failure  1:09.40# 1:07.68  0:17.53
-   
-   * defect of some sort 
-   # not including a hang at end of read
-
-   */
-
 /* Build which test model? */
 #undef  CDDA_TEST_OK
 #undef  CDDA_TEST_JITTER_SMALL
 #undef  CDDA_TEST_JITTER_LARGE
-#define CDDA_TEST_JITTER_MASSIVE
+#undef  CDDA_TEST_JITTER_MASSIVE
 #undef  CDDA_TEST_FRAG_SMALL
 #undef  CDDA_TEST_FRAG_LARGE
-#undef  CDDA_TEST_FRAG_MASSIVE
+#define CDDA_TEST_FRAG_MASSIVE
 #undef  CDDA_TEST_BOGUS_BYTES
-#undef  CDDA_TEST_DROPDUPE_BYTES
+#define  CDDA_TEST_DROPDUPE_BYTES
 #undef  CDDA_TEST_SCRATCH
 #undef  CDDA_TEST_UNDERRUN
 
@@ -57,11 +37,11 @@ static int test_readtoc (cdrom_drive *d){
 
   d->disc_toc[0].bFlags = 0;
   d->disc_toc[0].bTrack = 1;
-  d->disc_toc[0].dwStartSector = 0;
+  d->disc_toc[0].dwStartSector = 37;
 
   d->disc_toc[1].bFlags = 0x4;
   d->disc_toc[1].bTrack = CDROM_LEADOUT;
-  d->disc_toc[1].dwStartSector = sectors;
+  d->disc_toc[1].dwStartSector = sectors+37;
 
   tracks=2;
   d->cd_extra=0;
@@ -148,12 +128,13 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
     if(this_bytes>inner_bytes)this_bytes=inner_bytes;
     if(begin+this_jitter+bytes_so_far<0)this_jitter=0;    
     seeki=begin+bytes_so_far+this_jitter;
-    
+
     if(fseek(fd,seeki,SEEK_SET)<0){
       return(0);
     }
     rbytes=fread(inner_buf,1,this_bytes,fd);
     bytes_so_far+=rbytes;
+    if(rbytes==0)break;
   }
 
 #ifdef CDDA_TEST_SCRATCH

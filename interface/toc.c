@@ -16,7 +16,18 @@ long cdda_track_firstsector(cdrom_drive *d,int track){
     return(-1);
   }
 
-  if(track<1 || track>d->tracks){
+  if (track == 0) {
+    if (d->disc_toc[0].dwStartSector == 0) {
+      /* first track starts at lba 0 -> no pre-gap */
+      cderror(d,"401: Invalid track number\n");
+      return(-1);
+    }
+    else {
+      return 0; /* pre-gap of first track always starts at lba 0 */
+    }
+  }
+
+  if(track<0 || track>d->tracks){
     cderror(d,"401: Invalid track number\n");
     return(-1);
   }
@@ -32,8 +43,12 @@ long cdda_disc_firstsector(cdrom_drive *d){
 
   /* look for an audio track */
   for(i=0;i<d->tracks;i++)
-    if(cdda_track_audiop(d,i+1)==1)
-      return(cdda_track_firstsector(d,i+1));
+    if(cdda_track_audiop(d,i+1)==1) {
+      if (i == 0) /* disc starts at lba 0 if first track is an audio track */
+       return 0;
+      else
+       return(cdda_track_firstsector(d,i+1));
+    }
 
   cderror(d,"403: No audio tracks on disc\n");  
   return(-1);
@@ -43,6 +58,17 @@ long cdda_track_lastsector(cdrom_drive *d,int track){
   if(!d->opened){
     cderror(d,"400: Device not open\n");
     return(-1);
+  }
+
+  if (track == 0) {
+    if (d->disc_toc[0].dwStartSector == 0) {
+      /* first track starts at lba 0 -> no pre-gap */
+      cderror(d,"401: Invalid track number\n");
+      return(-1);
+    }
+    else {
+      return d->disc_toc[0].dwStartSector-1;
+    }
   }
 
   if(track<1 || track>d->tracks){
@@ -83,11 +109,16 @@ int cdda_sector_gettrack(cdrom_drive *d,long sector){
     return(-1);
   }else{
     int i;
+
+    if (sector < d->disc_toc[0].dwStartSector)
+      return 0; /* We're in the pre-gap of first track */
+
     for(i=0;i<d->tracks;i++){
       if(d->disc_toc[i].dwStartSector<=sector &&
 	 d->disc_toc[i+1].dwStartSector>sector)
 	return (i+1);
     }
+
     cderror(d,"401: Invalid track number\n");
     return -1;
   }
@@ -98,6 +129,10 @@ int cdda_track_bitmap(cdrom_drive *d,int track,int bit,int set,int clear){
     cderror(d,"400: Device not open\n");
     return(-1);
   }
+
+  if (track == 0)
+    track = 1; /* map to first track number */
+
   if(track<1 || track>d->tracks){
     cderror(d,"401: Invalid track number\n");
     return(-1);
