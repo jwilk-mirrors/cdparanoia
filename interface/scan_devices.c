@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <pwd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include "cdda_interface.h"
 #include "low_interface.h"
 #include "common_interface.h"
@@ -66,7 +68,14 @@ cdrom_drive *cdda_find_a_cdrom(int messagedest,char **messages){
     }
     i++;
   }
-  idmessage(messagedest,messages,"\n\nNo cdrom drives accessible to %s found.\n",cuserid(NULL));
+  {
+    struct passwd *temp;
+    temp=getpwuid(geteuid());
+    idmessage(messagedest,messages,
+	      "\n\nNo cdrom drives accessible to %s found.\n",
+	      temp->pw_name);
+    free(temp);
+  }
   return(NULL);
 }
 

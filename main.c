@@ -258,8 +258,7 @@ VERSION"\n"
 "                                    data reconstruction (don't allow 'V's)\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
 "  -Y --disable-extra-paranoia     : only do cdda2wav-style overlap checking\n"
-"  -X --disable-scratch-detection  : do not look for scratches\n"
-"  -W --disable-scratch-repair     : disable scratch repair (still detect)\n\n"
+"  -X --abort-on-skip              : abort on imperfect reads/skips\n\n"
 
 "OUTPUT SMILIES:\n"
 "  :-)   Normal operation, low/no jitter\n"
@@ -270,6 +269,7 @@ VERSION"\n"
 "  :-0   SCSI/ATAPI transport error\n"
 "  :-(   Scratch detected\n"
 "  ;-(   Gave up trying to perform a correction\n"
+"  8-X   Aborted (as per -X) due to a scratch/skip\n"
 "  :^D   Finished extracting\n\n"
 
 "PROGRESS BAR SYMBOLS:\n"
@@ -318,8 +318,9 @@ VERSION"\n"
 "  A) query only with exhaustive search for a drive and full reporting\n"
 "     of autosense:\n"
 "       cdparanoia -vsQ\n\n"
-"  B) extract an entire disc, putting each track in a seperate file:\n"
-"       cdparanoia -B \"1-\"\n\n"
+"  B) extract up to and including track 3, putting each track in a seperate\n"
+"     file:\n"
+"       cdparanoia -B -- \"-3\"\n\n"
 "  C) extract from track 1, time 0:30.12 to 1:10.00:\n"
 "       cdparanoia \"1[:30.12]-1[1:10]\"\n\n"
 
@@ -346,6 +347,8 @@ static char *callback_strings[15]={"wrote",
 				   "duped",
 				   "transport error"};
 
+static int skipped_flag=0;
+static int abort_on_skip=0;
 static void callback(long inpos, int function){
   /*
 
@@ -467,7 +470,10 @@ static void callback(long inpos, int function){
     
       switch(slevel){
       case 0:  /* finished, or no jitter */
-	smilie=" :^D";
+	if(skipped_flag)
+	  smilie=" 8-X";
+	else
+	  smilie=" :^D";
 	break;
       case 1:  /* normal.  no atom, low jitter */
 	smilie=" :-)";
@@ -492,6 +498,7 @@ static void callback(long inpos, int function){
 	break;
       case 8:  /* skip */
 	smilie=" ;-(";
+	skipped_flag=1;
 	break;
 	
       }
@@ -530,20 +537,27 @@ static void callback(long inpos, int function){
 	  stimeout=0;
 	}
 	slast=slevel;
-
-	if(v_sector==0)
-	  sprintf(buffer,
-		  "\r (== PROGRESS == [%s| ...... %02d ] ==%s %c ==)   ",
-		  dispcache,overlap/CD_FRAMEWORDS,smilie,heartbeat);
 	
-	else
+	if(abort_on_skip && skipped_flag && function !=-1){
 	  sprintf(buffer,
 		  "\r (== PROGRESS == [%s| %06ld %02d ] ==%s %c ==)   ",
+		  "  ...aborting; please wait...  ",
 		  dispcache,v_sector,overlap/CD_FRAMEWORDS,smilie,heartbeat);
-	
-	if(aheadposition>=0 && aheadposition<graph && !(function==-1))
-	  buffer[aheadposition+19]='>';
-	
+	}else{
+	  if(v_sector==0)
+	    sprintf(buffer,
+		    "\r (== PROGRESS == [%s| ...... %02d ] ==%s %c ==)   ",
+		    dispcache,overlap/CD_FRAMEWORDS,smilie,heartbeat);
+	  
+	  else
+	    sprintf(buffer,
+		    "\r (== PROGRESS == [%s| %06ld %02d ] ==%s %c ==)   ",
+		    dispcache,v_sector,overlap/CD_FRAMEWORDS,smilie,heartbeat);
+	  
+	  if(aheadposition>=0 && aheadposition<graph && !(function==-1))
+	    buffer[aheadposition+19]='>';
+	}
+   
 	fprintf(stderr,buffer);
       }
     }
@@ -580,8 +594,7 @@ struct option options [] = {
 	{"help",no_argument,NULL,'h'},
 	{"disable-paranoia",no_argument,NULL,'Z'},
 	{"disable-extra-paranoia",no_argument,NULL,'Y'},
-	{"disable-scratch-detection",no_argument,NULL,'X'},
-	{"disable-scratch-repair",no_argument,NULL,'W'},
+	{"abort-on-skip",no_argument,NULL,'X'},
 	{"disable-fragmentation",no_argument,NULL,'F'},
 	{"output-info",required_argument,NULL,'i'},
 	{"never-skip",no_argument,NULL,'z'},
@@ -726,7 +739,8 @@ int main(int argc,char *argv[]){
       paranoia_mode&=~PARANOIA_MODE_VERIFY;
       break;
     case 'X':
-      paranoia_mode&=~(PARANOIA_MODE_SCRATCH|PARANOIA_MODE_REPAIR);
+      /*paranoia_mode&=~(PARANOIA_MODE_SCRATCH|PARANOIA_MODE_REPAIR);*/
+      abort_on_skip=1;
       break;
     case 'W':
       paranoia_mode&=~PARANOIA_MODE_REPAIR;
@@ -982,6 +996,7 @@ int main(int argc,char *argv[]){
       setegid(getgid());
 
       while(cursor<=last_sector){
+	char outfile_name[256];
 	if(batch){
 	  batch_first=cursor;
 	  batch_last=
@@ -1005,8 +1020,8 @@ int main(int argc,char *argv[]){
 	    if(batch)report("Are you sure you wanted 'batch' "
 			    "(-B) output with stdout?");
 	    report("outputting to stdout\n");
+	    outfile_name[0]='\0';
 	  }else{
-	    char buffer[256];
 	    char path[256];
 
 	    char *post=strrchr(argv[optind+1],'/');
@@ -1019,69 +1034,68 @@ int main(int argc,char *argv[]){
 	      strncat(path,argv[optind+1],pos>256?256:pos);
 
 	    if(batch)
-	      snprintf(buffer,246,"%strack%02d.%s",path,batch_track,file);
+	      snprintf(outfile_name,246,"%strack%02d.%s",path,batch_track,file);
 	    else
-	      snprintf(buffer,246,"%s%s",path,file);
+	      snprintf(outfile_name,246,"%s%s",path,file);
 
 	    if(file[0]=='\0'){
 	      switch(output_type){
 	      case 0: /* raw */
-		strcat(buffer,"cdda.raw");
+		strcat(outfile_name,"cdda.raw");
 		break;
 	      case 1:
-		strcat(buffer,"cdda.wav");
+		strcat(outfile_name,"cdda.wav");
 		break;
 	      case 2:
-		strcat(buffer,"cdda.aifc");
+		strcat(outfile_name,"cdda.aifc");
 		break;
 	      case 3:
-		strcat(buffer,"cdda.aiff");
+		strcat(outfile_name,"cdda.aiff");
 		break;
 	      }
 	    }
 	    
-	    out=open(buffer,O_RDWR|O_CREAT|O_TRUNC,0666);
+	    out=open(outfile_name,O_RDWR|O_CREAT|O_TRUNC,0666);
 	    if(out==-1){
-	      report3("Cannot open specified output file %s: %s",buffer,
+	      report3("Cannot open specified output file %s: %s",outfile_name,
 		      strerror(errno));
 	      cdda_close(d);
 	      d=NULL;
 	      exit(1);
 	    }
-	    report2("outputting to %s\n",buffer);
+	    report2("outputting to %s\n",outfile_name);
 	  }
 	}else{
 	  /* default */
-	  char buffer[80];
 	  if(batch)
-	    sprintf(buffer,"track%02d.",batch_track);
+	    sprintf(outfile_name,"track%02d.",batch_track);
 	  else
-	    buffer[0]='\0';
+	    outfile_name[0]='\0';
 	  
 	  switch(output_type){
 	  case 0: /* raw */
-	    strcat(buffer,"cdda.raw");
+	    strcat(outfile_name,"cdda.raw");
 	    break;
 	  case 1:
-	    strcat(buffer,"cdda.wav");
+	    strcat(outfile_name,"cdda.wav");
 	    break;
 	  case 2:
-	    strcat(buffer,"cdda.aifc");
+	    strcat(outfile_name,"cdda.aifc");
 	    break;
 	  case 3:
-	    strcat(buffer,"cdda.aiff");
+	    strcat(outfile_name,"cdda.aiff");
 	    break;
 	  }
 	  
-	  out=open(buffer,O_RDWR|O_CREAT|O_TRUNC,0666);
+	  out=open(outfile_name,O_RDWR|O_CREAT|O_TRUNC,0666);
 	  if(out==-1){
-	    report3("Cannot open default output file %s: %s",buffer,
+	    report3("Cannot open default output file %s: %s",outfile_name,
 		    strerror(errno));
 	    cdda_close(d);
 	    d=NULL;
 	    exit(1);
 	  }
-	  report2("outputting to %s\n",buffer);
+	  report2("outputting to %s\n",outfile_name);
 	}
 	
 	switch(output_type){
@@ -1100,12 +1114,13 @@ int main(int argc,char *argv[]){
 	
 	/* Off we go! */
 	
+	skipped_flag=0;
 	while(cursor<=batch_last){
 	  /* read a sector */
 	  size16 *readbuf=paranoia_read(p,callback);
 	  char *err=cdda_errors(d);
 	  char *mes=cdda_messages(d);
-	  
+
 	  if(mes || err)
 	    fprintf(stderr,"\r                               "
 		    "                                           \r%s%s\n",
@@ -1114,12 +1129,16 @@ int main(int argc,char *argv[]){
 	  if(err)free(err);
 	  if(mes)free(mes);
 	  if(readbuf==NULL){
+	    skipped_flag=1;
 	    report("\nparanoia_read: Unrecoverable error, bailing.\n");
+	    break;
+	  }
+	  if(skipped_flag && abort_on_skip){
 	    cursor=batch_last+1;
-	    paranoia_seek(p,cursor,SEEK_SET);      
 	    break;
 	  }
 
+	  skipped_flag=0;
 	  cursor++;
 	  
 	  if(output_endian!=bigendianp()){
@@ -1141,6 +1160,17 @@ int main(int argc,char *argv[]){
 	}
 	callback(cursor*(CD_FRAMESIZE_RAW/2)-1,-1);
 	buffering_close(out);
+	if(skipped_flag){
+	  /* remove the file */
+	  report2("\nRemoving aborted file: %s",outfile_name);
+	  unlink(outfile_name);
+	  /* make the cursor correct if we have another track */
+	  if(batch_track!=-1){
+	    batch_track++;
+	    cursor=cdda_track_firstsector(d,batch_track);
+	    paranoia_seek(p,cursor,SEEK_SET);      
+	  }
+	}
 	report("\n");
       }
 

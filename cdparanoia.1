@@ -143,30 +143,17 @@ Disable
 data verification and correction features.  When using -Z, cdparanoia
 reads data exactly as would cdda2wav with an overlap setting of zero.
 This option implies that 
-.b \-X 
-and
 .B \-Y
-are active, but is 
-.B not 
-equivalent to 
-.B \-Z \-X \-Y
-as the 
-.B \-X
-through
-.B \-Z
-options specify layered levels of verification.  The last specified
-option takes precedence.
+is active.
 
 .TP
 .B \-Y --disable-extra-paranoia
 Disables intra-read data verification; only overlap checking at read
-boundaries is performed.
+boundaries is performed. Not recommended.
 
 .TP
-.B \-X --disable-scratch-detection
-Neither look for scratches nor perform scratch-tolerant synchronization during verification. With
-.B \-X
-specified, a scratched disc will cause cdparanoia to abort its read.
+.B \-X --abort-on-skip
+If the read skips due to imperfect data, a scratch, whatever, abort reading this track.  If output is to a file, delete the partially completed file.
 
 .SH OUTPUT SMILIES
 .TP
@@ -203,7 +190,7 @@ Scratch detected
 Gave up trying to perform a correction
 .TP
 .B
-  8-*
+  8-X
 Aborted read due to known, uncorrectable error
 .TP
 .B
