@@ -148,7 +148,7 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
 
   cdrom_drive *d=NULL;
   struct stat st;
-  int fd=-1;
+  int fd=-1, i;
   int type;
   char *description=NULL;
   char *device;
@@ -180,7 +180,12 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
     /* Yay, ATAPI... */
     /* Ping for CDROM-ness */
     
-    fd=open(device,O_RDONLY|O_NONBLOCK);
+    fd=open(device,O_RDONLY|O_NONBLOCK|O_EXCL);
+    for (i = 0; (i<10) && (fd == -1); i++) {
+      fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", device, strerror(errno));
+      usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+      fd = open(device,O_RDONLY|O_NONBLOCK|O_EXCL);
+    }
     if(fd==-1){
       idperror(messagedest,messages,"\t\tUnable to open %s",device);
       free(device);
@@ -250,14 +255,6 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
     return(NULL);
   }
 
-  if(fd==-1)fd=open(device,O_RDONLY|O_NONBLOCK);
-  if(fd==-1){
-    idperror(messagedest,messages,"\t\tUnable to open %s",device);
-    free(device);
-    if(description)free(description);
-    return(NULL);
-  }
-  
   /* Minimum init */
   
   d=calloc(1,sizeof(cdrom_drive));
@@ -311,11 +308,18 @@ static char *scsi_match(const char *device,char **prefixes,
 			char *devfs_test,
 			char *devfs_other,
 			char *prompt,int messagedest,char **messages){
-  int dev=open(device,O_RDONLY|O_NONBLOCK);
+  int dev=-1;
   scsiid a,b;
 
   int i,j;
   char buffer[200];
+
+  dev=open(device,O_RDONLY|O_NONBLOCK|O_EXCL);
+  for (i = 0; (i<10) && (dev == -1); i++) {
+    fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", device, strerror(errno));
+    usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+    dev = open(device,O_RDONLY|O_NONBLOCK|O_EXCL);
+  }
 
   /* if we're running under /devfs, build the device name from the
      device we already have */
@@ -327,6 +331,11 @@ static char *scsi_match(const char *device,char **prefixes,
       int matchf;
       sprintf(pos,"/%s",devfs_other);
       matchf=open(buffer,O_RDONLY|O_NONBLOCK);
+      for (i = 0; (i<10) && (matchf==-1); i++) {
+        fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 seconds.\n", buffer, strerror(errno));
+        usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+        matchf = open(buffer,O_RDONLY|O_NONBLOCK);
+      }
       if(matchf!=-1){
 	close(matchf);
 	close(dev);
@@ -353,7 +362,7 @@ static char *scsi_match(const char *device,char **prefixes,
   for(i=0;i<25;i++){
     for(j=0;j<2;j++){
       int pattern=0;
-      int matchf;
+      int matchf, k;
       
       while(prefixes[pattern]!=NULL){
 	switch(j){
@@ -368,6 +377,12 @@ static char *scsi_match(const char *device,char **prefixes,
 	}
 	
 	matchf=open(buffer,O_RDONLY|O_NONBLOCK);
+	for (k = 0; (k<10) && (matchf==-1); k++) {
+	  fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", buffer, strerror(errno));
+	  usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+	  matchf=open(buffer,O_RDONLY|O_NONBLOCK);
+	}
+
 	if(matchf!=-1){
 	  if(get_scsi_id(matchf,&b)==0){
 	    if(a.bus==b.bus && a.id==b.id && a.lun==b.lun){
@@ -438,7 +453,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   cdrom_drive *d=NULL;
   struct stat i_st;
   struct stat g_st;
-  int i_fd=-1;
+  int i_fd=-1, i;
   int g_fd=-1;
   int version;
   int type;
@@ -534,8 +549,20 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
     goto cdda_identify_scsi_fail;
   }
 
-  if(ioctl_device)i_fd=open(ioctl_device,O_RDONLY|O_NONBLOCK);
-  g_fd=open(generic_device,O_RDWR);
+  if(ioctl_device) {
+    i_fd=open(ioctl_device,O_RDONLY|O_NONBLOCK|O_EXCL);
+    for(i=0; (i<10) && (i_fd==-1); i++) {
+      fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", ioctl_device, strerror(errno));
+      usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+      i_fd=open(ioctl_device,O_RDONLY|O_NONBLOCK|O_EXCL);
+    }
+  }
+  g_fd=open(generic_device,O_RDWR|O_EXCL);
+  for(i=0; (i<10) && (g_fd==-1); i++) {
+    fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", generic_device, strerror(errno));
+    usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+    g_fd=open(generic_device,O_RDWR|O_EXCL);
+  }
   
   if(ioctl_device && i_fd==-1)
     idperror(messagedest,messages,"\t\tCould not open SCSI cdrom device "
@@ -661,7 +688,7 @@ cdrom_drive *cdda_identify_test(const char *filename, int messagedest,
   
   cdrom_drive *d=NULL;
   struct stat st;
-  int fd=-1;
+  int fd=-1,i;
 
   idmessage(messagedest,messages,"\tTesting %s for file/test interface",
 	    filename);
@@ -678,7 +705,17 @@ cdrom_drive *cdda_identify_test(const char *filename, int messagedest,
     return(NULL);
   }
 
-  fd=open(filename,O_RDONLY);
+  /* I'm not certain this one nees O_EXCL, but it can't hurt */
+  fd=open(filename,O_RDONLY|O_EXCL);
+  for(i=0; (i<10) && (fd==-1); i++) {
+    fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", filename, strerror(errno));
+    usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+    fd=open(filename,O_RDONLY|O_EXCL);
+  }
+  
+  if(ioctl_device && i_fd==-1)
+    idperror(messagedest,messages,"\t\tCould not open SCSI cdrom device "
+	     "%s (continuing)",ioctl_device);
   
   if(fd==-1){
     idperror(messagedest,messages,"\t\tCould not open file %s",filename);
