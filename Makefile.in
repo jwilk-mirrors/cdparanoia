@@ -44,7 +44,6 @@ all:
 	cd interface && $(MAKE) all
 	cd paranoia && $(MAKE) all
 	$(MAKE) cdparanoia CFLAGS="$(OPT)" 
-	strip cdparanoia
 
 debug:  
 	cd interface && $(MAKE) debug
