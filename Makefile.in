@@ -34,7 +34,6 @@ debug:
 	cd interface && $(MAKE) debug
 	cd paranoia && $(MAKE) debug
 	$(MAKE) cdparanoia CFLAGS="$(DEBUG)" 
-	$(MAKE) tests CFLAGS="$(OPT)"
 
 test:	
 	cd interface && $(MAKE) all

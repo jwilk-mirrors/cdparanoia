@@ -200,7 +200,7 @@ static int handle_scsi_cmd(cdrom_drive *d,
 
     FD_ZERO(&fdset);
     FD_SET(d->cdda_fd,&fdset);
-    tv.tv_sec=5;
+    tv.tv_sec=15;
     tv.tv_usec=0;
 
     while(1){
@@ -624,7 +624,7 @@ static int i_read_A8 (cdrom_drive *d, void *p, long begin, long sectors){
   return(0);
 }
 
-static int i_read_D4 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_D4_10 (cdrom_drive *d, void *p, long begin, long sectors){
   int ret;
   memcpy(d->sg_buffer,(char []){0xd4, 0, 0, 0, 0, 0, 0, 0, 0, 0},10);
 
@@ -637,6 +637,24 @@ static int i_read_D4 (cdrom_drive *d, void *p, long begin, long sectors){
   d->sg_buffer[5] = begin & 0xFF;
   d->sg_buffer[8] = sectors;
   if((ret=handle_scsi_cmd(d,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_D4_12 (cdrom_drive *d, void *p, long begin, long sectors){
+  int ret;
+  memcpy(d->sg_buffer,(char []){0xd4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},12);
+
+  if(d->fua)
+    d->sg_buffer[1]=0x08;
+
+  d->sg_buffer[1]|=d->lun<<5;
+  d->sg_buffer[3] = (begin >> 16) & 0xFF;
+  d->sg_buffer[4] = (begin >> 8) & 0xFF;
+  d->sg_buffer[5] = begin & 0xFF;
+  d->sg_buffer[9] = sectors;
+  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
@@ -841,9 +859,14 @@ long scsi_read_A8 (cdrom_drive *d, void *p, long begin,
   return(scsi_read_map(d,p,begin,sectors,i_read_A8));
 }
 
-long scsi_read_D4 (cdrom_drive *d, void *p, long begin, 
+long scsi_read_D4_10 (cdrom_drive *d, void *p, long begin, 
 			       long sectors){
-  return(scsi_read_map(d,p,begin,sectors,i_read_D4));
+  return(scsi_read_map(d,p,begin,sectors,i_read_D4_10));
+}
+
+long scsi_read_D4_12 (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_D4_12));
 }
 
 long scsi_read_D5 (cdrom_drive *d, void *p, long begin, 
@@ -983,14 +1006,18 @@ static int verify_read_command(cdrom_drive *d){
 	densitypossible=0;
 	break;
       case 5:
-	d->read_audio=scsi_read_D4;
-	rs="d4 0x,00";
+	d->read_audio=scsi_read_D4_10;
+	rs="d4(10)0x";
 	break;
       case 6:
+	d->read_audio=scsi_read_D4_12;
+	rs="d4(12)0x";
+	break;
+      case 7:
 	d->read_audio=scsi_read_D5;
 	rs="d5 0x,00";
 	break;
-      case 7:
+      case 8:
 	d->read_audio=scsi_read_D8;
 	rs="d8 0x,00";
 	j=-2;

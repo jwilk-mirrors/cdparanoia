@@ -172,17 +172,24 @@ int data_bigendianp(cdrom_drive *d){
 
 int FixupTOC(cdrom_drive *d,int tracks){
   struct cdrom_multisession ms_str;
-      int j;
-
+  int j;
+  
   /* First off, make sure the 'starting sector' is >=0 */
   
-  for(j=0;j<tracks;j++)
+  for(j=0;j<tracks;j++){
     if(d->disc_toc[j].dwStartSector<0){
       cdmessage(d,"\n\tTOC entry claims a negative start offset: massaging"
 		".\n");
       d->disc_toc[j].dwStartSector=0;
     }
+    if(j<tracks-1 && d->disc_toc[j].dwStartSector>
+       d->disc_toc[j+1].dwStartSector){
+      cdmessage(d,"\n\tTOC entry claims an overly large start offset: massaging"
+		".\n");
+      d->disc_toc[j].dwStartSector=0;
+    }
 
+  }
   /* Make sure the listed 'starting sectors' are actually increasing.
      Flag things that are blatant/stupid/wrong */
   {
@@ -191,6 +198,8 @@ int FixupTOC(cdrom_drive *d,int tracks){
       if(d->disc_toc[j].dwStartSector<last){
 	cdmessage(d,"\n\tTOC entries claim non-increasing offsets: massaging"
 		  ".\n");
+	 d->disc_toc[j].dwStartSector=last;
+	
       }
       last=d->disc_toc[j].dwStartSector;
     }

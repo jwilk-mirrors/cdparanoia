@@ -103,7 +103,7 @@ static inline long try_sort_sync(cdrom_paranoia *p,
 				 void *old,char *oldflags,
 				 void *new,char *newflags,
 				 long post,long *begin,long *end,
-				 long *offset){
+				 long *offset,void (*callback)(long,int)){
   
   long dynoverlap=p->dynoverlap;
   long *matches=NULL,*ptr=NULL;
@@ -120,7 +120,7 @@ static inline long try_sort_sync(cdrom_paranoia *p,
 			 post-isort_begin(new),zeropos,
 			 begin,end,offset)){
 	  
-	  offset_add_value(p,&(p->stage1),*offset,NULL);
+	  offset_add_value(p,&(p->stage1),*offset,callback);
 
 	  return(1);
 	}
@@ -138,7 +138,7 @@ static inline long try_sort_sync(cdrom_paranoia *p,
 		       post-isort_begin(new),*ptr,
 		       begin,end,offset)){
 	
-	offset_add_value(p,&(p->stage1),*offset,NULL);
+	offset_add_value(p,&(p->stage1),*offset,callback);
 	free(matches);
 	return(1);
       }
@@ -169,6 +169,9 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
   long ret=0;
   char *already;
 
+  long matched=0;
+  long tried=0;
+
   if(searchsize<=0)return(0);
   
   already=calloc(isort_size(new->vector),sizeof(char));
@@ -176,10 +179,11 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
   while(step>0){
     long j;
     for(j=searchend-step;j>=searchbegin;j-=(step<<1)){
-
       if(already[j-hardbegin]==0 && (new->flags[j-hardbegin]&6)==0)
+	tried++;
 	if(try_sort_sync(p,old->vector,old->flags,new->vector,new->flags,
-			 j,&matchbegin,&matchend,&matchoffset)==1){
+			 j,&matchbegin,&matchend,&matchoffset,
+			 callback)==1){
 	  
 	  if(matchbegin!=-1 && matchend-matchbegin>=MIN_WORDS_OVERLAP){
 	    long i;
@@ -202,8 +206,10 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
 	    }else
 	      (*callback)(matchend,PARANOIA_CB_FIXUP_ATOM);
 
-	    for(i=adjbegin;i<adjend;i++)
+	    for(i=adjbegin;i<adjend;i++){
+	      if(!already[i])matched++;
 	      already[i]=1; /* mark verified */
+	    }
 
 	    /* Mark the verification flags.  Don't mark the first or last
 	       OVERLAP/2 elements so that overlapping fragments have to
@@ -218,8 +224,7 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
 
 	    if((matchbegin==hardbegin || matchbegin-matchoffset==oldbegin)&&
 	       (matchend==hardend || matchend-matchoffset==oldend)){
-	      free(already);
-	      return(ret);
+	      goto match_cleanup;
 	    }
 	    
 	  }
@@ -227,6 +232,8 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
     }
     step>>=1;
   }
+match_cleanup:
+
   free(already);
   return(ret);
 }
@@ -300,7 +307,7 @@ static long i_iterate_stage2(cdrom_paranoia *p,
     for(j=searchend-step;j>=searchbegin;j-=(step<<1)){
 
       if(try_sort_sync(p,rv,NULL,v->one->vector,NULL,j,
-		       &matchbegin,&matchend,&offset)==1){
+		       &matchbegin,&matchend,&offset,callback)==1){
 	
 	/* faster to do the test this way */
 	matchbegin=max(matchbegin,hardbegin); 
@@ -590,8 +597,8 @@ static int i_stage2(cdrom_paranoia *p,long beginword,long endword,
     while(first){
       v_fragment *next=v_next(first);
       
-      (*callback)(isort_begin(first->one->vector),PARANOIA_CB_VERIFY);
       if(first->one){
+	(*callback)(isort_begin(first->one->vector),PARANOIA_CB_VERIFY);
 	if(root->vector==NULL){
 	  if(i_init_root(&(p->root),first,beginword,callback)){
 	    free_v_fragment(first);

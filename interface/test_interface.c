@@ -55,13 +55,13 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
   begin*=CD_FRAMESIZE_RAW;
   while(bytes_so_far<bytestotal){
     long local_bytes=bytestotal-bytes_so_far;
-    long rbytes,bytes=bytestotal;
-    int jitter=10*(int)((drand48()-.5)*CD_FRAMESIZE_RAW);
+    long rbytes,bytes=(int)(CD_FRAMESIZE_RAW*drand48())*4;
+    int jitter=20*(int)((drand48()-.5)*CD_FRAMESIZE_RAW);
 
     char *local_buf=buffer+bytes_so_far;
     if(bytes>local_bytes)bytes=local_bytes;
 
-    if(begin==0)jitter=0;
+    /*    if(begin==0)jitter=0;*/
     if(begin+bytes_so_far+jitter<0)jitter=0;
 
     {
