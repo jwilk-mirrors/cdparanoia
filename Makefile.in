@@ -25,7 +25,7 @@ LIBDIR=@libdir@
 LIBS = -lm
 PWD = $(shell pwd)
 
-OFILES = main.o report.o header.o
+OFILES = main.o report.o header.o buffering_write.o
 
 all: 	
 	cd interface && $(MAKE) all

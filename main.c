@@ -1129,7 +1129,7 @@ int main(int argc,char *argv[]){
 	  
 	  callback(cursor*(CD_FRAMEWORDS)-1,-2);
 
-	  if(blocking_write(out,(char *)readbuf,CD_FRAMESIZE_RAW)){
+	  if(buffering_write(out,(char *)readbuf,CD_FRAMESIZE_RAW)){
 	    report2("Error writing output: %s",strerror(errno));
 	    exit(1);
 	  }
@@ -1140,7 +1140,7 @@ int main(int argc,char *argv[]){
 	  }
 	}
 	callback(cursor*(CD_FRAMESIZE_RAW/2)-1,-1);
-	close(out);
+	buffering_close(out);
 	report("\n");
       }
 
