@@ -96,6 +96,9 @@ int data_bigendianp(cdrom_drive *d){
 	  firstsector+=readsectors;
 	}else{
 	  d->enable_cdda(d,0);
+	  free(a);
+	  free(b);
+	  free(buff);
 	  return(-1);
 	}
       }

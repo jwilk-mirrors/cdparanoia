@@ -1,5 +1,5 @@
 cdparanoia release III alpha 9 README
-[March 19, 1998, updated August 17, 1999]
+[March 19, 1998, updated December 13, 1999]
 
 Monty <monty@xiph.org>
 
@@ -11,21 +11,6 @@ These are installation notes; for lots of other cdparanoia related
 information, see:
 
 http://www.xiph.org/paranoia/
-
-WARNING: (Danger! Danger!)
-==========================
-
-This is a *prerelease* of the new cdparanoia package; due to the huge
-pool of hardware out there and the newness of the software, this
-package is probably kinda buggy yet.  If you use this prerelease and
-have any sort of trouble, PLEASE let me know.  Contact information is
-at the end of this file.
-
-In addition, this software is alpha for a reason; although the code
-itself is high-quality and robust, the structure of the code and
-especially the setup of the library interfaces will continue to shift.
-The progress output and library interfaces will not be set in stone
-until this software reaches beta.
 
 Requirements
 ============
@@ -58,8 +43,9 @@ emulation mode works much better for CDDA extraction.  Cdparanoia may
 also be able to identify and use unusual drives that report 'CDDA
 incapable' in native ATAPI mode.
 
-Also, although a stock SCSI setup may work, performance will be
-better if linux/include/scsi/sg.h defines SG_BIG_BUFF to 65536.
+Linux 2.0.x only: Also, although a stock SCSI setup may work,
+performance will be better if linux/include/scsi/sg.h defines
+SG_BIG_BUFF to 65536.
 
 /proc filesystem support is no longer needed, although you'll
 certainly want to have it for other packages.  Cdparanoia does not
@@ -73,7 +59,13 @@ To build the cdparanoia utility:
 	./configure
 	make all
 	
-This will compile cdparanoia; make install (as root) will install it.
+This will compile cdparanoia and the shared paranoia libs; make
+install (as root) will install it.  Note that unlike previous
+releases, this version uses shared paranoia libs; you can still build
+the static version as follows:
+
+	./configure
+	make all STATIC=TRUE
 
 Unlike cdda2wav and readcdda, cdparanoia is smart enough to find CDROM
 drives and the appropriate interfaces automatically; if you have only
@@ -87,7 +79,12 @@ To build the cdda_interface.a and cdda_paranoia.a libraries:
 	./configure
 	make lib
 
-Other build notes (such as building and using a debuggin version of
+The .so shared libraries can be built as follows:
+
+	./configure
+	make slib
+
+Other build notes (such as building and using a debugging version of
 cdparanoia to aid me in tracking down any trouble) can be found on the
 Cdparanoia web site at the URL given above.
 
@@ -165,8 +162,8 @@ cdda2wav README)
   *without* IDE CDROM drive (ATAPI) support.  If native ATAPI support is
   enabled, the kernel will always choose to use the native ATAPI driver.
 
-Missing Features (compared to cdda2wav)
-=======================================
+"Missing Features:
+==================
 
 Specifically, 'cdparanoia' will not play to sound cards, do MD5
 signatures, do rate reduction, or generally make use of the maximum

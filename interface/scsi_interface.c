@@ -1284,6 +1284,7 @@ static void check_fua_bit(cdrom_drive *d){
   
   d->fua=0;
   cdmessage(d,"\tDrive rejected FUA bit.\n");
+  free(buff);
   return;
 }
 

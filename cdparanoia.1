@@ -2,7 +2,7 @@
 .SH NAME
 cdparanoia (Paranoia release III) \- an audio CD reading utility which includes extra data verification features
 .SH DATE
-version III release alpha 9.6 (17 Aug 1999)
+version III release alpha 9.7 (13 Dec 1999)
 .SH SYNOPSIS
 .B cdparanoia
 .RB [ options ]
@@ -143,15 +143,15 @@ Disable
 data verification and correction features.  When using -Z, cdparanoia
 reads data exactly as would cdda2wav with an overlap setting of zero.
 This option implies that 
-.b \-W \-X 
+.b \-X 
 and
 .B \-Y
 are active, but is 
 .B not 
 equivalent to 
-.B \-Z \-W \-X \-Y
+.B \-Z \-X \-Y
 as the 
-.B \-W
+.B \-X
 through
 .B \-Z
 options specify layered levels of verification.  The last specified
@@ -167,12 +167,6 @@ boundaries is performed.
 Neither look for scratches nor perform scratch-tolerant synchronization during verification. With
 .B \-X
 specified, a scratched disc will cause cdparanoia to abort its read.
-
-.TP
-.B \-W --disable-scratch-repair
-Detect and hold sync across scratches, but do not attempt any repair of damaged data.  If an info file is in use
-.RB ( \-i )
-log the frame positions of all scratches.
 
 .SH OUTPUT SMILIES
 .TP
@@ -207,6 +201,10 @@ Scratch detected
 .B
   ;-(   
 Gave up trying to perform a correction
+.TP
+.B
+  8-*
+Aborted read due to known, uncorrectable error
 .TP
 .B
   :^D   
@@ -261,7 +259,7 @@ twenty seconds, [10:] would be ten minutes, [.30] would be thirty
 sectors (75 sectors per second).
 .P
 When only a single offset is supplied, it is interpreted as a starting
-offset and ripping will continue to the end of he track.  If a single
+offset and ripping will continue to the end of the track.  If a single
 offset is preceeded or followed by a hyphen, the implicit missing
 offset is taken to be the start or end of the disc, respectively. Thus:
 
@@ -280,7 +278,7 @@ Specifies ripping from the beginning of the disc up to (and including) track 2
 Specifies ripping from the beginning of the disc up to 2:[30.35]
 .TP
 .B 2-4          
-Specifies ripping from the beginning of track two to the end of track 4.
+Specifies ripping from the beginning of track 2 to the end of track 4.
 .P
 Again, don't forget to protect square brackets and preceeding hyphens from
 the shell.
@@ -295,16 +293,17 @@ Query only with exhaustive search for a drive and full reporting of autosense:
 .TP
 Extract an entire disc, putting each track in a seperate file:
 .P
-       cdparanoia -B "1-"
+       cdparanoia -B 
 .TP
 Extract from track 1, time 0:30.12 to 1:10.00:
 .P
        cdparanoia "1[:30.12]-1[1:10]"
 .TP
-Extract one minute from track 1, starting at time 0:30.12:
+Extract from the beginning of the disc up to track 3:
 .P
-       cdparanoia "1[:30.12]-[1:00]"
-
+       cdparanoia -- "-3"
+.TP
+The "--" above is to distinguish "-3" from an option flag.
 .SH OUTPUT
 
 The output file argument is optional; if it is not specified,

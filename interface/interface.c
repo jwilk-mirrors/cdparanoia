@@ -13,12 +13,22 @@
 #include "common_interface.h"
 #include "utils.h"
 
+static void _clean_messages(cdrom_drive *d){
+  if(d){
+    if(d->messagebuf)free(d->messagebuf);
+    if(d->errorbuf)free(d->errorbuf);
+    d->messagebuf=NULL;
+    d->errorbuf=NULL;
+  }
+}
+
 /* doubles as "cdrom_drive_free()" */
 int cdda_close(cdrom_drive *d){
   if(d){
     if(d->opened)
       d->enable_cdda(d,0);
 
+    _clean_messages(d);
     if(d->cdda_device_name)free(d->cdda_device_name);
     if(d->ioctl_device_name)free(d->ioctl_device_name);
     if(d->drive_model)free(d->drive_model);

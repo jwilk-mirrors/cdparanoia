@@ -1002,6 +1002,7 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
 
 void paranoia_free(cdrom_paranoia *p){
   paranoia_resetall(p);
+  sort_free(p->sortcache);
   free(p);
 }
 

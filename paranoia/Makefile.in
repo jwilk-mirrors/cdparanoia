@@ -22,6 +22,7 @@ OFILES = paranoia.o p_block.o overlap.o gap.o isort.o
 #TFILES = isort.t gap.t p_block.t paranoia.t
 
 LIBS = ../interface/libcdda_interface.a -lm
+export VERSION
 
 all: lib slib
 
@@ -43,9 +44,9 @@ libcdda_paranoia.a: 	$(OFILES)
 	$(RANLIB) libcdda_paranoia.a
 
 libcdda_paranoia.so: 	$(OFILES)	
-	$(CC) -fpic -shared -o libcdda_paranoia.so.0.9.5 -Wl,-soname -Wl,libcdda_paranoia.so.0 $(OFILES)
-	[ -e libcdda_paranoia.so.0 ] || ln -s libcdda_paranoia.so.0.9.5 libcdda_paranoia.so.0
-	[ -e libcdda_paranoia.so ] || ln -s libcdda_paranoia.so.0.9.5 libcdda_paranoia.so
+	$(CC) -fpic -shared -o libcdda_paranoia.so.0.$(VERSION) -Wl,-soname -Wl,libcdda_paranoia.so.0 $(OFILES)
+	[ -e libcdda_paranoia.so.0 ] || ln -s libcdda_paranoia.so.0.$(VERSION) libcdda_paranoia.so.0
+	[ -e libcdda_paranoia.so ] || ln -s libcdda_paranoia.so.0.$(VERSION) libcdda_paranoia.so
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<
@@ -58,7 +59,7 @@ lessmessy:
 	-rm -f *.o  *.t core *~
 
 clean: lessmessy
-	-rm -f  *.a *.so *.so.0 *.so.0.9.5 core
+	-rm -f  *.a *.so *.so.0 *.so.0.* core
 
 distclean: clean
 	-rm -f Makefile 

@@ -587,8 +587,8 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
 cdda_identify_scsi_fail:
   if(generic_device)free((char *)generic_device);
   if(ioctl_device)free((char *)ioctl_device);
-  if(i_fd==-1)close(i_fd);
-  if(g_fd==-1)close(g_fd);
+  if(i_fd!=-1)close(i_fd);
+  if(g_fd!=-1)close(g_fd);
   return(NULL);
 }
 
