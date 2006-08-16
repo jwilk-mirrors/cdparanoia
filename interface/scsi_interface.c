@@ -43,7 +43,11 @@ static void tweak_SG_buffer(cdrom_drive *d){
     cur=table*reserved;
 
     /* not too much; new kernels have trouble with DMA allocation, so
-       be more conservative: 32kB max until I test more thoroughly */
+       be more conservative: 32kB max until I test more thoroughly.
+       Note from RedHat: "Ee don't always get -ENOMEM.  Sometimes USB drives 
+       still fail the wrong way.  This needs some kernel-land investigation.
+    */
+
     cur=(cur>1024*32?1024*32:cur);
     d->nsectors=cur/CD_FRAMESIZE_RAW;
     d->bigbuff=cur;
