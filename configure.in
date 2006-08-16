@@ -28,10 +28,6 @@ fi
 
 AC_HEADER_STDC
 
-CFLAGS=""
-
-TYPESIZES="" 
-
 AC_CHECK_SIZEOF(short)
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
@@ -48,16 +44,14 @@ case 4 in
 	$ac_cv_sizeof_long) SIZE32="long";;
 esac
 
-AC_CHECK_TYPE(int16_t,$SIZE16)
-AC_CHECK_TYPE(int32_t,$SIZE32)
-AC_CHECK_TYPE(u_int16_t,$SIZE16)
-AC_CHECK_TYPE(u_int32_t,$SIZE32)
+AC_CHECK_TYPE(int16_t,SIZE16="int16_t",,)
+AC_CHECK_TYPE(int32_t,SIZE32="size32_t",,)
 
 if test -z "$SIZE16"; then
-	AC_MSG_ERROR(No 16 bit tupe found on this platform!)
+	AC_MSG_ERROR(No 16 bit type found on this platform!)
 fi
 if test -z "$SIZE32"; then
-	AC_MSG_ERROR(No 32 bit tupe found on this platform!)
+	AC_MSG_ERROR(No 32 bit type found on this platform!)
 fi
 	
 AC_CHECK_HEADERS(linux/sbpcd.h, SBPCD_H="-DSBPCD_H='1' ")
