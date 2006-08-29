@@ -848,14 +848,10 @@ int main(int argc,char *argv[]){
     exit(1);
   }
   
-  if(quiet)
-    cdda_verbose_set(d,CDDA_MESSAGE_FORGETIT,CDDA_MESSAGE_FORGETIT);
-  else{
-    if(verbose)
-      cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_PRINTIT);
-    else
-      cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_FORGETIT);
-  }
+  if(verbose)
+    cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_PRINTIT);
+  else
+    cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_FORGETIT);
 
   /* possibly force hand on endianness of drive, sector request size */
   if(force_cdrom_endian!=-1){
@@ -1035,6 +1031,11 @@ int main(int argc,char *argv[]){
       p=paranoia_init(d);
       paranoia_modeset(p,paranoia_mode);
       if(force_cdrom_overlap!=-1)paranoia_overlapset(p,force_cdrom_overlap);
+
+      if(verbose)
+        cdda_verbose_set(d,CDDA_MESSAGE_LOGIT,CDDA_MESSAGE_LOGIT);
+      else
+        cdda_verbose_set(d,CDDA_MESSAGE_FORGETIT,CDDA_MESSAGE_FORGETIT);
 
       paranoia_seek(p,cursor=first_sector,SEEK_SET);      
 

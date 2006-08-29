@@ -101,7 +101,8 @@ cdrom_drive *cdda_find_a_cdrom(int messagedest,char **messages){
 
 cdrom_drive *cdda_identify(const char *device, int messagedest,char **messages){
   struct stat st;
-  cdrom_drive *d=NULL;
+  cdrom_drive *d=NULL;  
+
   idmessage(messagedest,messages,"Checking %s for cdrom...",device);
 
   if(stat(device,&st)){
