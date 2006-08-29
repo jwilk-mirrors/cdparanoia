@@ -300,31 +300,6 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   return(0);
 }
 
-static void print_cmd_error(cdrom_drive *d, char *direction, unsigned char *cmdp, int cmdlen) {
-  char ebuf[1024];
-  unsigned char tmp[2];
-  int x=0;
-
-  sprintf(ebuf, "\nError %s command: ", direction);
-  cdmessage(d, ebuf);
-  tmp[1] = 0;
-  while (x < cmdlen) {
-    if (x % 8 == 0)
-      cdmessage(d, " ");
-    if (x % 16 == 0) {
-      cdmessage(d, "\n");
-      if (x+1 < cmdlen)
-        cdmessage(d, "\t");
-    }   
-    tmp[0] = cmdp[x];
-    sprintf(ebuf, "%02x ", tmp[0]);
-    cdmessage(d, ebuf);
-    x++;
-  }
-  if (!(x % 16 == 0))
-    cdmessage(d, "\n");
-}
-
 static int sgio_handle_scsi_cmd(cdrom_drive *d,
 				unsigned char *cmd,
 				unsigned int cmd_len, 
@@ -362,10 +337,7 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
     status = ioctl(d->ioctl_fd, SG_IO, &hdr);
     if (status >= 0 && hdr.status)
       status = check_sbp_error(hdr.sbp);
-    if (status < 0) {
-      print_cmd_error(d, "writing", hdr.cmdp, cmd_len);
-      return TR_EWRITE;
-    }
+    if (status < 0) return TR_EWRITE;
   }
 
   if (!in_size | out_size) {
@@ -380,10 +352,7 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
     status = ioctl(d->ioctl_fd, SG_IO, &hdr);
     if (status >= 0 && hdr.status)
       status = check_sbp_error(hdr.sbp);
-    if (status < 0) {
-      print_cmd_error(d, "reading", hdr.cmdp, cmd_len);
-      return TR_EREAD;
-    }
+    if (status < 0) return TR_EREAD;
   }
 
   /* Failed/Partial DMA transfers occasionally get through.  Why?  No clue,
