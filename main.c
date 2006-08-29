@@ -847,11 +847,15 @@ int main(int argc,char *argv[]){
       report("\nUnable to open cdrom drive; -v will give more information.");
     exit(1);
   }
-
-  if(verbose)
-    cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_PRINTIT);
-  else
-    cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_FORGETIT);
+  
+  if(quiet)
+    cdda_verbose_set(d,CDDA_MESSAGE_FORGETIT,CDDA_MESSAGE_FORGETIT);
+  else{
+    if(verbose)
+      cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_PRINTIT);
+    else
+      cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_FORGETIT);
+  }
 
   /* possibly force hand on endianness of drive, sector request size */
   if(force_cdrom_endian!=-1){
