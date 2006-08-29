@@ -1,6 +1,6 @@
-.TH CDPARANOIA 1 "02 Mar 2001"
+.TH CDPARANOIA 1 "29 Aug 2006"
 .SH NAME
-cdparanoia 9.8 (Paranoia release III) \- an audio CD reading utility which includes extra data verification features
+cdparanoia 10.0 (Paranoia release III) \- an audio CD reading utility which includes extra data verification features
 .SH SYNOPSIS
 .B cdparanoia
 .RB [ options ]
@@ -122,11 +122,14 @@ proprietary).
 
 .TP
 .BI "\-g --force-generic-device " device
-This option is used along with
+This option forces use of the old 'generic scsi' (sg) kernel 
+interface with the specified generic scsi device.
+.B \-g
+may be used with
 .B \-d
-when one wants explicit control in setting both the SCSI cdrom and
-generic devices seperately. This option is only useful on
-non-standard SCSI setups.
+to explicitly set both the SCSI cdrom and
+generic (sg) devices seperately. This option is only useful on
+non-standard SCSI setups and when using the generic scsi (sg) driver. 
 
 .TP
 .BI "\-S --force-read-speed " number

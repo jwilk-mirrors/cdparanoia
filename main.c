@@ -17,30 +17,6 @@
  *
  * cdparanoia (C) 2006 Monty <monty@xiph.org>
  *
- * last changes:
- *   22.01.98 - first version
- *   15.02.98 - alpha 2: juggled two includes from interface/low_interface.h
- *                       that move contents in Linux 2.1
- *                       Linked status bar to isatty to avoid it appearing
- *                       in a redirected file.
- *                       Played with making TOC less verbose.
- *   04.04.98 - alpha 3: zillions of bugfixes, also added MMC and IDE_SCSI
- *                       emulation support
- *   05.04.98 - alpha 4: Segfault fix, cosmetic repairs
- *   05.04.98 - alpha 5: another segfault fix, cosmetic repairs, 
- *                       Gadi Oxman provided code to identify/fix nonstandard
- *                       ATAPI CDROMs 
- *   07.04.98 - alpha 6: Bugfixes to autodetection
- *   18.06.98 - alpha 7: Additional SCSI error handling code
- *                       cosmetic fixes
- *                       segfault fixes
- *                       new sync/silence code, smaller fft      
- *   15.07.98 - alpha 8: More new SCSI code, better error recovery
- *                       more segfault fixes (two linux bugs, one my fault)
- *                       Fixup reporting fixes, smilie fixes.
- *                       AIFF support (in addition to AIFC)
- *                       Path parsing fixes
- *   Changes are becoming TNTC. Will resume the log at beta.
  */
 
 #include <stdio.h>
