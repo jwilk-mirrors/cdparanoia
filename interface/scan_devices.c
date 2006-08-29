@@ -725,7 +725,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   if (!p){
 
     /* 2.6 kernels have a bug where the block layer implements
-         SG_DXFER_TO_FROM_DEVICE as a read operation instead of write.
+         SG_DXFER_TO_FROM_DEVICE as a write operation instead of read.
          I've submitted a kernel patch, but it will take a while to
          propogate.  Work around it for now. --Monty */
 
