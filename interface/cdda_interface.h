@@ -30,9 +30,11 @@ typedef struct TOC {	/* structure of table of contents */
 } TOC;
 
 /* interface types */
-#define GENERIC_SCSI	0
-#define COOKED_IOCTL	1
-#define TEST_INTERFACE	2
+#define GENERIC_SCSI	 0
+#define COOKED_IOCTL	 1
+#define TEST_INTERFACE	 2
+#define SGIO_SCSI	 3
+#define SGIO_SCSI_BUGGY1 4
 
 #define CDDA_MESSAGE_FORGETIT 0
 #define CDDA_MESSAGE_PRINTIT 1
@@ -81,6 +83,11 @@ typedef struct cdrom_drive{
   int is_mmc;
 
   /* SCSI command buffer and offset pointers */
+  /* this should have been private hidden data, but it isn't.  At
+     this point, sg and sg_buffer are treated internally as void *
+     pointing to internal private data, which is correct even if it is
+     semantically confusing.  This problem will be corrected in the
+     next major release increment. */
   unsigned char *sg;
   unsigned char *sg_buffer;
   unsigned char inqbytes[4];

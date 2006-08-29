@@ -2,7 +2,7 @@
  * CopyPolicy: GNU Public License 2 applies
  * Original interface.c Copyright (C) 1994-1997 
  *            Eissfeldt heiko@colossus.escape.de
- * Current blenderization Copyright (C) 1998-1999 Monty xiphmont@mit.edu
+ * Current blenderization Copyright (C) 1998-2006 Monty xiphmont@mit.edu
  * 
  * Generic SCSI interface specific code.
  *
@@ -18,64 +18,59 @@ static int Dummy (cdrom_drive *d,int s){
 }
 
 #include "drive_exceptions.h"
-
-static void tweak_SG_buffer(cdrom_drive *d){
-  int table,reserved;
+static void tweak_SG_buffer(cdrom_drive *d) {
+  int table, reserved, cur, err;
   char buffer[256];
 
-  /* maximum transfer size? */
-  if(ioctl(d->cdda_fd,SG_GET_RESERVED_SIZE,&reserved)){
-    /* Up, guess not. */
-    cdmessage(d,"\tCould not get scatter/gather buffer size.\n");
-    return;
-  }
+  /* SG_SET_RESERVED_SIZE doesn't actually allocate or reserve anything.
+   * what it _does_ do is give you an error if you ask for a value
+   * larger than q->max_sectors (the length of the device's bio request
+   * queue).  So we walk it up from 1 sector until it fails, then get
+   * the value we set it to last.
+   */
+  /* start with 2 frames, round down to our queue's sector size */
+  cur = 1;
+  do {
+    cur <<= 1; reserved = cur * (1<<9);
+    err = ioctl(d->cdda_fd, SG_SET_RESERVED_SIZE, &reserved);
+  } while(err >= 0);
+  ioctl(d->cdda_fd, SG_GET_RESERVED_SIZE, &reserved);
 
-  if(ioctl(d->cdda_fd,SG_GET_SG_TABLESIZE,&table))table=1;
-  {
-    int cur;
+  /* this doesn't currently ever work, but someday somebody might
+     implement working sg lists with SG_IO devices, so who knows... */
+  if (ioctl(d->cdda_fd, SG_GET_SG_TABLESIZE, &table) < 0)
+    table=1;
 
-    sprintf(buffer,"\tDMA scatter/gather table entries: %d\n\t"
-	    "table entry size: %d bytes\n\t"
-	    "maximum theoretical transfer: %d sectors\n",
-	    table,reserved,table*reserved/CD_FRAMESIZE_RAW);
-    cdmessage(d,buffer);
+  sprintf(buffer,"\tDMA scatter/gather table entries: %d\n\t"
+      "table entry size: %d bytes\n\t"
+      "maximum theoretical transfer: %d sectors\n",
+      table, reserved, table*reserved/CD_FRAMESIZE_RAW);
+  cdmessage(d,buffer);
 
-    cur=table*reserved;
+  cur=table*reserved;
 
-    /* not too much; new kernels have trouble with DMA allocation, so
-       be more conservative: 32kB max until I test more thoroughly.
-       Note from RedHat: "Ee don't always get -ENOMEM.  Sometimes USB drives 
-       still fail the wrong way.  This needs some kernel-land investigation.
-    */
-
+  /* so since we never go above q->max_sectors, we should never get -EIO.
+   * we might still get -ENOMEM, but we back off for that later.  Monty
+   * had an old comment: "not too much; new kernels have trouble with DMA
+   * "allocation, so be more conservative: 32kB max until I test more 
+   * thoroughly".  We're not currently honoring that, because we should
+   * always get -ENOMEM.
+   *
+   * Updated: but we don't always get -ENOMEM.  Sometimes USB drives 
+   * still fail the wrong way.  This needs some kernel-land investigation.
+   */
+  if (!getenv("CDDA_IGNORE_BUFSIZE_LIMIT")) {
     cur=(cur>1024*32?1024*32:cur);
-    d->nsectors=cur/CD_FRAMESIZE_RAW;
-    d->bigbuff=cur;
-
-    sprintf(buffer,"\tSetting default read size to %d sectors (%d bytes).\n\n",
-	    d->nsectors,d->nsectors*CD_FRAMESIZE_RAW);
-    cdmessage(d,buffer);
-  } 
-
-  /* Disable command queue; we don't need it, no reason to have it on */
-  reserved=0;
-  if(ioctl(d->cdda_fd,SG_SET_COMMAND_Q,&reserved)){
-    cdmessage(d,"\tCouldn't disable command queue!  Continuing anyway...\n");
   }
+  d->nsectors=cur/CD_FRAMESIZE_RAW;
+  d->bigbuff=cur;
 
-}
+  sprintf(buffer,"\tSetting default read size to %d sectors (%d bytes).\n\n",
+      d->nsectors,d->nsectors*CD_FRAMESIZE_RAW);
 
-static void reset_scsi(cdrom_drive *d){
-  int arg;
-  d->enable_cdda(d,0);
+  if(cur==0) exit(1);
 
-  cdmessage(d,"sending SG SCSI reset... ");
-  if(ioctl(d->cdda_fd,SG_SCSI_RESET,&arg))
-    cdmessage(d,"FAILED: EBUSY\n");
-  else
-    cdmessage(d,"OK\n");
-  
-  d->enable_cdda(d,1);
+  cdmessage(d,buffer);
 }
 
 static void clear_garbage(cdrom_drive *d){
@@ -109,14 +104,61 @@ static void clear_garbage(cdrom_drive *d){
   }
 }
 
-/* process a complete scsi command. */
-static int handle_scsi_cmd(cdrom_drive *d,
-			   unsigned int cmd_len, 
-			   unsigned int in_size, 
-			   unsigned int out_size,
+static int check_sbp_error(const unsigned char *sbp) {
+  if (sbp[0]) {
+    char key = sbp[2] & 0xf;
+    char ASC = sbp[12];
+    char ASCQ = sbp[13];
+    
+    switch (key){
+    case 0:
+      if (errno==0)
+	errno = EIO;
+      return(TR_UNKNOWN);
+    case 1:
+      break;
+    case 2:
+      if (errno==0)
+	errno = EBUSY;
+      return(TR_BUSY);
+    case 3: 
+      if ((ASC==0x0C) & (ASCQ==0x09)) {
+	/* loss of streaming */
+	if (errno==0)
+	  errno = EIO;
+	return(TR_STREAMING);
+      } else {
+	if (errno==0)
+	  errno = EIO;
+	return(TR_MEDIUM);
+      }
+    case 4:
+      if (errno==0)
+	errno = EIO;
+      return(TR_FAULT);
+    case 5:
+      if (errno==0)
+	errno = EINVAL;
+      return(TR_ILLEGAL);
+    default:
+      if (errno==0)
+	errno = EIO;
+      return(TR_UNKNOWN);
+    }
+  }
+  return 0;
+}
 
-			   unsigned char bytefill,
-			   int bytecheck){
+/* process a complete scsi command. */
+static int sg2_handle_scsi_cmd(cdrom_drive *d,
+			       unsigned char *cmd,
+			       unsigned int cmd_len, 
+			       unsigned int in_size, 
+			       unsigned int out_size,       
+			       unsigned char bytefill,
+			       int bytecheck,
+			       unsigned char *sense_buffer){
+  
   int status = 0;
   struct sg_header *sg_hd=(struct sg_header *)d->sg;
   long writebytes=SG_OFF+cmd_len+in_size;
@@ -127,6 +169,8 @@ static int handle_scsi_cmd(cdrom_drive *d,
   clear_garbage(d);
 
   memset(sg_hd,0,sizeof(sg_hd)); 
+  memset(sense_buffer,0,SG_MAX_SENSE); 
+  memcpy(d->sg_buffer,cmd,cmd_len);
   sg_hd->twelve_byte = cmd_len == 12;
   sg_hd->result = 0;
   sg_hd->reply_len = SG_OFF + out_size;
@@ -221,6 +265,7 @@ static int handle_scsi_cmd(cdrom_drive *d,
   errno=0;
   status = read(d->cdda_fd, sg_hd, SG_OFF + out_size);
   sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
+  memcpy(sense_buffer,sg_hd->sense_buffer,SG_MAX_SENSE);
 
   if (status<0)return(TR_EREAD);
 
@@ -229,47 +274,14 @@ static int handle_scsi_cmd(cdrom_drive *d,
     return(TR_EREAD);
   }
 
-  if(sg_hd->sense_buffer[0]){
-    char key=sg_hd->sense_buffer[2]&0xf;
-    char ASC=sg_hd->sense_buffer[12];
-    char ASCQ=sg_hd->sense_buffer[13];
-    switch(key){
-    case 0:
-      if(errno==0)errno=EIO;
-      return(TR_UNKNOWN);
-    case 1:
-      break;
-    case 2:
-      if(errno==0)errno=EBUSY;
-      return(TR_BUSY);
-    case 3: 
-      if(ASC==0x0C && ASCQ==0x09){
-	/* loss of streaming */
-	if(errno==0)errno=EIO;
-	return(TR_STREAMING);
-      }else{
-	if(errno==0)errno=EIO;
-	return(TR_MEDIUM);
-      }
-    case 4:
-      if(errno==0)errno=EIO;
-      return(TR_FAULT);
-    case 5:
-      if(errno==0)errno=EINVAL;
-      return(TR_ILLEGAL);
-    default:
-      if(errno==0)errno=EIO;
-      return(TR_UNKNOWN);
-    }
-  }
+  status = check_sbp_error(sense_buffer);
+  if(status)return status;
 
-  /* still not foolproof; the following doesn't guarantee that we got
-     all the data, just that the command was not rejected. */
-
-  /* Why do this with the above sense stuff?  For some reason,
-     commands still get through.  Perhaps no data comes back even
-     though the target reports success? */
-
+  /* Failed/Partial DMA transfers occasionally get through.  Why?  No clue,
+     but it's been demonstrated in practice that we occasionally get
+     fewer bytes than we request with no indication anything went
+     wrong. */
+  
   if(bytecheck && in_size+cmd_len<out_size){
     long i,flag=0;
     for(i=in_size;i<out_size;i++)
@@ -288,30 +300,190 @@ static int handle_scsi_cmd(cdrom_drive *d,
   return(0);
 }
 
-/* Group 1 (10b) command */
+static void print_cmd_error(cdrom_drive *d, char *direction, unsigned char *cmdp, int cmdlen) {
+  char ebuf[1024];
+  unsigned char tmp[2];
+  int x=0;
+
+  sprintf(ebuf, "\nError %s command: ", direction);
+  cdmessage(d, ebuf);
+  tmp[1] = 0;
+  while (x < cmdlen) {
+    if (x % 8 == 0)
+      cdmessage(d, " ");
+    if (x % 16 == 0) {
+      cdmessage(d, "\n");
+      if (x+1 < cmdlen)
+        cdmessage(d, "\t");
+    }   
+    tmp[0] = cmdp[x];
+    sprintf(ebuf, "%02x ", tmp[0]);
+    cdmessage(d, ebuf);
+    x++;
+  }
+  if (!(x % 16 == 0))
+    cdmessage(d, "\n");
+}
+
+static int sgio_handle_scsi_cmd(cdrom_drive *d,
+				unsigned char *cmd,
+				unsigned int cmd_len, 
+				unsigned int in_size, 
+				unsigned int out_size,       
+				unsigned char bytefill,
+				int bytecheck,
+				unsigned char *sense){
+
+  int status = 0;
+  struct sg_io_hdr hdr;
+
+  memset(&hdr,0,sizeof(hdr));
+  memset(sense,0,sizeof(sense));
+  
+  hdr.cmdp = cmd;
+  hdr.cmd_len = cmd_len;
+  hdr.sbp = sense;
+  hdr.mx_sb_len = SG_MAX_SENSE;
+  hdr.timeout = 50000;
+  hdr.interface_id = 'S';
+  hdr.dxferp =  d->sg_buffer;
+  hdr.flags = SG_FLAG_DIRECT_IO;  /* direct IO if we can get it */
+
+  /* scary buffer fill hack */
+  if(bytecheck && out_size>in_size)
+    memset(hdr.dxferp+in_size,bytefill,out_size-in_size); 
+
+
+  if (in_size) {
+    hdr.dxfer_len = in_size;
+    hdr.dxfer_direction = SG_DXFER_TO_DEV;
+    
+    errno = 0;
+    status = ioctl(d->ioctl_fd, SG_IO, &hdr);
+    if (status >= 0 && hdr.status)
+      status = check_sbp_error(hdr.sbp);
+    if (status < 0) {
+      print_cmd_error(d, "writing", hdr.cmdp, cmd_len);
+      return TR_EWRITE;
+    }
+  }
+
+  if (!in_size | out_size) {
+    hdr.dxfer_len = out_size;
+
+    if(bytecheck && d->interface != SGIO_SCSI_BUGGY1)
+      hdr.dxfer_direction = out_size ? SG_DXFER_TO_FROM_DEV : SG_DXFER_NONE;
+    else
+      hdr.dxfer_direction = out_size ? SG_DXFER_FROM_DEV : SG_DXFER_NONE;
+
+    errno = 0;
+    status = ioctl(d->ioctl_fd, SG_IO, &hdr);
+    if (status >= 0 && hdr.status)
+      status = check_sbp_error(hdr.sbp);
+    if (status < 0) {
+      print_cmd_error(d, "reading", hdr.cmdp, cmd_len);
+      return TR_EREAD;
+    }
+  }
+
+  /* Failed/Partial DMA transfers occasionally get through.  Why?  No clue,
+     but it's been demonstrated in practice that we occasionally get
+     fewer bytes than we request with no indication anything went
+     wrong. */
+  
+  if(bytecheck && in_size<out_size){
+    long i,flag=0;
+    for(i=in_size;i<out_size;i++)
+      if(d->sg_buffer[i]!=bytefill){
+	flag=1;
+	break;
+      }
+    
+    if(!flag){
+      errno=EINVAL;
+      return(TR_ILLEGAL);
+    }
+  }
+  
+  errno = 0;
+  return 0;
+}
+
+static int handle_scsi_cmd(cdrom_drive *d,
+			   unsigned char *cmd,
+			   unsigned int cmd_len, 
+			   unsigned int in_size, 
+			   unsigned int out_size,       
+			   unsigned char bytefill,
+			   int bytecheck,
+			   unsigned char *sense){
+
+  if(d->interface == SGIO_SCSI || d->interface == SGIO_SCSI_BUGGY1)
+    return sgio_handle_scsi_cmd(d,cmd,cmd_len,in_size,out_size,bytefill,bytecheck,sense);
+  return sg2_handle_scsi_cmd(d,cmd,cmd_len,in_size,out_size,bytefill,bytecheck,sense);
+
+}
+
+static int test_unit_ready(cdrom_drive *d){
+  unsigned char sense[SG_MAX_SENSE];
+  unsigned char key, ASC, ASCQ;
+  unsigned char cmd[6] =  { 0x00, /* TEST_UNIT_READY */	
+			    0, /* reserved */
+			    0, /* reserved */
+			    0, /* reserved */
+			    0, /* reserved */
+			    0};/* control */		
+
+  handle_scsi_cmd(d, cmd, 6, 0, 56, 0,0, sense);
+
+  key = d->sg_buffer[2] & 0xf;
+  ASC = d->sg_buffer[12];
+  ASCQ = d->sg_buffer[13];
+  
+  if(key == 2 && ASC == 4 && ASCQ == 1) return 0;
+  return 1;
+}
+
+static void reset_scsi(cdrom_drive *d){
+  int arg,tries=0;
+  d->enable_cdda(d,0);
+
+  cdmessage(d,"sending SG SCSI reset... ");
+  if(ioctl(d->cdda_fd,SG_SCSI_RESET,&arg))
+    cdmessage(d,"FAILED: EBUSY\n");
+  else
+    cdmessage(d,"OK\n");
+
+  while(1) {
+    if(test_unit_ready(d))break;
+    tries++;
+    usleep(10);
+  }
+  
+  d->enable_cdda(d,1);
+}
 
 static int mode_sense_atapi(cdrom_drive *d,int size,int page){ 
-  memcpy(d->sg_buffer,  
-	 (char [])  {0x5A,   /* MODE_SENSE */
-		       0x00, /* reserved */
-		       0x00, /* page */
-		       0,    /* reserved */
-		       0,    /* reserved */
-		       0,    /* reserved */
-		       0,    /* reserved */
-		       0,    /* MSB (0) */
-		       0,    /* sizeof(modesense - SG_OFF) */
-		       0},   /* reserved */ 
-         10);
+  unsigned char sense[SG_MAX_SENSE];
+  unsigned char cmd[10]= {0x5A,   /* MODE_SENSE */
+			  0x00, /* reserved */
+			  0x00, /* page */
+			  0,    /* reserved */
+			  0,    /* reserved */
+			  0,    /* reserved */
+			  0,    /* reserved */
+			  0,    /* MSB (0) */
+			  0,    /* sizeof(modesense - SG_OFF) */
+			  0};   /* reserved */ 
 
-  d->sg_buffer[1]=d->lun<<5;
-  d->sg_buffer[2]=0x3F&page;
-  d->sg_buffer[8]=size+4;
+  cmd[1]=d->lun<<5;
+  cmd[2]=0x3F&page;
+  cmd[8]=size+4;
 
-  if (handle_scsi_cmd (d, 10, 0, size+4,'\377',1)) return(1);
+  if (handle_scsi_cmd (d, cmd, 10, 0, size+4,'\377',1,sense)) return(1);
 
   {
-    char *b=d->sg_buffer;
+    unsigned char *b=d->sg_buffer;
     if(b[0])return(1); /* Handles only up to 256 bytes */
     if(b[6])return(1); /* Handles only up to 256 bytes */
 
@@ -328,20 +500,19 @@ static int mode_sense_atapi(cdrom_drive *d,int size,int page){
 /* group 0 (6b) command */
 
 static int mode_sense_scsi(cdrom_drive *d,int size,int page){  
-  memcpy(d->sg_buffer,  
-	 (char [])  {0x1A,   /* MODE_SENSE */
-		       0x00, /* return block descriptor/lun */
-		       0x00, /* page */
-		       0,    /* reserved */
-		       0,   /* sizeof(modesense - SG_OFF) */
-		       0},   /* control */ 
-         6);
+  unsigned char sense[SG_MAX_SENSE];
+  unsigned char cmd[6]={0x1A, /* MODE_SENSE */
+			0x00, /* return block descriptor/lun */
+			0x00, /* page */
+			0,    /* reserved */
+			0,    /* sizeof(modesense - SG_OFF) */
+			0};   /* control */ 
   
-  d->sg_buffer[1]=d->lun<<5;
-  d->sg_buffer[2]=(0x3F&page);
-  d->sg_buffer[4]=size;
-
-  if (handle_scsi_cmd (d, 6, 0, size, '\377',1)) return(1);
+  cmd[1]=d->lun<<5;
+  cmd[2]=(0x3F&page);
+  cmd[4]=size;
+  
+  if (handle_scsi_cmd (d, cmd, 6, 0, size, '\377',1, sense)) return(1);
   return(0);
 }
 
@@ -351,63 +522,63 @@ static int mode_sense(cdrom_drive *d,int size,int page){
   return(mode_sense_scsi(d,size,page));
 }
 
+/* Current SG/SGIO impleemntations specifically disallow mode set
+   unless running as root (or setuid).  One can see why (could be
+   disastrous on, eg, a SCSI disk), but it curtails what we can do
+   with older SCSI cdroms. */
 static int mode_select(cdrom_drive *d,int density,int secsize){
   /* short circut the way Heiko does it; less flexible, but shorter */
+  unsigned char sense[SG_MAX_SENSE];
   if(d->is_atapi){
-    unsigned char *mode = d->sg_buffer + 18;
-
-    memcpy(d->sg_buffer,
-	   (char []) { 0x55, /* MODE_SELECT */
-			 0x10, /* no save page */
-			 0, /* reserved */
-			 0, /* reserved */
-			 0, /* reserved */
-			 0, /* reserved */
-			 0, /* reserved */
-			 0, /* reserved */
-			 12, /* sizeof(mode) */
-			 0, /* reserved */
-
-			 /* mode parameter header */
-			 0, 0, 0, 0,  0, 0, 0, 
-			 8, /* Block Descriptor Length */
-
-			 /* descriptor block */
-			 0,       /* Density Code */
-			 0, 0, 0, /* # of Blocks */
-			 0,       /* reserved */
-			 0, 0, 0},/* Blocklen */
-	   26);
-
-    d->sg_buffer[1]|=d->lun<<5;
-
+    unsigned char cmd[26] = { 0x55, /* MODE_SELECT */
+			      0x10, /* no save page */
+			      0,    /* reserved */
+			      0,    /* reserved */
+			      0,    /* reserved */
+			      0,    /* reserved */
+			      0,    /* reserved */
+			      0,    /* reserved */
+			      12,   /* sizeof(mode) */
+			      0,    /* reserved */
+			      
+			      /* mode parameter header */
+			      0, 0, 0, 0,  0, 0, 0, 
+			      8, /* Block Descriptor Length */
+			      
+			      /* descriptor block */
+			      0,       /* Density Code */
+			      0, 0, 0, /* # of Blocks */
+			      0,       /* reserved */
+			      0, 0, 0};/* Blocklen */
+    unsigned char *mode = cmd + 18;
+    
+    
+    cmd[1]|=d->lun<<5;
+    
     /* prepare to read cds in the previous mode */
     mode [0] = density;
-    mode [6] =  secsize >> 8;   /* block length "msb" */
-    mode [7] =  secsize & 0xFF; /* block length lsb */
+    mode [6] = secsize >> 8;   /* block length "msb" */
+    mode [7] = secsize & 0xFF; /* block length lsb */
 
     /* do the scsi cmd */
-    return(handle_scsi_cmd (d,10, 16, 0,0,0));
+    return(handle_scsi_cmd (d,cmd,10, 16, 0,0,0,sense));
 
   }else{
-    unsigned char *mode = d->sg_buffer + 10;
-
-    memcpy(d->sg_buffer,
-	   (char []) { 0x15, /* MODE_SELECT */
-			 0x10, /* no save page */
-			 0, /* reserved */
-			 0, /* reserved */
-			 12, /* sizeof(mode) */
-			 0, /* reserved */
-			 /* mode section */
-			 0, 
-			 0, 0, 
-			 8,       /* Block Descriptor Length */
-			 0,       /* Density Code */
-			 0, 0, 0, /* # of Blocks */
-			 0,       /* reserved */
-			 0, 0, 0},/* Blocklen */
-	   18);
+    unsigned char cmd[18] = { 0x15, /* MODE_SELECT */
+			      0x10, /* no save page */
+			      0, /* reserved */
+			      0, /* reserved */
+			      12, /* sizeof(mode) */
+			      0, /* reserved */
+			      /* mode section */
+			      0, 
+			      0, 0, 
+			      8,       /* Block Descriptor Length */
+			      0,       /* Density Code */
+			      0, 0, 0, /* # of Blocks */
+			      0,       /* reserved */
+			      0, 0, 0};/* Blocklen */
+    unsigned char *mode = cmd + 10;
 
     /* prepare to read cds in the previous mode */
     mode [0] = density;
@@ -415,7 +586,7 @@ static int mode_select(cdrom_drive *d,int density,int secsize){
     mode [7] =  secsize & 0xFF; /* block length lsb */
 
     /* do the scsi cmd */
-    return(handle_scsi_cmd (d,6, 12, 0,0,0));
+    return(handle_scsi_cmd (d,cmd,6, 12, 0,0,0,sense));
   }
 }
 
@@ -474,10 +645,11 @@ static int scsi_read_toc (cdrom_drive *d){
      len lsb, flags */
 
   /* read the header first */
-  memcpy(d->sg_buffer, (char []){ 0x43, 0, 0, 0, 0, 0, 1, 0, 12, 0}, 10);
-  d->sg_buffer[1]=d->lun<<5;
+  unsigned char sense[SG_MAX_SENSE];
+  unsigned char cmd[10] = { 0x43, 0, 0, 0, 0, 0, 1, 0, 12, 0};
+  cmd[1]=d->lun<<5;
 
-  if (handle_scsi_cmd (d,10, 0, 12,'\377',1)){
+  if (handle_scsi_cmd (d,cmd,10, 0, 12,'\377',1,sense)){
     cderror(d,"004: Unable to read table of contents header\n");
     return(-4);
   }
@@ -492,11 +664,11 @@ static int scsi_read_toc (cdrom_drive *d){
   }
 
   for (i = first; i <= last; i++){
-    memcpy(d->sg_buffer, (char []){ 0x43, 0, 0, 0, 0, 0, 0, 0, 12, 0}, 10);
-    d->sg_buffer[1]=d->lun<<5;
-    d->sg_buffer[6]=i;
+    memcpy(cmd, (char []){ 0x43, 0, 0, 0, 0, 0, 0, 0, 12, 0}, 10);
+    cmd[1]=d->lun<<5;
+    cmd[6]=i;
     
-    if (handle_scsi_cmd (d,10, 0, 12,'\377',1)){
+    if (handle_scsi_cmd (d,cmd, 10, 0, 12,'\377',1,sense)){
       cderror(d,"005: Unable to read table of contents entry\n");
       return(-5);
     }
@@ -513,11 +685,11 @@ static int scsi_read_toc (cdrom_drive *d){
     }
   }
 
-  memcpy(d->sg_buffer, (char []){ 0x43, 0, 0, 0, 0, 0, 0, 0, 12, 0}, 10);
-  d->sg_buffer[1]=d->lun<<5;
-  d->sg_buffer[6]=0xAA;
+  memcpy(cmd, (char []){ 0x43, 0, 0, 0, 0, 0, 0, 0, 12, 0}, 10);
+  cmd[1]=d->lun<<5;
+  cmd[6]=0xAA;
     
-  if (handle_scsi_cmd (d,10, 0, 12,'\377',1)){
+  if (handle_scsi_cmd (d,cmd,10, 0, 12,'\377',1,sense)){
     cderror(d,"002: Unable to read table of contents lead-out\n");
     return(-2);
   }
@@ -545,11 +717,12 @@ static int scsi_read_toc2 (cdrom_drive *d){
   int i;
   unsigned tracks;
 
-  memcpy(d->sg_buffer, (char[]){ 0xe5, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 10);
-  d->sg_buffer[5]=1;
-  d->sg_buffer[8]=255;
+  unsigned char cmd[10] = { 0xe5, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  unsigned char sense[SG_MAX_SENSE];
+  cmd[5]=1;
+  cmd[8]=255;
 
-  if (handle_scsi_cmd (d,10, 0, 256,'\377',1)){
+  if (handle_scsi_cmd (d,cmd,10, 0, 256,'\377',1,sense)){
     cderror(d,"004: Unable to read table of contents header\n");
     return(-4);
   }
@@ -562,11 +735,11 @@ static int scsi_read_toc2 (cdrom_drive *d){
   }
 
   for (i = 0; i < tracks; i++){
-    memcpy(d->sg_buffer, (char[]){ 0xe5, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 10);
-    d->sg_buffer[5]=i+1;
-    d->sg_buffer[8]=255;
+    memcpy(cmd, (char[]){ 0xe5, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 10);
+    cmd[5]=i+1;
+    cmd[8]=255;
     
-    if (handle_scsi_cmd (d,10, 0, 256,'\377',1)){
+    if (handle_scsi_cmd (d,cmd,10, 0, 256,'\377',1,sense)){
       cderror(d,"005: Unable to read table of contents entry\n");
       return(-5);
     }
@@ -606,158 +779,153 @@ static int scsi_read_toc2 (cdrom_drive *d){
 
 /* These do one 'extra' copy in the name of clean code */
 
-static int i_read_28 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_28 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0x28, 0, 0, 0, 0, 0, 0, 0, 0, 0},10);
+  unsigned char cmd[10]={0x28, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
   if(d->fua)
-    d->sg_buffer[1]=0x08;
+    cmd[1]=0x08;
 
-  d->sg_buffer[1]|=d->lun<<5;
+  cmd[1]|=d->lun<<5;
 
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[8] = sectors;
-  if((ret=handle_scsi_cmd(d,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_A8 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_A8 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xA8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},12);
+  unsigned char cmd[12]={0xA8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  
+  if(d->fua)
+    cmd[1]=0x08;
+  
+  cmd[1]|=d->lun<<5;
+
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[9] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_D4_10 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
+  int ret;
+  unsigned char cmd[10]={0xd4, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  
+  if(d->fua)
+    cmd[1]=0x08;
+
+  cmd[1]|=d->lun<<5;
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_D4_12 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
+  int ret;
+  unsigned char cmd[12]={0xd4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
   if(d->fua)
-    d->sg_buffer[1]=0x08;
+    cmd[1]=0x08;
 
-  d->sg_buffer[1]|=d->lun<<5;
-
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[9] = sectors;
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  cmd[1]|=d->lun<<5;
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[9] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_D4_10 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_D5 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xd4, 0, 0, 0, 0, 0, 0, 0, 0, 0},10);
+  unsigned char cmd[10]={0xd5, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
   if(d->fua)
-    d->sg_buffer[1]=0x08;
+    cmd[1]=0x08;
 
-  d->sg_buffer[1]|=d->lun<<5;
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[8] = sectors;
-  if((ret=handle_scsi_cmd(d,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  cmd[1]|=d->lun<<5;
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_D4_12 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_D8 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xd4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},12);
+  unsigned char cmd[12]={0xd8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
   if(d->fua)
-    d->sg_buffer[1]=0x08;
+    cmd[1]=0x08;
 
-  d->sg_buffer[1]|=d->lun<<5;
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[9] = sectors;
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  cmd[1]|=d->lun<<5;
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[9] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_D5 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xd5, 0, 0, 0, 0, 0, 0, 0, 0, 0},10);
+  unsigned char cmd[12]={0xbe, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0};
 
-  if(d->fua)
-    d->sg_buffer[1]=0x08;
-
-  d->sg_buffer[1]|=d->lun<<5;
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[8] = sectors;
-  if((ret=handle_scsi_cmd(d,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_D8 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xd8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},12);
+  unsigned char cmd[12]={0xbe, 0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
 
-  if(d->fua)
-    d->sg_buffer[1]=0x08;
-
-  d->sg_buffer[1]|=d->lun<<5;
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[9] = sectors;
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_mmc3 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  /*  if(begin<=12007 && begin+sectors>12000){
-    errno=EIO;
-    return(TR_ILLEGAL);
-  }*/
+  unsigned char cmd[12]={0xbe, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
 
-  memcpy(d->sg_buffer,(char []){0xbe, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0},12);
-
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[8] = sectors;
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
-    return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
-  return(0);
-}
-
-static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors){
-  int ret;
-  memcpy(d->sg_buffer,(char []){0xbe, 0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
-
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[8] = sectors;
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
-    return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
-  return(0);
-}
-
-static int i_read_mmc3 (cdrom_drive *d, void *p, long begin, long sectors){
-  int ret;
-  memcpy(d->sg_buffer,(char []){0xbe, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
-
-  d->sg_buffer[3] = (begin >> 16) & 0xFF;
-  d->sg_buffer[4] = (begin >> 8) & 0xFF;
-  d->sg_buffer[5] = begin & 0xFF;
-  d->sg_buffer[8] = sectors;
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
@@ -784,47 +952,50 @@ static inline void LBA_to_MSF(long lba,
 }
 
 
-static int i_read_msf (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_msf (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0},12);
+  unsigned char cmd[12]={0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0};
 
-  LBA_to_MSF(begin,d->sg_buffer+3,d->sg_buffer+4,d->sg_buffer+5);
-  LBA_to_MSF(begin+sectors,d->sg_buffer+6,d->sg_buffer+7,d->sg_buffer+8);
+  LBA_to_MSF(begin,cmd+3,cmd+4,cmd+5);
+  LBA_to_MSF(begin+sectors,cmd+6,cmd+7,cmd+8);
 
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_msf2 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_msf2 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
+  unsigned char cmd[12]={0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
 
-  LBA_to_MSF(begin,d->sg_buffer+3,d->sg_buffer+4,d->sg_buffer+5);
-  LBA_to_MSF(begin+sectors,d->sg_buffer+6,d->sg_buffer+7,d->sg_buffer+8);
+  LBA_to_MSF(begin,cmd+3,cmd+4,cmd+5);
+  LBA_to_MSF(begin+sectors,cmd+6,cmd+7,cmd+8);
 
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
-static int i_read_msf3 (cdrom_drive *d, void *p, long begin, long sectors){
+static int i_read_msf3 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  memcpy(d->sg_buffer,(char []){0xb9, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0},12);
-
-  LBA_to_MSF(begin,d->sg_buffer+3,d->sg_buffer+4,d->sg_buffer+5);
-  LBA_to_MSF(begin+sectors,d->sg_buffer+6,d->sg_buffer+7,d->sg_buffer+8);
-
-  if((ret=handle_scsi_cmd(d,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1)))
+  unsigned char cmd[12]={0xb9, 4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
+  
+  LBA_to_MSF(begin,cmd+3,cmd+4,cmd+5);
+  LBA_to_MSF(begin+sectors,cmd+6,cmd+7,cmd+8);
+  
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
   if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
+
 
 static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
-			  int (*map)(cdrom_drive *, void *, long, long)){
+			   int (*map)(cdrom_drive *, void *, long, long, 
+				      unsigned char *)){
+  unsigned char sense[SG_MAX_SENSE];
   int retry_count,err;
   char *buffer=(char *)p;
 
@@ -835,18 +1006,17 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
   retry_count=0;
   
   while(1) {
-    if((err=map(d,(p?buffer:NULL),begin,sectors))){
+    if((err=map(d,(p?buffer:NULL),begin,sectors,sense))){
       if(d->report_all){
-	struct sg_header *sg_hd=(struct sg_header *)d->sg;
 	char b[256];
 
 	sprintf(b,"scsi_read error: sector=%ld length=%ld retry=%d\n",
 		begin,sectors,retry_count);
 	cdmessage(d,b);
 	sprintf(b,"                 Sense key: %x ASC: %x ASCQ: %x\n",
-		(int)(sg_hd->sense_buffer[2]&0xf),
-		(int)(sg_hd->sense_buffer[12]),
-		(int)(sg_hd->sense_buffer[13]));
+		(int)(sense[2]&0xf),
+		(int)(sense[12]),
+		(int)(sense[13]));
 	cdmessage(d,b);
 	sprintf(b,"                 Transport error: %s\n",strerror_tr[err]);
 	cdmessage(d,b);
@@ -856,9 +1026,9 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	fprintf(stderr,"scsi_read error: sector=%ld length=%ld retry=%d\n",
 		begin,sectors,retry_count);
 	fprintf(stderr,"                 Sense key: %x ASC: %x ASCQ: %x\n",
-		(int)(sg_hd->sense_buffer[2]&0xf),
-		(int)(sg_hd->sense_buffer[12]),
-		(int)(sg_hd->sense_buffer[13]));
+		(int)(sense[2]&0xf),
+		(int)(sense[12]),
+		(int)(sense[13]));
 	fprintf(stderr,"                 Transport error: %s\n",strerror_tr[err]);
 	fprintf(stderr,"                 System error: %s\n",strerror(errno));
       }
@@ -1313,8 +1483,7 @@ static void check_fua_bit(cdrom_drive *d){
 
 static int check_atapi(cdrom_drive *d){
   int atapiret=-1;
-  int fd = d->cdda_fd; /* this is the correct fd (not ioctl_fd), as the 
-			  generic device is the device we need to check */
+  int fd = d->cdda_fd; /* check the device we'll actually be using to read */
 			  
   cdmessage(d,"\nChecking for SCSI emulation...\n");
 
@@ -1323,10 +1492,16 @@ static int check_atapi(cdrom_drive *d){
     return(-1);
   } else {
     if(atapiret==1){
-      cdmessage(d,"\tDrive is ATAPI (using SCSI host adaptor emulation)\n");
-      /* Disable kernel SCSI command translation layer for access through sg */
-      if (ioctl(fd,SG_SET_TRANSFORM,0))
-	cderror(d,"\tCouldn't disable kernel command translation layer\n");
+      if(d->interface == SGIO_SCSI){
+	cdmessage(d,"\tDrive is ATAPI (using SG_IO host adaptor emulation)\n");
+      }else if(d->interface == SGIO_SCSI_BUGGY1){
+	cdmessage(d,"\tDrive is ATAPI (using SG_IO host adaptor emulation with workarounds)\n");
+      }else{
+	cdmessage(d,"\tDrive is ATAPI (using SCSI host adaptor emulation)\n");
+	/* Disable kernel SCSI command translation layer for access through sg */
+	if (ioctl(fd,SG_SET_TRANSFORM,0))
+	  cderror(d,"\tCouldn't disable kernel command translation layer\n");
+      }
       d->is_atapi=1;
     }else{
       cdmessage(d,"\tDrive is SCSI\n");
@@ -1338,7 +1513,7 @@ static int check_atapi(cdrom_drive *d){
 }  
 
 static int check_mmc(cdrom_drive *d){
-  char *b;
+  unsigned char *b;
   cdmessage(d,"\nChecking for MMC style command set...\n");
 
   d->is_mmc=0;
@@ -1385,9 +1560,10 @@ static void check_exceptions(cdrom_drive *d,exception *list){
 
 /* request vendor brand and model */
 unsigned char *scsi_inquiry(cdrom_drive *d){
-  memcpy(d->sg_buffer,(char[]){ 0x12,0,0,0,56,0},6);
-
-  if(handle_scsi_cmd(d,6, 0, 56,'\377',1)) {
+  unsigned char sense[SG_MAX_SENSE];
+  unsigned char cmd[6]={ 0x12,0,0,0,56,0 };
+  
+  if(handle_scsi_cmd(d,cmd,6, 0, 56,'\377',1,sense)) {
     cderror(d,"008: Unable to identify CDROM model\n");
     return(NULL);
   }

@@ -47,6 +47,7 @@ int cdda_open(cdrom_drive *d){
   if(d->opened)return(0);
 
   switch(d->interface){
+  case SGIO_SCSI:  
   case GENERIC_SCSI:  
     if((ret=scsi_init_drive(d)))
       return(ret);

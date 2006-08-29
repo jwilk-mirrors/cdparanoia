@@ -1,6 +1,6 @@
 /******************************************************************
  * CopyPolicy: GNU Public License 2 applies
- * Copyright (C) 1998 Monty xiphmont@mit.edu
+ * Copyright (C) 2006 Monty xiphmont@mit.edu
  * 
  * Autoscan for or verify presence of a cdrom device
  * 
@@ -117,13 +117,15 @@ cdrom_drive *cdda_identify(const char *device, int messagedest,char **messages){
   }
 #endif
 
-  d=cdda_identify_cooked(device,messagedest,messages);
-  if(!d)d=cdda_identify_scsi(device,NULL,messagedest,messages);
-
+  /* an IDE device may have scsi-ide support, SG_IO support and cooked
+     support.  Prefer the SCSI variants, they give the most control */
+  d=cdda_identify_scsi(NULL,device,messagedest,messages);
+  if(!d)d=cdda_identify_cooked(device,messagedest,messages);
+  
 #ifdef CDDA_TEST
   if(!d)d=cdda_identify_test(device,messagedest,messages);
 #endif
-  
+
   return(d);
 }
 
@@ -446,13 +448,66 @@ static int verify_SG_version(cdrom_drive *d,int messagedest,
   return(major);
 }
 
+int check_sgio(const char *device, int messagedest, char **messages){
+  int fd;
+  struct sg_io_hdr hdr;
+
+  if (!device) return 0;
+
+  /* we don't really care what type of device it is -- if it can do
+   * SG_IO, then we'll put it through the normal mmc/atapi/etc tests
+   * later, but it's good enough for now. */
+  fd = open(device, O_RDWR|O_NONBLOCK);
+  if (fd < 0){
+    idperror(messagedest,messages,
+	     "\t\tCould not access device %d to test for SG_IO support",device);    
+    return 0;
+  }
+
+  memset(&hdr, 0, sizeof (struct sg_io_hdr));
+  /* First try with interface_id = 'A'; for all but the sg case,
+   * that'll get us a -EINVAL if it supports SG_IO, and some other
+   * error for all other cases. */
+  hdr.interface_id = 'A';
+  if (ioctl(fd, SG_IO, &hdr)) {
+    switch (errno) {
+    case EINVAL: /* sr and ata give us EINVAL when SG_IO is
+		  * supported but interface_id is bad. */
+      
+    case ENOSYS: /* sg gives us ENOSYS when SG_IO is supported but
+		  * interface_id is bad.  IMHO, this is wrong and
+		  * needs fixing in the kernel. */
+      
+      close(fd);
+      return 1;
+      
+    default: /* everything else gives ENOTTY, I think.  I'm just
+	      * going to be paranoid and reject everything else. */
+      
+      close(fd);
+      return 0;
+      
+    }
+  }
+  /* if we get here, something is dreadfuly wrong. ioctl(fd,SG_IO,&hdr)
+   * handled SG_IO, but took hdr.interface_id = 'A' as valid, and an empty
+   * command as good.  Don't trust it. */
+  close(fd);
+  return 0;
+}
+
+/* scanning is always done by specifying a device name in
+   specialized_device; generic_device is only filled when the generic device
+   force option is used, and in that case, use of SG (not SGIO) should indeed be
+   forced */
 cdrom_drive *cdda_identify_scsi(const char *generic_device, 
-				const char *ioctl_device, int messagedest,
+				const char *specialized_device, int messagedest,
 				char **messages){
-  
+
   cdrom_drive *d=NULL;
   struct stat i_st;
   struct stat g_st;
+  int use_sgio=1;
   int i_fd=-1, i;
   int g_fd=-1;
   int version;
@@ -460,49 +515,37 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   char *p;
 
   if(generic_device)
-    idmessage(messagedest,messages,"\tTesting %s for SCSI interface",
+    idmessage(messagedest,messages,"\tTesting %s for SCSI/MMC interface",
 	      generic_device);
   else
-    if(ioctl_device)
-    idmessage(messagedest,messages,"\tTesting %s for SCSI interface",
-	      ioctl_device);
+    if(specialized_device)
+      idmessage(messagedest,messages,"\tTesting %s for SCSI/MMC interface",
+		specialized_device);
+  
 
-
-  /* Do this first; it's wasteful, but the messages make more sense */
   if(generic_device){
+    use_sgio = 0;
+    idmessage(messagedest,messages,"\t\tgeneric device forced; not testing for SG_IO interface",
+	      generic_device);
+    
     if(stat(generic_device,&g_st)){
       idperror(messagedest,messages,"\t\tCould not access device %s",
 	       generic_device);
       return(NULL);
     }
+
     if((int)(g_st.st_rdev>>8)!=SCSI_GENERIC_MAJOR){
-      if((int)(g_st.st_rdev>>8)!=SCSI_CDROM_MAJOR){
-	idmessage(messagedest,messages,"\t\t%s is not a SCSI device",
-		  generic_device);
-	return(NULL);
-      }else{
-	char *temp=(char *)generic_device;
-	generic_device=ioctl_device;
-	ioctl_device=temp;
-      }
-    }
-  }
-  if(ioctl_device){
-    if(stat(ioctl_device,&i_st)){
-      idperror(messagedest,messages,"\t\tCould not access device %s",
-	       ioctl_device);
+      idmessage(messagedest,messages,"\t\t%s is not a generic SCSI device",
+		generic_device);
       return(NULL);
     }
-    if((int)(i_st.st_rdev>>8)!=SCSI_CDROM_MAJOR){
-      if((int)(i_st.st_rdev>>8)!=SCSI_GENERIC_MAJOR){
-	idmessage(messagedest,messages,"\t\t%s is not a SCSI device",
-		  ioctl_device);
-	return(NULL);
-      }else{
-	char *temp=(char *)generic_device;
-	generic_device=ioctl_device;
-	ioctl_device=temp;
-      }
+  }
+  
+  if(specialized_device){ 
+    if(stat(specialized_device,&i_st)){
+      idperror(messagedest,messages,"\t\tCould not access device %s",
+	       specialized_device);
+      return(NULL);
     }
   }
 
@@ -511,125 +554,162 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   if(generic_device){
     generic_device=test_resolve_symlink(generic_device,messagedest,messages);
     if(generic_device==NULL)goto cdda_identify_scsi_fail;
-
   }
-  if(ioctl_device){
-    ioctl_device=test_resolve_symlink(ioctl_device,messagedest,messages);
-    if(ioctl_device==NULL)goto cdda_identify_scsi_fail;
-
+  if(specialized_device){
+    specialized_device=test_resolve_symlink(specialized_device,messagedest,messages);
+    if(specialized_device==NULL)goto cdda_identify_scsi_fail;
   }
 
-  if(!generic_device || !ioctl_device){
-    if(generic_device){
-      ioctl_device=
-	scsi_match(generic_device,scsi_cdrom_prefixes,
-		   devfs_scsi_test,devfs_scsi_cd,
-		   "\t\tNo cdrom device found to match generic device %s",
-		   messagedest,messages);
+  /* sgio is always preferred if it's there, unless user has forced the generic scsi device name */
+  if(use_sgio){
+    if(check_sgio(specialized_device,messagedest,messages)){
+      idmessage(messagedest,messages,"\t\tSG_IO device: %s",specialized_device);
     }else{
-      generic_device=
-	scsi_match(ioctl_device,scsi_generic_prefixes,
-		   devfs_scsi_test,devfs_scsi_generic,
-		   "\t\tNo generic SCSI device found to match CDROM device %s",
-		   messagedest,messages);
-      if(!generic_device)	
-	goto cdda_identify_scsi_fail;
+      idmessage(messagedest,messages,"\t\tno SG_IO support for device: %s",specialized_device);
+      use_sgio=0;
     }
   }
   
-  idmessage(messagedest,messages,"\t\tgeneric device: %s",generic_device);
-  idmessage(messagedest,messages,"\t\tioctl device: %s",(ioctl_device?
-							 ioctl_device:
-							 "not found"));
-  
-  if(stat(generic_device,&g_st)){
-    idperror(messagedest,messages,"\t\tCould not access generic SCSI device "
-	     "%s",generic_device);
+  if(!use_sgio){
 
+    /* was a generic device passed in as the specialized device name? */
+    if(specialized_device){ 
+      if((int)(i_st.st_rdev>>8)==SCSI_GENERIC_MAJOR){
+	char *temp=(char *)generic_device;
+	generic_device=specialized_device;
+	specialized_device=temp;
+      }
+      
+      if(!generic_device || !specialized_device){
+	if(generic_device){
+	  specialized_device=
+	    scsi_match(generic_device,scsi_cdrom_prefixes,
+		       devfs_scsi_test,devfs_scsi_cd,
+		       "\t\tNo cdrom device found to match generic device %s",
+		       messagedest,messages);
+	}else{
+	  generic_device=
+	    scsi_match(specialized_device,scsi_generic_prefixes,
+		       devfs_scsi_test,devfs_scsi_generic,
+		       "\t\tNo generic SCSI device found to match CDROM device %s",
+		       messagedest,messages);
+	  if(!generic_device)	
+	    goto cdda_identify_scsi_fail;
+	}
+      }
+    }
+    
+    idmessage(messagedest,messages,"\t\tgeneric device: %s",generic_device);
+    idmessage(messagedest,messages,"\t\tioctl device: %s",(specialized_device?
+							   specialized_device:
+							   "not found"));
+    if(specialized_device){
+      if(stat(specialized_device,&i_st)){
+	idperror(messagedest,messages,"\t\tCould not access cdrom device "
+		 "%s",specialized_device);
+	goto cdda_identify_scsi_fail;
+      }
+    }
+
+    if(stat(generic_device,&g_st)){
+      idperror(messagedest,messages,"\t\tCould not access generic SCSI device "
+	       "%s",generic_device);
+      
+      goto cdda_identify_scsi_fail;
+    }
+  }
+
+  if(specialized_device) {
+    for(i=0; (i<10) && (i_fd==-1); i++) {
+      if(use_sgio)
+	i_fd=open(specialized_device,O_RDWR|O_NONBLOCK|O_EXCL);
+      else
+	i_fd=open(specialized_device,O_RDONLY|O_NONBLOCK|O_EXCL);
+      if(i_fd!=-1)break;
+      fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", specialized_device, strerror(errno));
+      usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+    }
+  }
+
+  if(generic_device) {
+    g_fd=open(generic_device,O_RDWR|O_EXCL);
+    for(i=0; (i<10) && (g_fd==-1); i++) {
+      fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", generic_device, strerror(errno));
+      usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
+      g_fd=open(generic_device,O_RDWR|O_EXCL);
+    }
+  }
+  
+  if(specialized_device && i_fd==-1){
+    idperror(messagedest,messages,"\t\tCould not open cdrom device "
+	     "%s (continuing)",specialized_device);
     goto cdda_identify_scsi_fail;
   }
-
-  if(ioctl_device) {
-    i_fd=open(ioctl_device,O_RDONLY|O_NONBLOCK|O_EXCL);
-    for(i=0; (i<10) && (i_fd==-1); i++) {
-      fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", ioctl_device, strerror(errno));
-      usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
-      i_fd=open(ioctl_device,O_RDONLY|O_NONBLOCK|O_EXCL);
-    }
-  }
-  g_fd=open(generic_device,O_RDWR|O_EXCL);
-  for(i=0; (i<10) && (g_fd==-1); i++) {
-    fprintf(stderr, "Error trying to open %s exclusively (%s). retrying in 1 second.\n", generic_device, strerror(errno));
-    usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
-    g_fd=open(generic_device,O_RDWR|O_EXCL);
-  }
   
-  if(ioctl_device && i_fd==-1)
-    idperror(messagedest,messages,"\t\tCould not open SCSI cdrom device "
-	     "%s (continuing)",ioctl_device);
-
-  if(g_fd==-1){
+  if(generic_device && g_fd==-1){
     idperror(messagedest,messages,"\t\tCould not open generic SCSI device "
 	     "%s",generic_device);
     goto cdda_identify_scsi_fail;
   }
-
+    
   if(i_fd!=-1){
-    if(stat(ioctl_device,&i_st)){
-      idperror(messagedest,messages,"\t\tCould not access SCSI cdrom device "
-	       "%s",ioctl_device);
-      goto cdda_identify_scsi_fail;
-    }
-
     type=(int)(i_st.st_rdev>>8);
 
-    if(type==SCSI_CDROM_MAJOR){
-      if (!S_ISBLK(i_st.st_mode)) {
-	idmessage(messagedest,messages,"\t\tSCSI CDROM device %s not a "
-		  "block device",ioctl_device);
+    if(!use_sgio){
+      if(type==SCSI_CDROM_MAJOR){
+	if (!S_ISBLK(i_st.st_mode)) {
+	  idmessage(messagedest,messages,"\t\tSCSI CDROM device %s not a "
+		    "block device",specialized_device);
+	  goto cdda_identify_scsi_fail;
+	}
+      }else{
+	idmessage(messagedest,messages,"\t\tSCSI CDROM device %s has wrong "
+		  "major number",specialized_device);
+	goto cdda_identify_scsi_fail;
+      }
+    }
+  }
+  
+  if(g_fd != -1){
+    if((int)(g_st.st_rdev>>8)==SCSI_GENERIC_MAJOR){
+      if (!S_ISCHR(g_st.st_mode)) {
+	idmessage(messagedest,messages,"\t\tGeneric SCSI device %s not a "
+		  "char device",generic_device);
 	goto cdda_identify_scsi_fail;
       }
     }else{
-      idmessage(messagedest,messages,"\t\tSCSI CDROM device %s has wrong "
-		"major number",ioctl_device);
+      idmessage(messagedest,messages,"\t\tGeneric SCSI device %s has wrong "
+		"major number",generic_device);
       goto cdda_identify_scsi_fail;
     }
   }
-
-  if((int)(g_st.st_rdev>>8)==SCSI_GENERIC_MAJOR){
-    if (!S_ISCHR(g_st.st_mode)) {
-      idmessage(messagedest,messages,"\t\tGeneric SCSI device %s not a "
-		"char device",generic_device);
-      goto cdda_identify_scsi_fail;
-    }
-  }else{
-    idmessage(messagedest,messages,"\t\tGeneric SCSI device %s has wrong "
-	      "major number",generic_device);
-    goto cdda_identify_scsi_fail;
-  }
-  
 
   d=calloc(1,sizeof(cdrom_drive));
-
   d->drive_type=type;
   d->cdda_fd=g_fd;
   d->ioctl_fd=i_fd;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
 
-  version=verify_SG_version(d,messagedest,messages);
-  switch(version){
-  case -1:case 0:case 1:
-    d->interface=GENERIC_SCSI;
-    goto cdda_identify_scsi_fail;
-  case 2:case 3:
-    d->interface=GENERIC_SCSI;
-    break;
-  }
+  if(use_sgio){
+    d->interface=SGIO_SCSI;
+    d->sg_buffer=d->sg=malloc(MAX_BIG_BUFF_SIZE);
+    g_fd=d->cdda_fd=dup(d->ioctl_fd);
+  }else{
+    version=verify_SG_version(d,messagedest,messages);
+    switch(version){
+    case -1:case 0:case 1:
+      d->interface=GENERIC_SCSI;
+      goto cdda_identify_scsi_fail;
+    case 2:case 3:
+      d->interface=GENERIC_SCSI;
+      break;
+    }
 
-  /* malloc our big buffer for scsi commands */
-  d->sg=malloc(MAX_BIG_BUFF_SIZE);
-  d->sg_buffer=d->sg+SG_OFF;
+    /* malloc our big buffer for scsi commands */
+    d->sg=malloc(MAX_BIG_BUFF_SIZE);
+    d->sg_buffer=d->sg+SG_OFF;
+  }
 
   {
     /* get the lun */
@@ -640,10 +720,37 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
       d->lun=lun.lun;
   }
 
-  p = scsi_inquiry(d);
+  p = (char *)scsi_inquiry(d);
 
+  if (!p){
+
+    /* 2.6 kernels have a bug where the block layer implements
+         SG_DXFER_TO_FROM_DEVICE as a read operation instead of write.
+         I've submitted a kernel patch, but it will take a while to
+         propogate.  Work around it for now. --Monty */
+
+    if(d->interface == SGIO_SCSI){
+      /* test the inquiry with the workaround */
+      d->interface = SGIO_SCSI_BUGGY1;
+      p = (char *)scsi_inquiry(d);
+
+      if(p){
+	idmessage(messagedest,messages,
+		  "\t\tThis kernel's block layer has a buggy SG_DXFER_TO_FROM_DEVICE;\n\t\t   activating workaround.\n",NULL);
+      }else{
+	/* Failed for some reason other than the buggy ioctl(); set the interface type back */
+	d->interface = SGIO_SCSI;
+      }
+    }
+  }
+
+  if (!p){
+    idmessage(messagedest,messages,
+	      "\t\tInquiry command failed; unable to probe drive\n",NULL);
+    goto cdda_identify_scsi_fail;
+  }
+  
   /* It would seem some TOSHIBA CDROMs gets things wrong */
- 
   if (p &&
       !strncmp (p + 8, "TOSHIBA", 7) &&
       !strncmp (p + 16, "CD-ROM", 6) &&
@@ -652,18 +759,16 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
     p[1] |= 0x80;     /* removable */
   }
 
-  if (!p || (*p != TYPE_ROM && *p != TYPE_WORM)) {
+  if (*p != TYPE_ROM && *p != TYPE_WORM) {
     idmessage(messagedest,messages,
 	      "\t\tDrive is neither a CDROM nor a WORM device\n",NULL);
-    free(d->sg);
-    free(d);
     goto cdda_identify_scsi_fail;
   }
 
   d->drive_model=calloc(36,1);
   memcpy(d->inqbytes,p,4);
   d->cdda_device_name=copystring(generic_device);
-  d->ioctl_device_name=copystring(ioctl_device);
+  d->ioctl_device_name=copystring(specialized_device);
 
   d->drive_model=calloc(36,1);
   strscat(d->drive_model,p+8,8);
@@ -676,9 +781,13 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   
 cdda_identify_scsi_fail:
   if(generic_device)free((char *)generic_device);
-  if(ioctl_device)free((char *)ioctl_device);
+  if(specialized_device)free((char *)specialized_device);
   if(i_fd!=-1)close(i_fd);
   if(g_fd!=-1)close(g_fd);
+  if(d){
+    if(d->sg)free(d->sg);
+    free(d);
+  }
   return(NULL);
 }
 
@@ -713,10 +822,6 @@ cdrom_drive *cdda_identify_test(const char *filename, int messagedest,
     usleep(1000000 + 100000.0 * rand()/(RAND_MAX+1.0));
     fd=open(filename,O_RDONLY|O_EXCL);
   }
-  
-  if(ioctl_device && i_fd==-1)
-    idperror(messagedest,messages,"\t\tCould not open SCSI cdrom device "
-	     "%s (continuing)",ioctl_device);
   
   if(fd==-1){
     idperror(messagedest,messages,"\t\tCould not open file %s",filename);

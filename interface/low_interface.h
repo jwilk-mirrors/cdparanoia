@@ -50,11 +50,6 @@
 
 #include "cdda_interface.h"
 
-#define MAX_RETRIES 8
-#define MAX_BIG_BUFF_SIZE 65536
-#define MIN_BIG_BUFF_SIZE 4096
-#define SG_OFF sizeof(struct sg_header)
-
 #ifndef SG_EMULATED_HOST
 /* old kernel version; the check for the ioctl is still runtime, this
    is just to build */
@@ -62,6 +57,44 @@
 #define SG_SET_TRANSFORM 0x2204
 #define SG_GET_TRANSFORM 0x2205
 #endif
+
+#ifndef SG_IO
+/* old kernel version; the usage is all runtime-safe, this is just to
+   build */
+typedef struct sg_io_hdr
+{
+  int interface_id;           /* [i] 'S' for SCSI generic (required) */
+  int dxfer_direction;        /* [i] data transfer direction  */
+  unsigned char cmd_len;      /* [i] SCSI command length ( <= 16 bytes) */
+  unsigned char mx_sb_len;    /* [i] max length to write to sbp */
+  unsigned short int iovec_count; /* [i] 0 implies no scatter gather */
+  unsigned int dxfer_len;     /* [i] byte count of data transfer */
+  void * dxferp;              /* [i], [*io] points to data transfer memory
+                                 or scatter gather list */
+  unsigned char * cmdp;       /* [i], [*i] points to command to perform */
+  unsigned char * sbp;        /* [i], [*o] points to sense_buffer memory */
+  unsigned int timeout;       /* [i] MAX_UINT->no timeout (unit: millisec) */
+  unsigned int flags;         /* [i] 0 -> default, see SG_FLAG... */
+  int pack_id;                /* [i->o] unused internally (normally) */
+  void * usr_ptr;             /* [i->o] unused internally */
+  unsigned char status;       /* [o] scsi status */
+  unsigned char masked_status;/* [o] shifted, masked scsi status */
+  unsigned char msg_status;   /* [o] messaging level data (optional) */
+  unsigned char sb_len_wr;    /* [o] byte count actually written to sbp */
+  unsigned short int host_status; /* [o] errors from host adapter */
+  unsigned short int driver_status;/* [o] errors from software driver */
+  int resid;                  /* [o] dxfer_len - actual_transferred */
+  unsigned int duration;      /* [o] time taken by cmd (unit: millisec) */
+  unsigned int info;          /* [o] auxiliary information */
+} sg_io_hdr_t;
+
+
+#endif
+
+#define MAX_RETRIES 8
+#define MAX_BIG_BUFF_SIZE 65536
+#define MIN_BIG_BUFF_SIZE 4096
+#define SG_OFF sizeof(struct sg_header)
 
 extern int  cooked_init_drive (cdrom_drive *d);
 extern unsigned char *scsi_inquiry (cdrom_drive *d);

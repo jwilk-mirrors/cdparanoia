@@ -15,7 +15,7 @@
  *   along with this program; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * cdparanoia (C) 1998 Monty <xiphmont@mit.edu>
+ * cdparanoia (C) 2006 Monty <monty@xiph.org>
  *
  * last changes:
  *   22.01.98 - first version
@@ -341,7 +341,7 @@ VERSION"\n"
 "  C) extract from track 1, time 0:30.12 to 1:10.00:\n"
 "       cdparanoia \"1[:30.12]-1[1:10]\"\n\n"
 
-"Submit bug reports to xiphmont@mit.edu\n\n");
+"Submit bug reports to paranoia@xiph.org\n\n");
 }
 
 long callbegin;
