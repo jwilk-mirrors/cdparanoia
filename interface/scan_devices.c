@@ -668,6 +668,7 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   d->ioctl_fd=i_fd;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
+  d->messagedest = messagedest;
 
   if(use_sgio){
     d->interface=SGIO_SCSI;
