@@ -162,6 +162,8 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
   }
 
   return(ret);
+
+
 }
 
 static void display_toc(cdrom_drive *d){
@@ -203,6 +205,11 @@ static void usage(FILE *f){
   fprintf( f,
 VERSION"\n"
 
+
+"(C) 2006 Monty <monty@xiph.org> and Xiph.Org\n\n"	\
+		"Report bugs to paranoia@xiph.org\n"\
+		"http://www.xiph.org/paranoia/\n"
+
 "USAGE:\n"
 "  cdparanoia [options] <span> [outfile]\n\n"
 
@@ -211,6 +218,7 @@ VERSION"\n"
 "  -q --quiet                      : quiet operation\n"
 "  -e --stderr-progress            : force output of progress information to\n"
 "                                    stderr (for wrapper scripts)\n"
+"  -l --log-summary         <file> : save result summary to file\n"
 "  -V --version                    : print version info and quit\n"
 "  -Q --query                      : autosense drive, query disc and quit\n"
 "  -B --batch                      : 'batch' mode (saves each track to a\n"
@@ -342,6 +350,7 @@ static char *callback_strings[15]={"wrote",
 
 static int skipped_flag=0;
 static int abort_on_skip=0;
+FILE *logfile = NULL;
 static void callback(long inpos, int function){
   /*
 
@@ -552,16 +561,22 @@ static void callback(long inpos, int function){
 	}
    
 	fprintf(stderr,buffer);
+       
+	if (logfile != NULL && function==-1) {
+	  fprintf(logfile,buffer+1);
+	  fprintf(logfile,"\n\n");
+	  fflush(logfile);
+	}
       }
     }
   }
-
+  
   /* clear the indicator for next batch */
   if(function==-1)
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:o:O:d:g:S:prRwafvqVQhZz::YXWBi:Tt:";
+const char *optstring = "escCn:o:O:d:g:S:prRwafvqVQhZz::YXWBi:Tt:l:";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -594,6 +609,7 @@ struct option options [] = {
 	{"disable-fragmentation",no_argument,NULL,'F'},
 	{"output-info",required_argument,NULL,'i'},
 	{"never-skip",optional_argument,NULL,'z'},
+	{"log-summary",required_argument,NULL,'l'},
 
 	{NULL,0,NULL,0}
 };
@@ -763,6 +779,20 @@ int main(int argc,char *argv[]){
     case 't':
       toc_offset=atoi(optarg);
       break;
+    case 'l':
+      if(logfile && logfile != stdout)fclose(logfile);
+      if(!strcmp(optarg,"-"))
+	logfile=stdout;
+      else{
+	logfile=fopen(optarg,"w");
+	if(logfile==NULL){
+	  report3("Cannot open log summary file %s: %s",(char*)optarg,
+		  strerror(errno));
+	  exit(1);
+	}
+      }
+
+      break;
     case 'O':
       sample_offset=atoi(optarg);
       break;
@@ -770,6 +800,18 @@ int main(int argc,char *argv[]){
       usage(stderr);
       exit(1);
     }
+  }
+
+  if(logfile){
+    /* log command line and version */
+    int i;
+    for (i = 0; i < argc; i++) 
+      fprintf(logfile,"%s ",argv[i]);
+    fprintf(logfile,"\n",argv[i]);
+    
+    fprintf(logfile,VERSION);
+    fprintf(logfile,"\n");
+    fflush(logfile);
   }
 
   if(optind>=argc && !query_only){
@@ -1052,6 +1094,10 @@ int main(int argc,char *argv[]){
 	    if(batch)report("Are you sure you wanted 'batch' "
 			    "(-B) output with stdout?");
 	    report("outputting to stdout\n");
+	    if(logfile){
+	      fprintf(logfile,"outputting to stdout\n");
+	      fflush(logfile);
+	    }
 	    outfile_name[0]='\0';
 	  }else{
 	    char path[256];
@@ -1096,6 +1142,10 @@ int main(int argc,char *argv[]){
 	      exit(1);
 	    }
 	    report2("outputting to %s\n",outfile_name);
+	    if(logfile){
+	      fprintf(logfile,"outputting to %s\n",outfile_name);
+	      fflush(logfile);
+	    }
 	  }
 	}else{
 	  /* default */
@@ -1128,6 +1178,10 @@ int main(int argc,char *argv[]){
 	    exit(1);
 	  }
 	  report2("outputting to %s\n",outfile_name);
+	  if(logfile){
+	    fprintf(logfile,"outputting to %s\n",outfile_name);
+	    fflush(logfile);
+	  }
 	}
 	
 	switch(output_type){
@@ -1270,5 +1324,7 @@ int main(int argc,char *argv[]){
   
   cdda_close(d);
   d=NULL;
+  if(logfile && logfile != stdout)
+    fclose(logfile);
   return 0;
 }
