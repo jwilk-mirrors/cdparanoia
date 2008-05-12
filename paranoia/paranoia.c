@@ -1418,7 +1418,6 @@ static long i_stage2_each(root_block *root, v_fragment *v,
 	   * the root?"
 	   *   We think these samples are more likely to be correct --Monty
 	   */
-	   */
 	  c_overwrite(rc(root),begin-matchC,
 			cv(l)+beginL-matchC,matchC);
 	  
@@ -1976,7 +1975,7 @@ static int i_stage2(cdrom_paranoia *p,long beginword,long endword,
 	   * get into a situation where the first read was far earlier
 	   * than all the others and no other read ever repeats the
 	   * early positioning. --Monty */
-	   */
+
 	  if(rv(root)==NULL){
 	    if(i_init_root(&(p->root),first,beginword,callback)){
 	      free_v_fragment(first);
