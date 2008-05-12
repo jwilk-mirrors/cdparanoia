@@ -36,13 +36,6 @@ long i_paranoia_overlap_r(int16_t *buffA,int16_t *buffB,
   for(;beginA>=0 && beginB>=0;beginA--,beginB--)
     if(buffA[beginA]!=buffB[beginB])break;
 
-  /* These values will either point to the first mismatching sample, or
-   * -1 if we hit the beginning of a vector.  So increment to point to the
-   * last matching sample.
-   */
-  beginA++;
-  beginB++;
-  
   return(offsetA-beginA);
 }
 
@@ -180,7 +173,7 @@ void i_analyze_rift_f(int16_t *A,int16_t *B,
    * to fix the rift.
    */
   
-  for(i=0;;i++){
+  for(i=1;;i++){
     /* Search for whatever case we hit first, so as to end up with the
      * smallest rift.
      */
@@ -335,7 +328,7 @@ void i_analyze_rift_r(int16_t *A,int16_t *B,
    * to fix the rift.
    */
   
-  for(i=0;;i++){
+  for(i=1;;i++){
     /* Search for whatever case we hit first, so as to end up with the
      * smallest rift.
      */
@@ -414,7 +407,16 @@ void i_analyze_rift_r(int16_t *A,int16_t *B,
      *
      * If the rift doesn't match the good samples in A (and hence in B),
      * it's not a stutter, and the rift should be inserted into A.
+     *
+     * ???BUG??? It's possible for aoffset+1+*matchA to be > sizeA, in
+     * which case the comparison in i_stutter_or_gap() will extend beyond
+     * the bounds of A.  Thankfully, this isn't writing data and thus
+     * trampling memory, but it's still a memory access error that should
+     * be fixed.
+     *
+     * This bug is not fixed yet.
      */
+
     if(i_stutter_or_gap(A,B,aoffset+1,boffset-*matchA+1,*matchA))
       return;
 
