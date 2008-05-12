@@ -1,5 +1,5 @@
 /******************************************************************
- * CopyPolicy: GNU Public License 2 applies
+ * CopyPolicy: GNU Lesser General Public License 3 applies
  * Copyright (C) Monty xiphmont@mit.edu
  *
  * CDROM code specific to the cooked ioctl interface

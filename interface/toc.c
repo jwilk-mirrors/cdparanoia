@@ -1,6 +1,6 @@
 /******************************************************************
- * CopyPolicy: GNU Public License 2 applies
- * Copyright (C) 1998 Monty xiphmont@mit.edu
+ * CopyPolicy: GNU Lesser General Public License 3 applies
+ * Copyright (C) 1998-2008 Monty xiphmont@mit.edu
  * derived from code (C) 1994-1996 Heiko Eissfeldt
  * 
  * Table of contents convenience functions

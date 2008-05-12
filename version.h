@@ -1,5 +1,5 @@
 /******************************************************************
- * CopyPolicy: GNU Public License 2 applies
+ * CopyPolicy: GNU Public License 3 applies
  * 
  * cdda_paranoia generation III release 10.0
  * Copyright (C) 2008 Monty monty@xiph.org

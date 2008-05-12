@@ -1,7 +1,7 @@
 /******************************************************************
- * CopyPolicy: GNU Public License 2 applies
- * Copyright (C) 2001 Xiph.org
- * and Heiko Eissfeldt heiko@escape.colossus.de
+ * CopyPolicy: GNU Lesser General Public License 3 applies
+ * Copyright (C) 2001-2008 Xiph.org
+ * Original version by Heiko Eissfeldt heiko@escape.colossus.de
  *
  * Toplevel interface header; applications include this
  *

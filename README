@@ -12,6 +12,12 @@ information, see:
 
 http://www.xiph.org/paranoia/
 
+COPYING
+=======
+
+cdparanoia (the command line tool) is released under the GPLv3.  The
+interface and paranoia libraries are covered by the LGPLv3.
+
 Requirements
 ============
 

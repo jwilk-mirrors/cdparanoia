@@ -1,8 +1,8 @@
 /******************************************************************
- * CopyPolicy: GNU Public License 2 applies
+ * CopyPolicy: GNU Lesser General Public License 3 applies
  * Original interface.c Copyright (C) 1994-1997 
  *            Eissfeldt heiko@colossus.escape.de
- * Current blenderization Copyright (C) 1998-2006 Monty xiphmont@mit.edu
+ * Current incarnation Copyright (C) 1998-2008 Monty xiphmont@mit.edu
  * 
  * Generic SCSI interface specific code.
  *
