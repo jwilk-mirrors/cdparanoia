@@ -282,6 +282,15 @@ void c_removef(c_block *v, long cut){
 
 /**** Initialization *************************************************/
 
+/*!  Get the beginning and ending sector bounds given cursor position.
+
+  There are a couple of subtle differences between this and the
+  cdda_firsttrack_sector and cdda_lasttrack_sector. If the cursor is
+  at a sector later than cdda_firsttrack_sector, that sector will be
+  used. As for the difference between cdda_lasttrack_sector, if the CD
+  is mixed and there is a data track after the cursor but before the
+  last audio track, the end of the audio sector before that is used.
+*/
 void i_paranoia_firstlast(cdrom_paranoia *p){
   int i;
   cdrom_drive *d=p->d;
