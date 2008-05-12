@@ -85,6 +85,24 @@ static inline int16_t *rv(root_block *root){
 
 #define rc(r) (r->vector)
 
+/** 
+    Flags indicating the status of a read samples.
+
+    Imagine the below enumeration values are #defines to be used in a
+    bitmask rather than distinct values of an enum.
+
+    The variable part of the declaration is trickery to force the enum
+    symbol values to be recorded in debug symbol tables. They are used
+    to allow one refer to the enumeration value names in a debugger
+    and in debugger expressions.
+*/
+enum  {
+  FLAGS_EDGE    =0x1, /**< first/last N words of frame */
+  FLAGS_UNREAD  =0x2, /**< unread, hence missing and unmatchable */
+  FLAGS_VERIFIED=0x4  /**< block read and verified */
+} paranoia_read_flags;
+
+
 /**** matching and analysis code *****************************************/
 
 static inline long i_paranoia_overlap(int16_t *buffA,int16_t *buffB,
@@ -119,12 +137,12 @@ static inline long i_paranoia_overlap2(int16_t *buffA,int16_t *buffB,
     if(buffA[beginA]!=buffB[beginB])break;
     /* don't allow matching across matching sector boundaries */
     /* don't allow matching through known missing data */
-    if((flagsA[beginA]&flagsB[beginB]&1)){
+    if((flagsA[beginA]&flagsB[beginB]&FLAGS_EDGE)){
       beginA--;
       beginB--;
       break;
     }
-    if((flagsA[beginA]&2)|| (flagsB[beginB]&2))break;
+    if((flagsA[beginA]&FLAGS_UNREAD)|| (flagsB[beginB]&FLAGS_UNREAD))break;
   }
   beginA++;
   beginB++;
@@ -132,12 +150,12 @@ static inline long i_paranoia_overlap2(int16_t *buffA,int16_t *buffB,
   for(;endA<sizeA && endB<sizeB;endA++,endB++){
     if(buffA[endA]!=buffB[endB])break;
     /* don't allow matching across matching sector boundaries */
-    if((flagsA[endA]&flagsB[endB]&1) &&endA!=beginA){
+    if((flagsA[endA]&flagsB[endB]&FLAGS_EDGE) &&endA!=beginA){
       break;
     }
 
     /* don't allow matching through known missing data */
-    if((flagsA[endA]&2)||(flagsB[endB]&2))break;
+    if((flagsA[endA]&FLAGS_UNREAD)||(flagsB[endB]&FLAGS_UNREAD))break;
   }
 
   if(ret_begin)*ret_begin=beginA;
@@ -165,7 +183,7 @@ static inline long do_const_sync(c_block *A,
     ret=i_paranoia_overlap(cv(A),iv(B),posA,posB,
 			   cs(A),is(B),begin,end);
   else
-    if((flagB[posB]&2)==0)
+    if((flagB[posB]&FLAGS_UNREAD)==0)
       ret=i_paranoia_overlap2(cv(A),iv(B),flagA,flagB,posA,posB,cs(A),
 			      is(B),begin,end);
 	
@@ -193,8 +211,8 @@ static inline long try_sort_sync(cdrom_paranoia *p,
   sort_link *ptr=NULL;
   char *Bflags=B->flags;
 
-  /* block flag matches 0x02 (unmatchable) */
-  if(Bflags==NULL || (Bflags[post-cb(B)]&2)==0){
+  /* block flag matches FLAGS_UNREAD (and hence unmatchable) */
+  if(Bflags==NULL || (Bflags[post-cb(B)]&FLAGS_UNREAD)==0){
     /* always try absolute offset zero first! */
     {
       long zeropos=post-ib(A);
@@ -244,17 +262,17 @@ static inline void stage1_matched(c_block *old,c_block *new,
   
   if(matchbegin-matchoffset<=cb(new) ||
      matchbegin<=cb(old) ||
-     (new->flags[newadjbegin]&1) ||
-     (old->flags[oldadjbegin]&1)){
+     (new->flags[newadjbegin]&FLAGS_EDGE) ||
+     (old->flags[oldadjbegin]&FLAGS_EDGE)){
     if(matchoffset)
       if(callback)(*callback)(matchbegin,PARANOIA_CB_FIXUP_EDGE);
   }else
     if(callback)(*callback)(matchbegin,PARANOIA_CB_FIXUP_ATOM);
   
   if(matchend-matchoffset>=ce(new) ||
-     (new->flags[newadjend]&1) ||
+     (new->flags[newadjend]&FLAGS_EDGE) ||
      matchend>=ce(old) ||
-     (old->flags[oldadjend]&1)){
+     (old->flags[oldadjend]&FLAGS_EDGE)){
     if(matchoffset)
       if(callback)(*callback)(matchend,PARANOIA_CB_FIXUP_EDGE);
   }else
@@ -269,12 +287,12 @@ static inline void stage1_matched(c_block *old,c_block *new,
   newadjbegin+=OVERLAP_ADJ;
   newadjend-=OVERLAP_ADJ;
   for(i=newadjbegin;i<newadjend;i++)
-    new->flags[i]|=4; /* mark verified */
+    new->flags[i]|=FLAGS_VERIFIED; /* mark verified */
 
   oldadjbegin+=OVERLAP_ADJ;
   oldadjend-=OVERLAP_ADJ;
   for(i=oldadjbegin;i<oldadjend;i++)
-    old->flags[i]|=4; /* mark verified */
+    old->flags[i]|=FLAGS_VERIFIED; /* mark verified */
     
 }
 
@@ -298,7 +316,7 @@ static long i_iterate_stage1(cdrom_paranoia *p,c_block *old,c_block *new,
   /* match return values are in terms of the new vector, not old */
 
   for(j=searchbegin;j<searchend;j+=23){
-    if((new->flags[j-cb(new)]&6)==0){      
+    if((new->flags[j-cb(new)]&(FLAGS_VERIFIED|FLAGS_UNREAD))==0){      
       tried++;
       if(try_sort_sync(p,i,new->flags,old,j,&matchbegin,&matchend,&matchoffset,
 		       callback)==1){
@@ -353,8 +371,8 @@ static long i_stage1(cdrom_paranoia *p,c_block *new,
   
   begin=0;
   while(begin<size){
-    for(;begin<size;begin++)if(new->flags[begin]&4)break;
-    for(end=begin;end<size;end++)if((new->flags[end]&4)==0)break;
+    for(;begin<size;begin++)if(new->flags[begin]&FLAGS_VERIFIED)break;
+    for(end=begin;end<size;end++)if((new->flags[end]&FLAGS_VERIFIED)==0)break;
     if(begin>=size)break;
     
     ret++;
@@ -939,9 +957,9 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
       if(cbegin<=post && cend>post){
 	long vend=post;
 
-	if(c->flags[post-cbegin]&4){
+	if(c->flags[post-cbegin]&FLAGS_VERIFIED){
 	  /* verified area! */
-	  while(vend<cend && (c->flags[vend-cbegin]&4))vend++;
+	  while(vend<cend && (c->flags[vend-cbegin]&FLAGS_VERIFIED))vend++;
 	  if(!vflag || vend>vflag){
 	    graft=c;
 	    gend=vend;
@@ -950,7 +968,7 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
 	}else{
 	  /* not a verified area */
 	  if(!vflag){
-	    while(vend<cend && (c->flags[vend-cbegin]&4)==0)vend++;
+	    while(vend<cend && (c->flags[vend-cbegin]&FLAGS_VERIFIED)==0)vend++;
 	    if(graft==NULL || gend>vend){
 	      /* smallest unverified area */
 	      graft=c;
@@ -966,7 +984,7 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
       long cbegin=cb(graft);
       long cend=ce(graft);
 
-      while(gend<cend && (graft->flags[gend-cbegin]&4))gend++;
+      while(gend<cend && (graft->flags[gend-cbegin]&FLAGS_VERIFIED))gend++;
       gend=min(gend+OVERLAP_ADJ,cend);
 
       if(rv(root)==NULL){
@@ -1143,7 +1161,7 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
 	if(callback)(*callback)((adjread+thisread)*CD_FRAMEWORDS,PARANOIA_CB_READERR);  
 	memset(buffer+(sofar+thisread)*CD_FRAMEWORDS,0,
 	       CD_FRAMESIZE_RAW*(secread-thisread));
-	if(flags)memset(flags+(sofar+thisread)*CD_FRAMEWORDS,2,
+	if(flags)memset(flags+(sofar+thisread)*CD_FRAMEWORDS,FLAGS_UNREAD,
 	       CD_FRAMEWORDS*(secread-thisread));
       }
       if(thisread!=0)anyflag=1;
@@ -1153,7 +1171,7 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
            another */
 	int i=0;
 	for(i=-MIN_WORDS_OVERLAP/2;i<MIN_WORDS_OVERLAP/2;i++)
-	  flags[sofar*CD_FRAMEWORDS+i]|=1;
+	  flags[sofar*CD_FRAMEWORDS+i]|=FLAGS_EDGE;
       }
 
       p->lastread=adjread+secread;
@@ -1249,9 +1267,9 @@ int16_t *paranoia_read_limited(cdrom_paranoia *p, void(*callback)(long,int),
 	    long begin=0,end=0;
 	    
 	    while(begin<cs(new)){
-	      while(end<cs(new)&&(new->flags[begin]&1))begin++;
+	      while(end<cs(new)&&(new->flags[begin]&FLAGS_EDGE))begin++;
 	      end=begin+1;
-	      while(end<cs(new)&&(new->flags[end]&1)==0)end++;
+	      while(end<cs(new)&&(new->flags[end]&FLAGS_EDGE)==0)end++;
 	      {
 		new_v_fragment(p,new,begin+cb(new),
 			       end+cb(new),
