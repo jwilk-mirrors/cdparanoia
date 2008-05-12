@@ -42,6 +42,11 @@
 #define CDROMAUDIOBUFSIZ        0x5382 /* set the audio buffer size */
 #endif
 
+#ifndef CDROM_GET_CAPABILITY
+#define CDROM_GET_CAPABILITY    0x5331 /* get CDROM capabilites if CDROM */
+#endif
+
+
 #include <scsi/sg.h>
 #include <scsi/scsi.h>
 

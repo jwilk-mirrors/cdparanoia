@@ -16,9 +16,12 @@
 #include <linux/hdreg.h>
 
 /* Test for presence of a cdrom by pinging with the 'CDROMVOLREAD' ioctl() */
+/* Also test using CDROM_GET_CAPABILITY (if available) as some newer DVDROMs will
+   reject CDROMVOLREAD ioctl for god-knows-what reason */
 int ioctl_ping_cdrom(int fd){
   struct cdrom_volctrl volctl;
-  if (ioctl(fd, CDROMVOLREAD, &volctl)) 
+  if (ioctl(fd, CDROMVOLREAD, &volctl) &&
+      ioctl(fd, CDROM_GET_CAPABILITY, NULL)<0)
     return(1); /* failure */
 
   return(0);
