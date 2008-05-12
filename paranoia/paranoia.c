@@ -438,9 +438,8 @@ static void i_silence_test(root_block *root){
   
   for(j=end-1;j>=0;j--)if(vec[j]!=0)break;
   if(j<0 || end-j>MIN_SILENCE_BOUNDARY){
-    if(j<0)j=0;
     root->silenceflag=1;
-    root->silencebegin=rb(root)+j;
+    root->silencebegin=rb(root)+j+1;
     if(root->silencebegin<root->returnedlimit)
       root->silencebegin=root->returnedlimit;
   }
@@ -1003,6 +1002,8 @@ static void verify_skip_case(cdrom_paranoia *p,void(*callback)(long,int)){
 void paranoia_free(cdrom_paranoia *p){
   paranoia_resetall(p);
   sort_free(p->sortcache);
+  free_list(p->cache, 1);
+  free_list(p->fragments, 1);
   free(p);
 }
 
