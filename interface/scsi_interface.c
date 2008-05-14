@@ -860,7 +860,7 @@ static int i_read_D8 (cdrom_drive *d, void *p, long begin, long sectors, unsigne
 
 static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  unsigned char cmd[12]={0xbe, 0x02, 0, 0, 0, 0, 0, 0, 0, 0x90, 0, 0};
+  unsigned char cmd[12]={0xbe, 0x0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0};
 
   cmd[3] = (begin >> 16) & 0xFF;
   cmd[4] = (begin >> 8) & 0xFF;
@@ -874,7 +874,7 @@ static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors, unsign
 
 static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  unsigned char cmd[12]={0xbe, 0x02, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
+  unsigned char cmd[12]={0xbe, 0x0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
 
   cmd[3] = (begin >> 16) & 0xFF;
   cmd[4] = (begin >> 8) & 0xFF;
@@ -888,7 +888,7 @@ static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors, unsig
 
 static int i_read_mmc3 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
-  unsigned char cmd[12]={0xbe, 0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
+  unsigned char cmd[12]={0xbe, 0x4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
 
   cmd[3] = (begin >> 16) & 0xFF;
   cmd[4] = (begin >> 8) & 0xFF;
