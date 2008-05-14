@@ -69,7 +69,7 @@ typedef struct cdrom_drive{
   char *errorbuf;
   char *messagebuf;
 
-  /* functions specific to particular drives/interrfaces */
+  /* functions specific to particular drives/interfaces */
 
   int  (*enable_cdda)  (struct cdrom_drive *d, int onoff);
   int  (*read_toc)     (struct cdrom_drive *d);

@@ -860,6 +860,20 @@ static int i_read_D8 (cdrom_drive *d, void *p, long begin, long sectors, unsigne
 
 static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
+  unsigned char cmd[12]={0xbe, 0x2, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0};
+
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_mmcB (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
+  int ret;
   unsigned char cmd[12]={0xbe, 0x0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0};
 
   cmd[3] = (begin >> 16) & 0xFF;
@@ -874,6 +888,20 @@ static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors, unsign
 
 static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
+  unsigned char cmd[12]={0xbe, 0x2, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
+
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_mmc2B (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
+  int ret;
   unsigned char cmd[12]={0xbe, 0x0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
 
   cmd[3] = (begin >> 16) & 0xFF;
@@ -887,6 +915,20 @@ static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors, unsig
 }
 
 static int i_read_mmc3 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
+  int ret;
+  unsigned char cmd[12]={0xbe, 0x6, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
+
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = begin & 0xFF;
+  cmd[8] = sectors;
+  if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
+    return(ret);
+  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  return(0);
+}
+
+static int i_read_mmc3B (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
   int ret;
   unsigned char cmd[12]={0xbe, 0x4, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0};
 
@@ -1134,6 +1176,21 @@ long scsi_read_mmc3 (cdrom_drive *d, void *p, long begin,
   return(scsi_read_map(d,p,begin,sectors,i_read_mmc3));
 }
 
+long scsi_read_mmcB (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_mmcB));
+}
+
+long scsi_read_mmc2B (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_mmc2B));
+}
+
+long scsi_read_mmc3B (cdrom_drive *d, void *p, long begin, 
+			       long sectors){
+  return(scsi_read_map(d,p,begin,sectors,i_read_mmc3B));
+}
+
 long scsi_read_msf (cdrom_drive *d, void *p, long begin, 
 			       long sectors){
   return(scsi_read_map(d,p,begin,sectors,i_read_msf));
@@ -1242,7 +1299,7 @@ static int verify_read_command(cdrom_drive *d){
     /* NEC test must come before sony; the nec drive expects d8 to be
        10 bytes, and a 12 byte verson (Sony) crashes the drive */
 
-    for(j=0;j>=0;j++){
+    for(j=0;j<15;j++){
       int densitypossible=1;
 
       switch(j){
@@ -1254,58 +1311,75 @@ static int verify_read_command(cdrom_drive *d){
 	d->read_audio=scsi_read_A8;
 	rs="a8 0x,00";
 	break;
+
       case 2:
+	d->read_audio=scsi_read_mmcB;
+	rs="be 02,10";
+	densitypossible=0;
+	break;
+      case 3:
+	d->read_audio=scsi_read_mmc2B;
+	rs="be 02,f8";
+	densitypossible=0;
+	break;
+      case 4:
+	d->read_audio=scsi_read_mmc3B;
+	rs="be 06,f8";
+	densitypossible=0;
+	break;
+
+      case 5:
 	d->read_audio=scsi_read_mmc;
 	rs="be 00,10";
 	densitypossible=0;
 	break;
-      case 3:
+      case 6:
 	d->read_audio=scsi_read_mmc2;
 	rs="be 00,f8";
 	densitypossible=0;
 	break;
-      case 4:
+      case 7:
 	d->read_audio=scsi_read_mmc3;
 	rs="be 04,f8";
 	densitypossible=0;
 	break;
 
-      case 5:
+      case 8:
 	d->read_audio=scsi_read_msf;
 	rs="b9 00,10";
 	densitypossible=0;
 	break;
-      case 6:
+      case 9:
 	d->read_audio=scsi_read_msf2;
 	rs="b9 00,f8";
 	densitypossible=0;
 	break;
-      case 7:
+      case 10:
 	d->read_audio=scsi_read_msf3;
 	rs="b9 04,f8";
 	densitypossible=0;
 	break;
 
-      case 8:
+      case 11:
 	d->read_audio=scsi_read_D4_10;
 	rs="d4(10)0x";
 	break;
-      case 9:
+      case 12:
 	d->read_audio=scsi_read_D4_12;
 	rs="d4(12)0x";
 	break;
-      case 10:
+      case 13:
 	d->read_audio=scsi_read_D5;
 	rs="d5 0x,00";
 	break;
-      case 11:
+      case 14:
 	d->read_audio=scsi_read_D8;
 	rs="d8 0x,00";
 	j=-2;
 	break;
       }
       
-      for(i=0;i>=0;i++){
+      for(i=0;i<5;i++){
 	switch(i){
 	case 0:
 	  d->density=0;
@@ -1419,10 +1493,12 @@ static void check_fua_bit(cdrom_drive *d){
   int16_t *buff=malloc(CD_FRAMESIZE_RAW);
   long i;
 
-  /* MMC has since been extended to allow FUA */
   if(d->read_audio==scsi_read_mmc)return;
   if(d->read_audio==scsi_read_mmc2)return;
   if(d->read_audio==scsi_read_mmc3)return;
+  if(d->read_audio==scsi_read_mmcB)return;
+  if(d->read_audio==scsi_read_mmc2B)return;
+  if(d->read_audio==scsi_read_mmc3B)return;
 
   cdmessage(d,"This command set may use a Force Unit Access bit.");
   cdmessage(d,"\nChecking drive for FUA bit support...\n");
@@ -1556,7 +1632,7 @@ int scsi_init_drive(cdrom_drive *d){
       
   if(d->is_mmc){
 
-    d->read_audio = scsi_read_mmc2;
+    d->read_audio = scsi_read_mmc2B;
     d->bigendianp=0;
 
     check_exceptions(d,mmc_list);
@@ -1566,7 +1642,7 @@ int scsi_init_drive(cdrom_drive *d){
     if(d->is_atapi){
       /* Not MMC maybe still uses 0xbe */
 
-      d->read_audio = scsi_read_mmc2;
+      d->read_audio = scsi_read_mmc2B;
       d->bigendianp=0;
 
       check_exceptions(d,atapi_list);
