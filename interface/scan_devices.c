@@ -6,6 +6,8 @@
  * 
  ******************************************************************/
 
+#define _GNU_SOURCE /* get cuserid */
+#define _USE_XOPEN /* get cuserid */
 #include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
