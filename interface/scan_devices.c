@@ -89,13 +89,9 @@ cdrom_drive *cdda_find_a_cdrom(int messagedest,char **messages){
     }
     i++;
   }
-  {
-    struct passwd *temp;
-    temp=getpwuid(geteuid());
-    idmessage(messagedest,messages,
-	      "\n\nNo cdrom drives accessible to %s found.\n",
-	      temp->pw_name);
-  }
+  idmessage(messagedest,messages,
+	    "\n\nNo cdrom drives accessible to %s found.\n",
+	    cuserid(NULL));
   return(NULL);
 }
 
@@ -449,7 +445,7 @@ int check_sgio(const char *device, int messagedest, char **messages){
   fd = open(device, O_RDWR|O_NONBLOCK);
   if (fd < 0){
     idperror(messagedest,messages,
-	     "\t\tCould not access device %d to test for SG_IO support",device);    
+	     "\t\tCould not access device %s to test for SG_IO support",device);    
     return 0;
   }
 
