@@ -807,7 +807,7 @@ int main(int argc,char *argv[]){
     int i;
     for (i = 0; i < argc; i++) 
       fprintf(logfile,"%s ",argv[i]);
-    fprintf(logfile,"\n",argv[i]);
+    fprintf(logfile,"\n");
     
     fprintf(logfile,VERSION);
     fprintf(logfile,"\n");

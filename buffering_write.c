@@ -49,7 +49,8 @@ long buffering_write(int fd, char *buffer, long num)
 		bw_pos = 0;
 	}
 	/* save data */
-	memcpy(&bw_outbuf[bw_pos], buffer, num);
+	if(buffer && num)
+	  memcpy(&bw_outbuf[bw_pos], buffer, num);
 	bw_pos += num;
 
 	return(0);
