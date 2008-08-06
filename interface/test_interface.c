@@ -1,5 +1,5 @@
 /******************************************************************
- * CopyPolicy: GNU Lessger General Public License 3 applies
+ * CopyPolicy: GNU Lessger General Public License 2.1 applies
  * Copyright (C) Monty xiphmont@mit.edu
  *
  * Fake interface backend for testing paranoia layer

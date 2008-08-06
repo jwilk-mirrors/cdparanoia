@@ -1,5 +1,5 @@
 /******************************************************************
- * CopyPolicy: GNU Public License 3 applies
+ * CopyPolicy: GNU Public License 2 applies
  * Copyright (C) 2008 Monty xiphmont@mit.edu
  ******************************************************************/
 

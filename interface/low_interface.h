@@ -1,5 +1,5 @@
 /******************************************************************
- * CopyPolicy: GNU Lesser General Public License 3 applies
+ * CopyPolicy: GNU Lesser General Public License 2.1 applies
  * Copyright (C) 1998-2008 Monty xiphmont@mit.edu
  * 
  * internal include file for cdda interface kit for Linux 

@@ -1,5 +1,5 @@
 /******************************************************************
- * CopyPolicy: GNU Lesser Public License 3 applies
+ * CopyPolicy: GNU Lesser Public License 2.1 applies
  * Copyright (C) 1998-2008 Monty monty@xiph.org
  *
  * CDROM communication common to all interface methods is done here 

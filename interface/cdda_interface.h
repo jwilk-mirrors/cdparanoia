@@ -1,5 +1,5 @@
 /******************************************************************
- * CopyPolicy: GNU Lesser General Public License 3 applies
+ * CopyPolicy: GNU Lesser General Public License 2.1 applies
  * Copyright (C) 2001-2008 Xiph.org
  * Original version by Heiko Eissfeldt heiko@escape.colossus.de
  *
