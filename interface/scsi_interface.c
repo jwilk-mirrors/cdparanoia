@@ -47,7 +47,7 @@ static void tweak_SG_buffer(cdrom_drive *d) {
       table, reserved, table*reserved/CD_FRAMESIZE_RAW);
   cdmessage(d,buffer);
 
-  cur=table*reserved;
+  cur=reserved; /* only use one entry for now */
 
   /* so since we never go above q->max_sectors, we should never get -EIO.
    * we might still get -ENOMEM, but we back off for that later.  Monty
