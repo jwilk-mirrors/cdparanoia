@@ -42,6 +42,8 @@ typedef struct TOC {	/* structure of table of contents */
 
 /* cdrom access function pointer */
 
+typedef struct cdda_private_data cdda_private_data_t;
+
 typedef struct cdrom_drive{
 
   int opened; /* This struct may just represent a candidate for opening */
@@ -82,14 +84,8 @@ typedef struct cdrom_drive{
   int is_atapi;
   int is_mmc;
 
-  /* SCSI command buffer and offset pointers */
-  /* this should have been private hidden data, but it isn't.  At
-     this point, sg and sg_buffer are treated internally as void *
-     pointing to internal private data, which is correct even if it is
-     semantically confusing.  This problem will be corrected in the
-     next major release increment. */
-  unsigned char *sg;
-  unsigned char *sg_buffer;
+  cdda_private_data_t *private;
+  void         *reserved;
   unsigned char inqbytes[4];
 
   /* Scsi parameters and state */
@@ -125,6 +121,7 @@ extern cdrom_drive *cdda_identify_test(const char *filename,
 
 /******** Drive oriented functions */
 
+extern int cdda_cache_sectors(cdrom_drive *d);
 extern int cdda_speed_set(cdrom_drive *d, int speed);
 extern void cdda_verbose_set(cdrom_drive *d,int err_action, int mes_action);
 extern char *cdda_messages(cdrom_drive *d);

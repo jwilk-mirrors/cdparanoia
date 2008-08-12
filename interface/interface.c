@@ -34,8 +34,11 @@ int cdda_close(cdrom_drive *d){
     if(d->drive_model)free(d->drive_model);
     if(d->cdda_fd!=-1)close(d->cdda_fd);
     if(d->ioctl_fd!=-1 && d->ioctl_fd!=d->cdda_fd)close(d->ioctl_fd);
-    if(d->sg)free(d->sg);
-    
+    if(d->private){
+      if(d->private->sg_hd)free(d->private->sg_hd);
+      free(d->private);
+    }
+
     free(d);
   }
   return(0);
@@ -72,7 +75,7 @@ int cdda_open(cdrom_drive *d){
   
   /* Some drives happily return a TOC even if there is no disc... */
   {
-    int i;
+     int i;
     for(i=0;i<d->tracks;i++)
       if(d->disc_toc[i].dwStartSector<0 ||
 	 d->disc_toc[i+1].dwStartSector==0){

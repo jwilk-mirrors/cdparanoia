@@ -928,6 +928,9 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
+  /* Determine drive caching behavior */
+  cdda_cache_sectors(d);
+
   /* Dump the TOC */
   if(query_only || verbose)display_toc(d);
   if(query_only)exit(0);

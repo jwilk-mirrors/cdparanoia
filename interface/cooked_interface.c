@@ -10,6 +10,19 @@
 #include "common_interface.h"
 #include "utils.h"
 
+static int timed_ioctl(cdrom_drive *d, int fd, int command, void *arg){
+  struct timeval tv1;
+  struct timeval tv2;
+  int ret1=gettimeofday(&tv1,NULL);
+  int ret2=ioctl(fd, command,arg);
+  int ret3=gettimeofday(&tv2,NULL);
+  if(ret1<0 || ret3<0){
+    d->private->last_milliseconds=-1;
+  }else{
+    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000 + (tv2.tv_usec-tv1.tv_usec)/1000;
+  }
+}
+
 static int cooked_readtoc (cdrom_drive *d){
   int i;
   int tracks;
@@ -72,12 +85,13 @@ static int cooked_setspeed(cdrom_drive *d, int speed)
  */
 
 static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
-  int retry_count,err;
+  int retry_count,err,ret=0;
   struct cdrom_read_audio arg;
   char *buffer=(char *)p;
 
   /* read d->nsectors at a time, max. */
   sectors=(sectors>d->nsectors?d->nsectors:sectors);
+  if(p==NULL)buffer = malloc(sectors*CD_FRAMESIZE_RAW);
 
   arg.addr.lba = begin;
   arg.addr_format = CDROM_LBA;
@@ -87,14 +101,18 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
 
   do {
     if((err=ioctl(d->ioctl_fd, CDROMREADAUDIO, &arg))){
-      if(!d->error_retry)return(-7);
+      if(!d->error_retry){
+	ret=-7;
+	goto done;
+      }
       switch(errno){
       case ENOMEM:
 	/* D'oh.  Possible kernel error. Keep limping */
 	if(sectors==1){
 	  /* Nope, can't continue */
 	  cderror(d,"300: Kernel memory error\n");
-	  return(-300);  
+	  ret=-300;
+	  goto done;
 	}
       default:
 	if(sectors==1){
@@ -108,8 +126,8 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
 	    sprintf(b,"010: Unable to access sector %ld: skipping...\n",
 		    begin);
 	    cderror(d,b);
-	    return(-10);
-	    
+	    ret=-10;
+	    goto done;
 	  }
 	  break;
 	}
@@ -120,13 +138,18 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
       retry_count++;
       if(retry_count>MAX_RETRIES){
 	cderror(d,"007: Unknown, unrecoverable error reading data\n");
-	return(-7);
+	ret=-7;
+	goto done;
       }
     }else
       break;
   } while (err);
   
-  return(sectors);
+  ret=sectors;
+
+ done:
+  if(p==NULL && buffer)free(buffer);
+  return ret;
 }
 
 /* hook */

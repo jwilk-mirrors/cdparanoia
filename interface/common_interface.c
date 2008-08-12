@@ -168,10 +168,122 @@ int data_bigendianp(cdrom_drive *d){
   }
 }
 
+/* we can ask most drives what their various caches' sizes are, but no
+   drive will tell if it caches redbook data.  None should, many do,
+   and there's no way in (eg) MMAC/ATAPI to tell a drive not to.  SCSI
+   drives have a FUA facility, but it's not clear how many ignore it.
+   For that reason, we need to empirically determine cache size used
+   for reads */
+
+int cdda_cache_sectors(cdrom_drive *d){
+  /* let's assume the (physically) fastest drives are 100x.  Although
+     the physical disc itself can't spin at faster than 50x or so,
+     many drives use multiple read heads and interleave access. */
+  float ms_per_sector = 1./75./100.;
+  int i;
+  int lo = 75;
+  int current = lo;
+  int max = 75*256;
+  int firstsector=-1;
+  int lastsector=-1;
+  int firsttest=-1;
+  int lasttest=-1;
+  int under=1;
+
+  cdmessage(d,"\nChecking CDROM drive cache behavior...\n");
+
+
+  /* find the longest stretch of available audio data */
+
+  for(i=0;i<d->tracks;i++){
+    if(cdda_track_audiop(d,i+1)==1){
+      if(firsttest == -1)
+	firsttest=cdda_track_firstsector(d,i+1);
+      lasttest=cdda_track_lastsector(d,i+1);
+      if(lasttest-firsttest > lastsector-firstsector){
+	firstsector=firsttest;
+	lastsector=lasttest;
+      }
+    }else{
+      firsttest=-1;
+      lasttest=-1;
+    }
+  }
+
+  if(firstsector==-1){
+    cdmessage(d,"\n\tNo audio on disc; Cannot determine audio caching behavior.\n");
+    return -1;
+  }
+
+  while(current <= max && under){
+    int offset = (lastsector - firstsector - current)/2; 
+    int i,j;
+    under=0;
+
+    {
+      char buffer[80];
+      snprintf(buffer,80,"\tTesting reads for caching (%d sectors):\n\t",current);
+      cdmessage(d,buffer);
+    }
+
+    for(i=0;i<10;i++){
+      int sofar=0;
+      int fulltime=0;
+      
+      while(sofar<current){
+	for(j=0;;j++){
+	  
+	  int readsectors = d->read_audio(d,NULL,offset+sofar,current-sofar);
+	  if(readsectors<=0){
+	    if(j==2){
+	      d->enable_cdda(d,0);
+	      cdmessage(d,"\n\tRead error while performing drive cache checks; aborting test.\n");
+	      return(-1);
+	    }
+	  }else{
+	    sofar+=readsectors;
+	    if(d->private->last_milliseconds==-1){
+	      if(j==2){
+		d->enable_cdda(d,0);
+		cdmessage(d,"\n\tTiming error while performing drive cache checks; aborting test.\n");
+		return(-1);
+	      }
+	    }else{
+	      fulltime += d->private->last_milliseconds;
+	      break;
+	    }
+	  }
+	}
+      }
+      {
+	char buffer[80];
+	snprintf(buffer,80," %d:%fms/sec",i,(float)fulltime/current);
+	cdmessage(d,buffer);
+      }
+      if(fulltime/current < ms_per_sector) under=1;
+    }
+    cdmessage(d,"\n");
+
+    current*=2;
+  } 
+#if 0
+  if(current > max){
+    cdmessage(d,"\nGiving up; drive cache is too large to defeat using overflow.\n");
+    cdmessage(d,"\n(Drives should not cache redbook reads, this drive does anyway."
+	        "\n Worse, the cache is too large to have any hope of defeating."
+	        "\n Cdparanoia has no chance of catching errors from this drive.\n");
+
+    return INT_MAX;
+  }
+
+#endif
+  return 0;
+}
+
 /************************************************************************/
 /* Here we fix up a couple of things that will never happen.  yeah,
    right.  The multisession stuff is from Hannu's code; it assumes it
-   knows the leadoud/leadin size. */
+   knows the leadout/leadin size. */
 
 int FixupTOC(cdrom_drive *d,int tracks){
   struct cdrom_multisession ms_str;

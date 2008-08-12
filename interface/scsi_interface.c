@@ -76,7 +76,7 @@ static void tweak_SG_buffer(cdrom_drive *d) {
 static void clear_garbage(cdrom_drive *d){
   fd_set fdset;
   struct timeval tv;
-  struct sg_header *sg_hd=(struct sg_header *)d->sg;
+  struct sg_header *sg_hd=d->private->sg_hd;
   int flag=0;
 
   /* clear out any possibly preexisting garbage */
@@ -158,9 +158,11 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
 			       unsigned char bytefill,
 			       int bytecheck,
 			       unsigned char *sense_buffer){
-  
+  struct timeval tv1;
+  struct timeval tv2;
+  int tret1,tret2;
   int status = 0;
-  struct sg_header *sg_hd=(struct sg_header *)d->sg;
+  struct sg_header *sg_hd=d->private->sg_hd;
   long writebytes=SG_OFF+cmd_len+in_size;
 
   /* generic scsi device services */
@@ -170,7 +172,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
 
   memset(sg_hd,0,sizeof(sg_hd)); 
   memset(sense_buffer,0,SG_MAX_SENSE); 
-  memcpy(d->sg_buffer,cmd,cmd_len);
+  memcpy(d->private->sg_buffer,cmd,cmd_len);
   sg_hd->twelve_byte = cmd_len == 12;
   sg_hd->result = 0;
   sg_hd->reply_len = SG_OFF + out_size;
@@ -184,7 +186,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
      tell if the command failed.  Scared yet? */
 
   if(bytecheck && out_size>in_size){
-    memset(d->sg_buffer+cmd_len+in_size,bytefill,out_size-in_size); 
+    memset(d->private->sg_buffer+cmd_len+in_size,bytefill,out_size-in_size); 
     /* the size does not remove cmd_len due to the way the kernel
        driver copies buffers */
     writebytes+=(out_size-in_size);
@@ -192,8 +194,8 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
 
   {
     /* Select on write with a 5 second timeout.  This is a hack until
-       a better error reporting layer is in place in alpha 10; right
-       now, always print a message. */
+       a better error reporting layer is in place; right now, always
+       print a message. */
 
     fd_set fdset;
     struct timeval tv;
@@ -218,6 +220,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   }
 
   sigprocmask (SIG_BLOCK, &(d->sigset), NULL );
+  tret1=gettimeofday(&tv1,NULL);  
   errno=0;
   status = write(d->cdda_fd, sg_hd, writebytes );
 
@@ -226,11 +229,12 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
     if(errno==0)errno=EIO;
     return(TR_EWRITE);
   }
+
   
   {
     /* Select on read (and write; this signals an error) with a 5
        second timeout.  This is a hack until a better error reporting
-       layer is in place in alpha 10; right now, always print a
+       layer is in place; right now, always print a
        message. */
 
     fd_set rset;
@@ -262,6 +266,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
     }
   }
 
+  tret2=gettimeofday(&tv2,NULL);  
   errno=0;
   status = read(d->cdda_fd, sg_hd, SG_OFF + out_size);
   sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
@@ -285,7 +290,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   if(bytecheck && in_size+cmd_len<out_size){
     long i,flag=0;
     for(i=in_size;i<out_size;i++)
-      if(d->sg_buffer[i]!=bytefill){
+      if(d->private->sg_buffer[i]!=bytefill){
 	flag=1;
 	break;
       }
@@ -297,6 +302,11 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   }
 
   errno=0;
+  if(tret1<0 || tret2<0){
+    d->private->last_milliseconds=-1;
+  }else{
+    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000 + (tv2.tv_usec-tv1.tv_usec)/1000;
+  }
   return(0);
 }
 
@@ -321,7 +331,7 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
   hdr.mx_sb_len = SG_MAX_SENSE;
   hdr.timeout = 50000;
   hdr.interface_id = 'S';
-  hdr.dxferp =  d->sg_buffer;
+  hdr.dxferp =  d->private->sg_buffer;
   hdr.flags = SG_FLAG_DIRECT_IO;  /* direct IO if we can get it */
 
   /* scary buffer fill hack */
@@ -363,7 +373,7 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
   if(bytecheck && in_size<out_size){
     long i,flag=0;
     for(i=in_size;i<out_size;i++)
-      if(d->sg_buffer[i]!=bytefill){
+      if(d->private->sg_buffer[i]!=bytefill){
 	flag=1;
 	break;
       }
@@ -374,6 +384,7 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
     }
   }
   
+  d->private->last_milliseconds = hdr.duration;
   errno = 0;
   return 0;
 }
@@ -405,9 +416,9 @@ static int test_unit_ready(cdrom_drive *d){
 
   handle_scsi_cmd(d, cmd, 6, 0, 56, 0,0, sense);
 
-  key = d->sg_buffer[2] & 0xf;
-  ASC = d->sg_buffer[12];
-  ASCQ = d->sg_buffer[13];
+  key = d->private->sg_buffer[2] & 0xf;
+  ASC = d->private->sg_buffer[12];
+  ASCQ = d->private->sg_buffer[13];
   
   if(key == 2 && ASC == 4 && ASCQ == 1) return 0;
   return 1;
@@ -452,7 +463,7 @@ static int mode_sense_atapi(cdrom_drive *d,int size,int page){
   if (handle_scsi_cmd (d, cmd, 10, 0, size+4,'\377',1,sense)) return(1);
 
   {
-    unsigned char *b=d->sg_buffer;
+    unsigned char *b=d->private->sg_buffer;
     if(b[0])return(1); /* Handles only up to 256 bytes */
     if(b[6])return(1); /* Handles only up to 256 bytes */
 
@@ -563,8 +574,8 @@ static int mode_select(cdrom_drive *d,int density,int secsize){
 static unsigned int get_orig_sectorsize(cdrom_drive *d){
   if(mode_sense(d,12,0x01))return(-1);
 
-  d->orgdens = d->sg_buffer[4];
-  return(d->orgsize = ((int)(d->sg_buffer[10])<<8)+d->sg_buffer[11]);
+  d->orgdens = d->private->sg_buffer[4];
+  return(d->orgsize = ((int)(d->private->sg_buffer[10])<<8)+d->private->sg_buffer[11]);
 }
 
 /* switch CDROM scsi drives to given sector size  */
@@ -623,8 +634,8 @@ static int scsi_read_toc (cdrom_drive *d){
     return(-4);
   }
 
-  first=d->sg_buffer[2];
-  last=d->sg_buffer[3];
+  first=d->private->sg_buffer[2];
+  last=d->private->sg_buffer[3];
   tracks=last-first+1;
 
   if (last > MAXTRK || first > MAXTRK || last<0 || first<0) {
@@ -642,7 +653,7 @@ static int scsi_read_toc (cdrom_drive *d){
       return(-5);
     }
     {
-      scsi_TOC *toc=(scsi_TOC *)(d->sg_buffer+4);
+      scsi_TOC *toc=(scsi_TOC *)(d->private->sg_buffer+4);
 
       d->disc_toc[i-first].bFlags=toc->bFlags;
       d->disc_toc[i-first].bTrack=i;
@@ -663,7 +674,7 @@ static int scsi_read_toc (cdrom_drive *d){
     return(-2);
   }
   {
-    scsi_TOC *toc=(scsi_TOC *)(d->sg_buffer+4);
+    scsi_TOC *toc=(scsi_TOC *)(d->private->sg_buffer+4);
     
     d->disc_toc[i-first].bFlags=toc->bFlags;
     d->disc_toc[i-first].bTrack=0xAA;
@@ -697,7 +708,7 @@ static int scsi_read_toc2 (cdrom_drive *d){
   }
 
   /* copy to our structure and convert start sector */
-  tracks = d->sg_buffer[1];
+  tracks = d->private->sg_buffer[1];
   if (tracks > MAXTRK) {
     cderror(d,"003: CDROM reporting illegal number of tracks\n");
     return(-3);
@@ -713,33 +724,33 @@ static int scsi_read_toc2 (cdrom_drive *d){
       return(-5);
     }
     
-    d->disc_toc[i].bFlags = d->sg_buffer[10];
+    d->disc_toc[i].bFlags = d->private->sg_buffer[10];
     d->disc_toc[i].bTrack = i + 1;
 
     d->disc_toc[i].dwStartSector= d->adjust_ssize * 
-	(((signed char)(d->sg_buffer[2])<<24) | 
-	 (d->sg_buffer[3]<<16)|
-	 (d->sg_buffer[4]<<8)|
-	 (d->sg_buffer[5]));
+	(((signed char)(d->private->sg_buffer[2])<<24) | 
+	 (d->private->sg_buffer[3]<<16)|
+	 (d->private->sg_buffer[4]<<8)|
+	 (d->private->sg_buffer[5]));
   }
 
   d->disc_toc[i].bFlags = 0;
   d->disc_toc[i].bTrack = i + 1;
-  memcpy (&foo, d->sg_buffer+2, 4);
-  memcpy (&bar, d->sg_buffer+6, 4);
+  memcpy (&foo, d->private->sg_buffer+2, 4);
+  memcpy (&bar, d->private->sg_buffer+6, 4);
   d->disc_toc[i].dwStartSector = d->adjust_ssize * (be32_to_cpu(foo) +
 						    be32_to_cpu(bar));
 
   d->disc_toc[i].dwStartSector= d->adjust_ssize * 
-    ((((signed char)(d->sg_buffer[2])<<24) | 
-      (d->sg_buffer[3]<<16)|
-      (d->sg_buffer[4]<<8)|
-      (d->sg_buffer[5]))+
+    ((((signed char)(d->private->sg_buffer[2])<<24) | 
+      (d->private->sg_buffer[3]<<16)|
+      (d->private->sg_buffer[4]<<8)|
+      (d->private->sg_buffer[5]))+
      
-     ((((signed char)(d->sg_buffer[6])<<24) | 
-       (d->sg_buffer[7]<<16)|
-       (d->sg_buffer[8]<<8)|
-       (d->sg_buffer[9]))));
+     ((((signed char)(d->private->sg_buffer[6])<<24) | 
+       (d->private->sg_buffer[7]<<16)|
+       (d->private->sg_buffer[8]<<8)|
+       (d->private->sg_buffer[9]))));
 
 
   d->cd_extra = FixupTOC(d,tracks+1);
@@ -763,7 +774,7 @@ static int i_read_28 (cdrom_drive *d, void *p, long begin, long sectors, unsigne
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -782,7 +793,7 @@ static int i_read_A8 (cdrom_drive *d, void *p, long begin, long sectors, unsigne
   cmd[9] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -800,7 +811,7 @@ static int i_read_D4_10 (cdrom_drive *d, void *p, long begin, long sectors, unsi
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -818,7 +829,7 @@ static int i_read_D4_12 (cdrom_drive *d, void *p, long begin, long sectors, unsi
   cmd[9] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -836,7 +847,7 @@ static int i_read_D5 (cdrom_drive *d, void *p, long begin, long sectors, unsigne
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,10,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -854,7 +865,7 @@ static int i_read_D8 (cdrom_drive *d, void *p, long begin, long sectors, unsigne
   cmd[9] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -868,7 +879,7 @@ static int i_read_mmc (cdrom_drive *d, void *p, long begin, long sectors, unsign
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -882,7 +893,7 @@ static int i_read_mmcB (cdrom_drive *d, void *p, long begin, long sectors, unsig
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -896,7 +907,7 @@ static int i_read_mmc2 (cdrom_drive *d, void *p, long begin, long sectors, unsig
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -910,7 +921,7 @@ static int i_read_mmc2B (cdrom_drive *d, void *p, long begin, long sectors, unsi
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -924,7 +935,7 @@ static int i_read_mmc3 (cdrom_drive *d, void *p, long begin, long sectors, unsig
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -938,7 +949,7 @@ static int i_read_mmc3B (cdrom_drive *d, void *p, long begin, long sectors, unsi
   cmd[8] = sectors;
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -972,7 +983,7 @@ static int i_read_msf (cdrom_drive *d, void *p, long begin, long sectors, unsign
 
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -985,7 +996,7 @@ static int i_read_msf2 (cdrom_drive *d, void *p, long begin, long sectors, unsig
 
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -998,7 +1009,7 @@ static int i_read_msf3 (cdrom_drive *d, void *p, long begin, long sectors, unsig
   
   if((ret=handle_scsi_cmd(d,cmd,12,0,sectors * CD_FRAMESIZE_RAW,'\177',1,sense)))
     return(ret);
-  if(p)memcpy(p,d->sg_buffer,sectors*CD_FRAMESIZE_RAW);
+  if(p)memcpy(p,d->private->sg_buffer,sectors*CD_FRAMESIZE_RAW);
   return(0);
 }
 
@@ -1214,7 +1225,7 @@ long scsi_read_msf3 (cdrom_drive *d, void *p, long begin,
 static int count_2352_bytes(cdrom_drive *d){
   long i;
   for(i=2351;i>=0;i--)
-    if(d->sg_buffer[i]!=(unsigned char)'\177')
+    if(d->private->sg_buffer[i]!=(unsigned char)'\177')
       return(((i+3)>>2)<<2);
 
   return(0);
@@ -1223,7 +1234,7 @@ static int count_2352_bytes(cdrom_drive *d){
 static int verify_nonzero(cdrom_drive *d){
   long i,flag=0;
   for(i=0;i<2352;i++)
-    if(d->sg_buffer[i]!=0){
+    if(d->private->sg_buffer[i]!=0){
       flag=1;
       break;
     }
@@ -1565,7 +1576,7 @@ static int check_mmc(cdrom_drive *d){
   d->is_mmc=0;
   if(mode_sense(d,22,0x2A)==0){
   
-    b=d->sg_buffer;
+    b=d->private->sg_buffer;
     b+=b[3]+4;
     
     if((b[0]&0x3F)==0x2A){
@@ -1613,7 +1624,7 @@ unsigned char *scsi_inquiry(cdrom_drive *d){
     cderror(d,"008: Unable to identify CDROM model\n");
     return(NULL);
   }
-  return (d->sg_buffer);
+  return (d->private->sg_buffer);
 }
 
 
@@ -1684,8 +1695,8 @@ int scsi_init_drive(cdrom_drive *d){
   check_fua_bit(d);
 
   d->error_retry=1;
-  d->sg=realloc(d->sg,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF + 128);
-  d->sg_buffer=d->sg+SG_OFF;
+  d->private->sg_hd=realloc(d->private->sg_hd,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF + 128);
+  d->private->sg_buffer=((unsigned char *)d->private->sg_hd)+SG_OFF;
   d->report_all=1;
   return(0);
 }

@@ -96,6 +96,13 @@ typedef struct sg_io_hdr
 
 #endif
 
+struct cdda_private_data {
+  struct sg_header *sg_hd;
+  unsigned char *sg_buffer; /* points into sg_hd */
+
+  int last_milliseconds;
+};
+
 #define MAX_RETRIES 8
 #define MAX_BIG_BUFF_SIZE 65536
 #define MIN_BIG_BUFF_SIZE 4096

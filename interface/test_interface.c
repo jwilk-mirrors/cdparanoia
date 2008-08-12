@@ -91,7 +91,7 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
 
   while(bytes_so_far<bytestotal){
     int inner_bytes=bytestotal-bytes_so_far;
-    char *inner_buf=p+bytes_so_far;
+    char *inner_buf=(p ? p+bytes_so_far : NULL);
     long seeki;
     long rbytes;
     long this_bytes=inner_bytes;
@@ -151,7 +151,15 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
     if(fseek(fd,seeki,SEEK_SET)<0){
       return(0);
     }
-    rbytes=fread(inner_buf,1,this_bytes,fd);
+    if(!inner_buf){
+      char *temp = malloc(this_bytes);
+      rbytes=fread(temp,1,this_bytes,fd);
+      free(temp);
+    }else
+      rbytes=fread(inner_buf,1,this_bytes,fd);
+
+    d->private->last_milliseconds=this_bytes/2352./75./20.*1000.;
+
     bytes_so_far+=rbytes;
     if(rbytes==0)break;
 
@@ -179,7 +187,7 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
     long location=300*CD_FRAMESIZE_RAW+(drand48()*56)+512;
 
     if(begin<=location && begin+bytestotal>location){
-      memset(p+location-begin,(int)(drand48()*256),1100);
+      if(p)memset(p+location-begin,(int)(drand48()*256),1100);
     }
   }
 #endif
