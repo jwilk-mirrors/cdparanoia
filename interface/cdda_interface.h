@@ -197,6 +197,7 @@ static char *strerror_tr[]={
 401: Invalid track number
 402: Track not audio data
 403: No audio tracks on disc
+404: No medium present
 
 */
 #endif

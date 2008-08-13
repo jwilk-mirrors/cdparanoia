@@ -114,6 +114,12 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
 	  ret=-300;
 	  goto done;
 	}
+      case ENXIO:
+      case EBADF:
+      case ENOMEDIUM:
+	errno=ENOMEDIUM;
+	ret=0;
+	goto done;
       default:
 	if(sectors==1){
 	    

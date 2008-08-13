@@ -174,7 +174,7 @@ static void display_toc(cdrom_drive *d){
 	 "===========================================================");
   
   for(i=1;i<=d->tracks;i++)
-    if(cdda_track_audiop(d,i)){
+    if(cdda_track_audiop(d,i)>0){
       char buffer[256];
 
       long sec=cdda_track_firstsector(d,i);
@@ -928,9 +928,6 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
-  /* Determine drive caching behavior */
-  cdda_cache_sectors(d);
-
   /* Dump the TOC */
   if(query_only || verbose)display_toc(d);
   if(query_only)exit(0);
@@ -1229,6 +1226,10 @@ int main(int argc,char *argv[]){
 	  if(err)free(err);
 	  if(mes)free(mes);
 	  if(readbuf==NULL){
+	    if(errno==EBADF || errno==ENOMEDIUM){
+	      report("\nparanoia_read: CDROM drive unavailable, bailing.\n");
+	      exit(1);
+	    }
 	    skipped_flag=1;
 	    report("\nparanoia_read: Unrecoverable error, bailing.\n");
 	    break;

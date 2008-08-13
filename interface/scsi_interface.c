@@ -104,12 +104,18 @@ static void clear_garbage(cdrom_drive *d){
   }
 }
 
-static int check_sbp_error(const unsigned char *sbp) {
-  if (sbp[0]) {
-    char key = sbp[2] & 0xf;
-    char ASC = sbp[12];
-    char ASCQ = sbp[13];
-    
+static int check_sbp_error(const unsigned char status,
+			   const unsigned char *sbp) {
+  char key = sbp[2] & 0xf;
+  char ASC = sbp[12];
+  char ASCQ = sbp[13];
+  
+  if(status==0)
+    return 0;
+
+  if(status==8)return TR_BUSY;
+
+  if (sbp[0]) {  
     switch (key){
     case 0:
       if (errno==0)
@@ -118,9 +124,8 @@ static int check_sbp_error(const unsigned char *sbp) {
     case 1:
       break;
     case 2:
-      if (errno==0)
-	errno = EBUSY;
-      return(TR_BUSY);
+      errno = ENOMEDIUM;
+      return(TR_NOTREADY);
     case 3: 
       if ((ASC==0x0C) & (ASCQ==0x09)) {
 	/* loss of streaming */
@@ -172,7 +177,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
 
   memset(sg_hd,0,sizeof(sg_hd)); 
   memset(sense_buffer,0,SG_MAX_SENSE); 
-  memcpy(d->private->sg_buffer,cmd,cmd_len);
+  memcpy(d->private->sg_buffer,cmd,cmd_len+in_size);
   sg_hd->twelve_byte = cmd_len == 12;
   sg_hd->result = 0;
   sg_hd->reply_len = SG_OFF + out_size;
@@ -279,7 +284,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
     return(TR_EREAD);
   }
 
-  status = check_sbp_error(sense_buffer);
+  status = check_sbp_error(sg_hd->target_status, sense_buffer);
   if(status)return status;
 
   /* Failed/Partial DMA transfers occasionally get through.  Why?  No clue,
@@ -324,7 +329,8 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
 
   memset(&hdr,0,sizeof(hdr));
   memset(sense,0,sizeof(sense));
-  
+  memcpy(d->private->sg_buffer,cmd+cmd_len,in_size);
+
   hdr.cmdp = cmd;
   hdr.cmd_len = cmd_len;
   hdr.sbp = sense;
@@ -338,15 +344,16 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
   if(bytecheck && out_size>in_size)
     memset(hdr.dxferp+in_size,bytefill,out_size-in_size); 
 
-
   if (in_size) {
     hdr.dxfer_len = in_size;
     hdr.dxfer_direction = SG_DXFER_TO_DEV;
     
     errno = 0;
     status = ioctl(d->ioctl_fd, SG_IO, &hdr);
-    if (status >= 0 && hdr.status)
-      status = check_sbp_error(hdr.sbp);
+    if (status >= 0 && hdr.status){
+      status = check_sbp_error(hdr.status,hdr.sbp);
+      if(status) return status;
+    }
     if (status < 0) return TR_EWRITE;
   }
 
@@ -360,8 +367,10 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
 
     errno = 0;
     status = ioctl(d->ioctl_fd, SG_IO, &hdr);
-    if (status >= 0 && hdr.status)
-      status = check_sbp_error(hdr.sbp);
+    if (status >= 0 && hdr.status){
+      status = check_sbp_error(hdr.status,hdr.sbp);
+      if(status) return status;
+    }
     if (status < 0) return TR_EREAD;
   }
 
@@ -472,7 +481,7 @@ static int mode_sense_atapi(cdrom_drive *d,int size,int page){
     b[2]=b[3];
     b[3]=b[7];
 
-    memmove(b+4,b+8,size);
+    memmove(b+4,b+8,size-4);
   }
   return(0);
 }
@@ -493,6 +502,10 @@ static int mode_sense_scsi(cdrom_drive *d,int size,int page){
   cmd[4]=size;
   
   if (handle_scsi_cmd (d, cmd, 6, 0, size, '\377',1, sense)) return(1);
+
+  /* dump it all... */
+  
+
   return(0);
 }
 
@@ -502,7 +515,7 @@ static int mode_sense(cdrom_drive *d,int size,int page){
   return(mode_sense_scsi(d,size,page));
 }
 
-/* Current SG/SGIO impleemntations specifically disallow mode set
+/* Current SG/SGIO impleenmtations specifically disallow mode set
    unless running as root (or setuid).  One can see why (could be
    disastrous on, eg, a SCSI disk), but it curtails what we can do
    with older SCSI cdroms. */
@@ -518,7 +531,7 @@ static int mode_select(cdrom_drive *d,int density,int secsize){
 			      0,    /* reserved */
 			      0,    /* reserved */
 			      0,    /* reserved */
-			      12,   /* sizeof(mode) */
+			      16,   /* sizeof(mode) */
 			      0,    /* reserved */
 			      
 			      /* mode parameter header */
@@ -531,9 +544,6 @@ static int mode_select(cdrom_drive *d,int density,int secsize){
 			      0,       /* reserved */
 			      0, 0, 0};/* Blocklen */
     unsigned char *mode = cmd + 18;
-    
-    
-    cmd[1]|=d->lun<<5;
     
     /* prepare to read cds in the previous mode */
     mode [0] = density;
@@ -583,7 +593,7 @@ static int set_sectorsize (cdrom_drive *d,unsigned int secsize){
   return(mode_select(d,d->orgdens,secsize));
 }
 
-/* switch Toshiba/DEC and HP drives from/to cdda density */
+/* switch old Toshiba/DEC and HP drives from/to cdda density */
 int scsi_enable_cdda (cdrom_drive *d, int fAudioMode){
   if (fAudioMode) {
     if(mode_select(d,d->density,CD_FRAMESIZE_RAW)){
@@ -1054,8 +1064,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	fprintf(stderr,"                 Transport error: %s\n",strerror_tr[err]);
 	fprintf(stderr,"                 System error: %s\n",strerror(errno));
       }
-
-      if(!d->error_retry)return(-7);
+      
       switch(errno){
       case EINTR:
 	usleep(100);
@@ -1077,6 +1086,10 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	}
 	sectors--;
 	continue;
+      case ENOMEDIUM:
+	cderror(d,"404: No medium present\n");
+	return(-404);
+
       default:
 	if(sectors==1){
 	  if(errno==EIO)
@@ -1102,6 +1115,8 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
            back to cdda */
 	reset_scsi(d);
       }
+      if(!d->error_retry)return(-7);
+
     }else{
 
       /* Did we get all the bytes we think we did, or did the kernel
@@ -1284,12 +1299,10 @@ static int verify_read_command(cdrom_drive *d){
     
     d->enable_cdda(d,0);
   }
-
   if(!audioflag){
     cdmessage(d,"\tCould not find any audio tracks on this disk.\n");
     return(-403);
   }
-
 
   {
     char *es="",*rs="";
@@ -1386,7 +1399,6 @@ static int verify_read_command(cdrom_drive *d){
       case 14:
 	d->read_audio=scsi_read_D8;
 	rs="d8 0x,00";
-	j=-2;
 	break;
       }
       
@@ -1396,7 +1408,7 @@ static int verify_read_command(cdrom_drive *d){
 	  d->density=0;
 	  d->enable_cdda=Dummy;
 	  es="none    ";
-	  if(!densitypossible)i=-2; /* short circuit MMC style commands */
+	  if(!densitypossible)i=5; /* short circuit MMC style commands */
 	  break;
 	case 1:
 	  d->density=0;
@@ -1412,11 +1424,11 @@ static int verify_read_command(cdrom_drive *d){
 	  d->density=0x82;
 	  d->enable_cdda=scsi_enable_cdda;
 	  es="yes/0x82";
+	  break;
 	case 4:
 	  d->density=0x81;
 	  d->enable_cdda=scsi_enable_cdda;
 	  es="yes/0x81";
-	  i=-2;
 	  break;
 	}
 

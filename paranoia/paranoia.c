@@ -81,6 +81,7 @@
 #include "overlap.h"
 #include "gap.h"
 #include "isort.h"
+#include <errno.h>
 
 static inline long re(root_block *root){
   if(!root)return(-1);
@@ -183,7 +184,8 @@ static inline long i_paranoia_overlap(int16_t *buffA,int16_t *buffB,
  * offsets of the first and last matching samples in A.
  */
 static inline long i_paranoia_overlap2(int16_t *buffA,int16_t *buffB,
-				       char *flagsA,char *flagsB,
+				       unsigned char *flagsA,
+				       unsigned char *flagsB,
 				       long offsetA, long offsetB,
 				       long sizeA,long sizeB,
 				       long *ret_begin, long *ret_end){
@@ -252,10 +254,11 @@ static inline long i_paranoia_overlap2(int16_t *buffA,int16_t *buffB,
  * on the CD and what B considers sample N.)
  */
 static inline long do_const_sync(c_block *A,
-				 sort_info *B,char *flagB,
+				 sort_info *B,
+				 unsigned char *flagB,
 				 long posA,long posB,
 				 long *begin,long *end,long *offset){
-  char *flagA=A->flags;
+  unsigned char *flagA=A->flags;
   long ret=0;
 
   /* If we're doing any verification whatsoever, we have flags in stage
@@ -318,14 +321,14 @@ static inline long do_const_sync(c_block *A,
    reference */
 
 static inline long try_sort_sync(cdrom_paranoia *p,
-				 sort_info *A,char *Aflags,
+				 sort_info *A,unsigned char *Aflags,
 				 c_block *B,
 				 long post,long *begin,long *end,
 				 long *offset,void (*callback)(long,int)){
   
   long dynoverlap=p->dynoverlap;
   sort_link *ptr=NULL;
-  char *Bflags=B->flags;
+  unsigned char *Bflags=B->flags;
 
   /* block flag matches FLAGS_UNREAD (and hence unmatchable) */
   if(Bflags==NULL || (Bflags[post-cb(B)]&FLAGS_UNREAD)==0){
@@ -2272,7 +2275,7 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
   c_block *new=NULL;
   root_block *root=&p->root;
   int16_t *buffer=NULL;
-  char *flags=NULL;
+  unsigned char *flags=NULL;
   long sofar;
   long dynoverlap=(p->dynoverlap+CD_FRAMEWORDS-1)/CD_FRAMEWORDS; 
   long anyflag=0;
@@ -2392,7 +2395,16 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
       if((thisread=cdda_read(p->d,buffer+sofar*CD_FRAMEWORDS,adjread,
 			    secread))<secread){
 
-	if(thisread<0)thisread=0;
+	if(thisread<0){
+	  if(errno==ENOMEDIUM){
+	    /* the one error we bail on immediately */
+	    if(new)free_c_block(new);
+	    if(buffer)free(buffer);
+	    if(flags)free(flags);
+	    return NULL;
+	  }
+	  thisread=0;
+	}
 
 	/* Uhhh... right.  Make something up. But don't make us seek
            backward! */
@@ -2501,6 +2513,11 @@ int16_t *paranoia_read_limited(cdrom_paranoia *p, void(*callback)(long,int),
   long endword=beginword+CD_FRAMEWORDS;
   long retry_count=0,lastend=-2;
   root_block *root=&p->root;
+
+  if(p->d->opened==0){
+    errno=EBADF;
+    return NULL;
+  }
 
   if(beginword>p->root.returnedlimit)p->root.returnedlimit=beginword;
   lastend=re(root);
@@ -2632,6 +2649,12 @@ int16_t *paranoia_read_limited(cdrom_paranoia *p, void(*callback)(long,int),
 			  callback);
       
 	}
+      }else{
+
+	/* Was the medium removed or the device closed out from
+	   under us? */
+	if(errno==ENOMEDIUM) return NULL;
+      
       }
     }
 

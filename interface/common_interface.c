@@ -174,11 +174,30 @@ int data_bigendianp(cdrom_drive *d){
    drives have a FUA facility, but it's not clear how many ignore it.
    For that reason, we need to empirically determine cache size used
    for reads */
-
+#if 0
 int cdda_cache_sectors(cdrom_drive *d){
-  /* let's assume the (physically) fastest drives are 100x.  Although
-     the physical disc itself can't spin at faster than 50x or so,
-     many drives use multiple read heads and interleave access. */
+
+  /* Some assumptions about timing: 
+
+     The physically fastest drives are about 50x, and usually only at
+     the rim.  This has been stable for nearly ten years at this
+     point.  It's possible to make faster drives using multiple read
+     pickups and interleaving, but it doesn't appear anyone cares to.
+
+     The slowest interface we're likely to see is UDMA40, which would
+     probably be able to maintain 100x in practice to a chain with a
+     single device on an otherwise unloaded machine.  This is a bit
+     too close for comfort to rely on simple timing thresholding,
+     especially as the kernel is going to be inserting its own
+     unpredictable timing latencies.
+
+     The bus itself adds a timing overhead; the SATA 150 machines at my disposal appear to fairly universally insert a roughly .06ms/sector (~200x) transfer latency. PATA UDMA 133 appears to be ~ .1 ms/sector.
+
+It's possible to make
+     drives faster (multiread, etc), but actual bus throughput at the
+     moment only abounts to 100x-200x,
+
+  /* let's assume the (physically) fastest drives are 60x; this is true in practice, and drives that fast are usually only that fast out at the rim */
   float ms_per_sector = 1./75./100.;
   int i;
   int lo = 75;
@@ -191,7 +210,6 @@ int cdda_cache_sectors(cdrom_drive *d){
   int under=1;
 
   cdmessage(d,"\nChecking CDROM drive cache behavior...\n");
-
 
   /* find the longest stretch of available audio data */
 
@@ -249,6 +267,8 @@ int cdda_cache_sectors(cdrom_drive *d){
 		return(-1);
 	      }
 	    }else{
+
+	      fprintf(stderr,">%d:%dms ",readsectors, d->private->last_milliseconds);
 	      fulltime += d->private->last_milliseconds;
 	      break;
 	    }
@@ -266,7 +286,7 @@ int cdda_cache_sectors(cdrom_drive *d){
 
     current*=2;
   } 
-#if 0
+
   if(current > max){
     cdmessage(d,"\nGiving up; drive cache is too large to defeat using overflow.\n");
     cdmessage(d,"\n(Drives should not cache redbook reads, this drive does anyway."
@@ -276,9 +296,10 @@ int cdda_cache_sectors(cdrom_drive *d){
     return INT_MAX;
   }
 
-#endif
   return 0;
 }
+#endif
+
 
 /************************************************************************/
 /* Here we fix up a couple of things that will never happen.  yeah,

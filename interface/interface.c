@@ -103,7 +103,7 @@ long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
     if(sectors>0){
       sectors=d->read_audio(d,buffer,beginsector,sectors);
 
-      if(sectors!=-1){
+      if(sectors>0){
 	/* byteswap? */
 	if(d->bigendianp==-1) /* not determined yet */
 	  d->bigendianp=data_bigendianp(d);
@@ -115,7 +115,7 @@ long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
 	  
 	  for(i=0;i<els;i++)p[i]=swap16(p[i]);
 	}
-      }
+      }	
     }
     return(sectors);
   }

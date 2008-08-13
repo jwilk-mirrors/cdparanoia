@@ -13,14 +13,14 @@
 long cdda_track_firstsector(cdrom_drive *d,int track){
   if(!d->opened){
     cderror(d,"400: Device not open\n");
-    return(-1);
+    return(-400);
   }
 
   if (track == 0) {
     if (d->disc_toc[0].dwStartSector == 0) {
       /* first track starts at lba 0 -> no pre-gap */
       cderror(d,"401: Invalid track number\n");
-      return(-1);
+      return(-401);
     }
     else {
       return 0; /* pre-gap of first track always starts at lba 0 */
@@ -29,7 +29,7 @@ long cdda_track_firstsector(cdrom_drive *d,int track){
 
   if(track<0 || track>d->tracks){
     cderror(d,"401: Invalid track number\n");
-    return(-1);
+    return(-401);
   }
   return(d->disc_toc[track-1].dwStartSector);
 }
@@ -38,7 +38,7 @@ long cdda_disc_firstsector(cdrom_drive *d){
   int i;
   if(!d->opened){
     cderror(d,"400: Device not open\n");
-    return(-1);
+    return(-400);
   }
 
   /* look for an audio track */
@@ -51,20 +51,20 @@ long cdda_disc_firstsector(cdrom_drive *d){
     }
 
   cderror(d,"403: No audio tracks on disc\n");  
-  return(-1);
+  return(-403);
 }
 
 long cdda_track_lastsector(cdrom_drive *d,int track){
   if(!d->opened){
     cderror(d,"400: Device not open\n");
-    return(-1);
+    return(-400);
   }
 
   if (track == 0) {
     if (d->disc_toc[0].dwStartSector == 0) {
       /* first track starts at lba 0 -> no pre-gap */
       cderror(d,"401: Invalid track number\n");
-      return(-1);
+      return(-401);
     }
     else {
       return d->disc_toc[0].dwStartSector-1;
@@ -73,7 +73,7 @@ long cdda_track_lastsector(cdrom_drive *d,int track){
 
   if(track<1 || track>d->tracks){
     cderror(d,"401: Invalid track number\n");
-    return(-1);
+    return(-401);
   }
   /* Safe, we've always the leadout at disc_toc[tracks] */
   return(d->disc_toc[track].dwStartSector-1);
@@ -83,7 +83,7 @@ long cdda_disc_lastsector(cdrom_drive *d){
   int i;
   if(!d->opened){
     cderror(d,"400: Device not open\n");
-    return(-1);
+    return(-400);
   }
 
   /* look for an audio track */
@@ -92,13 +92,13 @@ long cdda_disc_lastsector(cdrom_drive *d){
       return(cdda_track_lastsector(d,i+1));
 
   cderror(d,"403: No audio tracks on disc\n");  
-  return(-1);
+  return(-403);
 }
 
 long cdda_tracks(cdrom_drive *d){
   if(!d->opened){
     cderror(d,"400: Device not open\n");
-    return(-1);
+    return(-400);
   }
   return(d->tracks);
 }
@@ -106,7 +106,7 @@ long cdda_tracks(cdrom_drive *d){
 int cdda_sector_gettrack(cdrom_drive *d,long sector){
   if(!d->opened){
     cderror(d,"400: Device not open\n");
-    return(-1);
+    return(-400);
   }else{
     int i;
 
@@ -120,14 +120,14 @@ int cdda_sector_gettrack(cdrom_drive *d,long sector){
     }
 
     cderror(d,"401: Invalid track number\n");
-    return -1;
+    return -401;
   }
 }
 
 int cdda_track_bitmap(cdrom_drive *d,int track,int bit,int set,int clear){
   if(!d->opened){
     cderror(d,"400: Device not open\n");
-    return(-1);
+    return(-400);
   }
 
   if (track == 0)
@@ -135,7 +135,7 @@ int cdda_track_bitmap(cdrom_drive *d,int track,int bit,int set,int clear){
 
   if(track<1 || track>d->tracks){
     cderror(d,"401: Invalid track number\n");
-    return(-1);
+    return(-401);
   }
   if ((d->disc_toc[track-1].bFlags & bit))
     return(set);
