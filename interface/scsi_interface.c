@@ -611,6 +611,46 @@ int scsi_enable_cdda (cdrom_drive *d, int fAudioMode){
   return(0);
 }
 
+static int set_read_ahead (cdrom_drive *d, int start, int end){
+  int err;
+  unsigned char sense[SG_MAX_SENSE];
+  unsigned char cmd[12]={0xA7, /* SET READ AHEAD */
+			0x00, /* reserved */
+			0x00, /* lba */
+			0x00, /* lba */
+			0x00, /* lba */
+			0x00, /* lba */
+			0x00, /* lba */
+			0x00, /* lba */
+			0x00, /* lba */
+			0x00, /* lba */
+			0,    /* reserved */
+			0};   /* control */ 
+  
+  cmd[2] = (start>>24)&0xff;
+  cmd[3] = (start>>16)&0xff;
+  cmd[4] = (start>>8)&0xff;
+  cmd[5] = (start)&0xff;
+
+  cmd[6] = (end>>24)&0xff;
+  cmd[7] = (end>>16)&0xff;
+  cmd[8] = (end>>8)&0xff;
+  cmd[9] = (end)&0xff;
+  
+  if (err=handle_scsi_cmd (d, cmd, 12, 0, 0, 0, 0, sense)){
+    fprintf(stderr,"Unable to disable cache\n");
+    fprintf(stderr,"                 Sense key: %x ASC: %x ASCQ: %x\n",
+	    (int)(sense[2]&0xf),
+	    (int)(sense[12]),
+	    (int)(sense[13]));
+    fprintf(stderr,"                 Transport error: %s\n",strerror_tr[err]);
+    fprintf(stderr,"                 System error: %s\n",strerror(errno));
+    
+  }
+
+  return(0);
+}
+
 typedef struct scsi_TOC {  /* structure of scsi table of contents (cdrom) */
   unsigned char reserved1;
   unsigned char bFlags;
@@ -1037,6 +1077,8 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 
   retry_count=0;
   
+  set_read_ahead(d,begin-1,begin+sectors);
+
   while(1) {
     if((err=map(d,(p?buffer:NULL),begin,sectors,sense))){
       if(d->report_all){

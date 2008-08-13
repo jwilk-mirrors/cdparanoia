@@ -174,7 +174,7 @@ int data_bigendianp(cdrom_drive *d){
    drives have a FUA facility, but it's not clear how many ignore it.
    For that reason, we need to empirically determine cache size used
    for reads */
-#if 0
+
 int cdda_cache_sectors(cdrom_drive *d){
 
   /* Some assumptions about timing: 
@@ -198,7 +198,7 @@ It's possible to make
      moment only abounts to 100x-200x,
 
   /* let's assume the (physically) fastest drives are 60x; this is true in practice, and drives that fast are usually only that fast out at the rim */
-  float ms_per_sector = 1./75./100.;
+  float ms_per_sector = 1./75./100.*1000;
   int i;
   int lo = 75;
   int current = lo;
@@ -280,13 +280,14 @@ It's possible to make
 	snprintf(buffer,80," %d:%fms/sec",i,(float)fulltime/current);
 	cdmessage(d,buffer);
       }
-      if(fulltime/current < ms_per_sector) under=1;
+      if((float)fulltime/current < ms_per_sector) under=1;
     }
     cdmessage(d,"\n");
 
     current*=2;
   } 
 
+#if 0
   if(current > max){
     cdmessage(d,"\nGiving up; drive cache is too large to defeat using overflow.\n");
     cdmessage(d,"\n(Drives should not cache redbook reads, this drive does anyway."
@@ -295,10 +296,9 @@ It's possible to make
 
     return INT_MAX;
   }
-
+#endif
   return 0;
 }
-#endif
 
 
 /************************************************************************/
