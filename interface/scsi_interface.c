@@ -14,6 +14,12 @@
 
 /* hook */
 static int Dummy (cdrom_drive *d,int s){
+  if(d->opened){
+    fprintf(stderr,"Disabling cache\n");
+    set_read_ahead(d,
+		   cdda_track_firstsector(d,1),
+		   cdda_track_lastsector(d,d->tracks));
+  }
   return(0);
 }
 
@@ -611,7 +617,7 @@ int scsi_enable_cdda (cdrom_drive *d, int fAudioMode){
   return(0);
 }
 
-static int set_read_ahead (cdrom_drive *d, int start, int end){
+int set_read_ahead (cdrom_drive *d, int start, int end){
   int err;
   unsigned char sense[SG_MAX_SENSE];
   unsigned char cmd[12]={0xA7, /* SET READ AHEAD */
@@ -1077,8 +1083,6 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 
   retry_count=0;
   
-  set_read_ahead(d,begin-1,begin+sectors);
-
   while(1) {
     if((err=map(d,(p?buffer:NULL),begin,sectors,sense))){
       if(d->report_all){
