@@ -111,9 +111,8 @@ static void cderror(cdrom_drive *d,const char *s){
       d->errorbuf=catstring(d->errorbuf,s);
       break;
     case CDDA_MESSAGE_FORGETIT:
-      ;
     default:
-      ;
+      break;
     }
   }
 }
@@ -128,9 +127,8 @@ static void cdmessage(cdrom_drive *d,const char *s){
       d->messagebuf=catstring(d->messagebuf,s);
       break;
     case CDDA_MESSAGE_FORGETIT:
-      ;
     default:
-      ;
+      break;
     }
   }
 }
@@ -172,9 +170,8 @@ static void idperror(int messagedest,char **messages,const char *f,
       }
       break;
     case CDDA_MESSAGE_FORGETIT:
-      ;
     default:
-      ;
+      break;
     }
   }
   if(malloced)free(buffer);
@@ -210,9 +207,8 @@ static void idmessage(int messagedest,char **messages,const char *f,
 	}
       break;
     case CDDA_MESSAGE_FORGETIT:
-      ;
     default:
-      ;
+      break;
     }
   }
   if(malloced)free(buffer);

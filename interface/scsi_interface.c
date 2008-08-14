@@ -14,12 +14,6 @@
 
 /* hook */
 static int Dummy (cdrom_drive *d,int s){
-  if(d->opened){
-    fprintf(stderr,"Disabling cache\n");
-    set_read_ahead(d,
-		   cdda_track_firstsector(d,1),
-		   cdda_track_lastsector(d,d->tracks));
-  }
   return(0);
 }
 
@@ -58,7 +52,7 @@ static void tweak_SG_buffer(cdrom_drive *d) {
   /* so since we never go above q->max_sectors, we should never get -EIO.
    * we might still get -ENOMEM, but we back off for that later.  Monty
    * had an old comment: "not too much; new kernels have trouble with DMA
-   * "allocation, so be more conservative: 32kB max until I test more 
+   * allocation, so be more conservative: 32kB max until I test more 
    * thoroughly".  We're not currently honoring that, because we should
    * always get -ENOMEM.
    *
@@ -617,7 +611,7 @@ int scsi_enable_cdda (cdrom_drive *d, int fAudioMode){
   return(0);
 }
 
-int set_read_ahead (cdrom_drive *d, int start, int end){
+static int set_read_ahead (cdrom_drive *d, int start, int end){
   int err;
   unsigned char sense[SG_MAX_SENSE];
   unsigned char cmd[12]={0xA7, /* SET READ AHEAD */

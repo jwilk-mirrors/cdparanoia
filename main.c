@@ -242,7 +242,13 @@ VERSION"\n"
 "                                    verification to n sectors\n"
 "  -d --force-cdrom-device   <dev> : use specified device; disallow \n"
 "                                    autosense\n"
-"  -g --force-generic-device <dev> : use specified generic scsi device\n"
+"  -k --force-cooked-device  <dev> : use specified cdrom device and force\n"
+"                                    use of the old 'cooked ioctl' kernel\n"
+"                                    interface. -k cannot be used with -d\n"
+"                                    or -g.\n"
+"  -g --force-generic-device <dev> : use specified generic scsi device and\n"
+"                                    force use of the old SG kernel\n"
+"                                    interface. -g cannot be used with -k.\n"
 "  -S --force-read-speed <n>       : read from device at specified speed\n"
 "  -t --toc-offset <n>             : Add <n> sectors to the values reported\n"
 "                                    when addressing tracks. May be negative\n"
@@ -576,7 +582,7 @@ static void callback(long inpos, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:o:O:d:g:S:prRwafvqVQhZz::YXWBi:Tt:l:";
+const char *optstring = "escCn:o:O:d:g:k:S:prRwafvqVQhZz::YXWBi:Tt:l:";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -586,6 +592,7 @@ struct option options [] = {
 	{"force-default-sectors",required_argument,NULL,'n'},
 	{"force-search-overlap",required_argument,NULL,'o'},
 	{"force-cdrom-device",required_argument,NULL,'d'},
+	{"force-cooked-device",required_argument,NULL,'k'},
 	{"force-generic-device",required_argument,NULL,'g'},
 	{"force-read-speed",required_argument,NULL,'S'},
 	{"sample-offset",required_argument,NULL,'O'},
@@ -646,6 +653,7 @@ int main(int argc,char *argv[]){
   int force_cdrom_overlap=-1;
   char *force_cdrom_device=NULL;
   char *force_generic_device=NULL;
+  char *force_cooked_device=NULL;
   int force_cdrom_speed=-1;
   int max_retries=20;
   char *span=NULL;
@@ -687,8 +695,21 @@ int main(int argc,char *argv[]){
       force_cdrom_device=copystring(optarg);
       break;
     case 'g':
+      if(force_cooked_device){
+	report3("-g option incompatable with -k\n");
+	exit(1);
+      }
+      force_cooked_device=NULL;
       if(force_generic_device)free(force_generic_device);
       force_generic_device=copystring(optarg);
+      break;
+    case 'k':
+      if(force_generic_device || force_cdrom_device){
+	report3("-k option incompatable with -d and -g\n");
+	exit(1);
+      }
+      if(force_cooked_device)free(force_cooked_device);
+      force_cooked_device=copystring(optarg);
       break;
     case 'S':
       force_cdrom_speed=atoi(optarg);
@@ -730,7 +751,7 @@ int main(int argc,char *argv[]){
       break;
     case 'e':
       callscript=1;
-      fprintf(stderr,"Sending all callcaks to stderr for wrapper script\n");
+      fprintf(stderr,"Sending all callbacks to stderr for wrapper script\n");
       break;
     case 'V':
       fprintf(stderr,VERSION);
@@ -829,7 +850,9 @@ int main(int argc,char *argv[]){
 
   /* Query the cdrom/disc; we may need to override some settings */
 
-  if(force_generic_device)
+  if(force_cooked_device){
+    d=cdda_identify_cooked(force_cooked_device,verbose,NULL);
+  }else if(force_generic_device)
     d=cdda_identify_scsi(force_generic_device,force_cdrom_device,verbose,NULL);
   else
     if(force_cdrom_device)
@@ -928,7 +951,8 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
-  cdda_cache_sectors(d);
+  /* Determine drive caching behavior for cache-busting purposes */
+  /* cdda_cache_sectors(d); */
 
   /* Dump the TOC */
   if(query_only || verbose)display_toc(d);

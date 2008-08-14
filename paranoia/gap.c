@@ -9,6 +9,7 @@
 #include "p_block.h"
 #include "cdda_paranoia.h"
 #include "gap.h"
+#include <string.h>
 
 /**** Gap analysis code ***************************************************/
 

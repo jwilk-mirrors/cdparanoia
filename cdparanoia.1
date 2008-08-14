@@ -125,15 +125,31 @@ to specify devices of any valid interface type (ATAPI, SCSI or
 proprietary).
 
 .TP
+.BI "\-k --force-cooked-device " device
+This option forces use of the old 'cooked ioctl' kernel 
+interface with the specified cdrom device.  The cooked ioctl interface
+is obsolete in Linux 2.6 if it is present at all.  
+.B \-k 
+cannot be used 
+with
+.B \-d 
+or 
+.BR \-g .
+
+
+.TP
 .BI "\-g --force-generic-device " device
 This option forces use of the old 'generic scsi' (sg) kernel 
-interface with the specified generic scsi device.
+interface with the specified generic scsi device. 
+.B \-g 
+cannot be used with
+.BR \-k .
 .B \-g
 may be used with
 .B \-d
 to explicitly set both the SCSI cdrom and
 generic (sg) devices seperately. This option is only useful on
-non-standard SCSI setups and when using the generic scsi (sg) driver. 
+obsolete SCSI setups and when using the generic scsi (sg) driver. 
 
 .TP
 .BI "\-S --force-read-speed " number
