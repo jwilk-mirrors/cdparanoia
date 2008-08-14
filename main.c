@@ -696,7 +696,7 @@ int main(int argc,char *argv[]){
       break;
     case 'g':
       if(force_cooked_device){
-	report3("-g option incompatable with -k\n");
+	report("-g option incompatable with -k\n");
 	exit(1);
       }
       force_cooked_device=NULL;
@@ -705,7 +705,7 @@ int main(int argc,char *argv[]){
       break;
     case 'k':
       if(force_generic_device || force_cdrom_device){
-	report3("-k option incompatable with -d and -g\n");
+	report("-k option incompatable with -d and -g\n");
 	exit(1);
       }
       if(force_cooked_device)free(force_cooked_device);
@@ -952,7 +952,7 @@ int main(int argc,char *argv[]){
   }
 
   /* Determine drive caching behavior for cache-busting purposes */
-  /* cdda_cache_sectors(d); */
+  cdda_cache_sectors(d); 
 
   /* Dump the TOC */
   if(query_only || verbose)display_toc(d);

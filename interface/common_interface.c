@@ -247,7 +247,7 @@ It's possible to make
     for(i=0;i<10;i++){
       int sofar=0;
       int fulltime=0;
-      
+      offset--;
       while(sofar<current){
 	for(j=0;;j++){
 	  
