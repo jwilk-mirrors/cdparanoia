@@ -611,46 +611,6 @@ int scsi_enable_cdda (cdrom_drive *d, int fAudioMode){
   return(0);
 }
 
-static int set_read_ahead (cdrom_drive *d, int start, int end){
-  int err;
-  unsigned char sense[SG_MAX_SENSE];
-  unsigned char cmd[12]={0xA7, /* SET READ AHEAD */
-			0x00, /* reserved */
-			0x00, /* lba */
-			0x00, /* lba */
-			0x00, /* lba */
-			0x00, /* lba */
-			0x00, /* lba */
-			0x00, /* lba */
-			0x00, /* lba */
-			0x00, /* lba */
-			0,    /* reserved */
-			0};   /* control */ 
-  
-  cmd[2] = (start>>24)&0xff;
-  cmd[3] = (start>>16)&0xff;
-  cmd[4] = (start>>8)&0xff;
-  cmd[5] = (start)&0xff;
-
-  cmd[6] = (end>>24)&0xff;
-  cmd[7] = (end>>16)&0xff;
-  cmd[8] = (end>>8)&0xff;
-  cmd[9] = (end)&0xff;
-  
-  if (err=handle_scsi_cmd (d, cmd, 12, 0, 0, 0, 0, sense)){
-    fprintf(stderr,"Unable to disable cache\n");
-    fprintf(stderr,"                 Sense key: %x ASC: %x ASCQ: %x\n",
-	    (int)(sense[2]&0xf),
-	    (int)(sense[12]),
-	    (int)(sense[13]));
-    fprintf(stderr,"                 Transport error: %s\n",strerror_tr[err]);
-    fprintf(stderr,"                 System error: %s\n",strerror(errno));
-    
-  }
-
-  return(0);
-}
-
 typedef struct scsi_TOC {  /* structure of scsi table of contents (cdrom) */
   unsigned char reserved1;
   unsigned char bFlags;
@@ -805,6 +765,20 @@ static int scsi_read_toc2 (cdrom_drive *d){
 
   d->cd_extra = FixupTOC(d,tracks+1);
   return(tracks);
+}
+
+static int scsi_set_speed (cdrom_drive *d, int speed){
+  int ret;
+  char b[80];
+  unsigned char cmd[12]={0xBB, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0};
+  unsigned char sense[SG_MAX_SENSE];
+
+  speed=speed*44100*4/1024;
+  cmd[2] = (speed >> 8) & 0xFF;
+  cmd[3] = (speed) & 0xFF;
+  ret=handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
+
+  return check_sbp_error(ret,sense);
 }
 
 /* These do one 'extra' copy in the name of clean code */
@@ -1679,6 +1653,9 @@ unsigned char *scsi_inquiry(cdrom_drive *d){
   return (d->private->sg_buffer);
 }
 
+int scsi_preinit_drive(cdrom_drive *d){
+  d->set_speed = scsi_set_speed;
+}
 
 int scsi_init_drive(cdrom_drive *d){
   int ret;
@@ -1723,8 +1700,6 @@ int scsi_init_drive(cdrom_drive *d){
 
   d->read_toc = (!memcmp(d->drive_model, "IMS", 3) && !d->is_atapi) ? scsi_read_toc2 : 
     scsi_read_toc;
-  d->set_speed = NULL;
-  
 
   if(!d->is_atapi){
     unsigned sector_size= get_orig_sectorsize(d);

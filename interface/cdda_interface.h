@@ -198,7 +198,10 @@ static char *strerror_tr[]={
 402: Track not audio data
 403: No audio tracks on disc
 404: No medium present
+405: Option not supported by drive
 
+500: Drive timing analysis read failure
+501: Drive timing analysis indeterminate
 */
 #endif
 

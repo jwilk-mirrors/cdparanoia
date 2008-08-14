@@ -79,7 +79,6 @@ static int cooked_setspeed(cdrom_drive *d, int speed)
     return 0;
 }
 
-
 /* read 'SectorBurst' adjacent sectors of audio sectors 
  * to Buffer '*p' beginning at sector 'lSector'
  */
@@ -218,6 +217,11 @@ static void check_exceptions(cdrom_drive *d,exception *list){
   }
 }
 
+
+int cooked_preinit_drive(cdrom_drive *d){
+  d->set_speed = cooked_setspeed;
+}
+
 /* set function pointers to use the ioctl routines */
 int cooked_init_drive (cdrom_drive *d){
   int ret;
@@ -274,7 +278,6 @@ int cooked_init_drive (cdrom_drive *d){
   }
   d->enable_cdda = Dummy;
   d->read_audio = cooked_read;
-  d->set_speed = cooked_setspeed;
   d->read_toc = cooked_readtoc;
   ret=d->tracks=d->read_toc(d);
   if(d->tracks<1)

@@ -175,41 +175,49 @@ int data_bigendianp(cdrom_drive *d){
    For that reason, we need to empirically determine cache size used
    for reads */
 
-int cdda_cache_sectors(cdrom_drive *d){
+int analyze_timing_and_cache(cdrom_drive *d){
 
   /* Some assumptions about timing: 
 
-     The physically fastest drives are about 50x, and usually only at
-     the rim.  This has been stable for nearly ten years at this
-     point.  It's possible to make faster drives using multiple read
-     pickups and interleaving, but it doesn't appear anyone cares to.
+     We can't perform cache determination timing based on looking at
+     average transfer times; on slow setups, the speed of a drive
+     reading sectors via PIO will not be reliably distinguishable from
+     the same drive returning data from the cache via pio.  We need
+     something even more noticable and reliable: the seek time.  A
+     seek will reliably be approximately 1.5 orders of magnitude
+     faster than a sequential sector access or cache hit, and slower
+     systems will also tend to have slower seeks.  It is unlikely we'd
+     ever see a seek latency of under ~10ms given the synchronization
+     requirements of a CD and the maximum possible rotational
+     velocity.
 
-     The slowest interface we're likely to see is UDMA40, which would
-     probably be able to maintain 100x in practice to a chain with a
-     single device on an otherwise unloaded machine.  This is a bit
-     too close for comfort to rely on simple timing thresholding,
-     especially as the kernel is going to be inserting its own
-     unpredictable timing latencies.
+     Further complicating things, we have to watch the data collection
+     carefully as we're not always going to be on an unloaded system,
+     and we even have to guard against other apps accessing the drive
+     (something that should never happen on purpose, but could happen
+     by accident).  As we know in our testing when seeks should never
+     occur, a sudden seek-sized latency popping up in the middle of a
+     collection is an indication that collection is possibly invalid.
 
-     The bus itself adds a timing overhead; the SATA 150 machines at my disposal appear to fairly universally insert a roughly .06ms/sector (~200x) transfer latency. PATA UDMA 133 appears to be ~ .1 ms/sector.
+     A second cause of 'spurious latency' would be media damage; if
+     we're consistently hitting latency on the same sector during
+     initial collection, may need to move past it. */
 
-It's possible to make
-     drives faster (multiread, etc), but actual bus throughput at the
-     moment only abounts to 100x-200x,
-
-  /* let's assume the (physically) fastest drives are 60x; this is true in practice, and drives that fast are usually only that fast out at the rim */
-  float ms_per_sector = 1./75./100.*1000;
-  int i;
-  int lo = 75;
-  int current = lo;
-  int max = 75*256;
+  int i,ret;
   int firstsector=-1;
   int lastsector=-1;
   int firsttest=-1;
   int lasttest=-1;
-  int under=1;
+  char buffer[80];
+  int max_retries=20;
+  float median;
+  int offset;
 
-  cdmessage(d,"\nChecking CDROM drive cache behavior...\n");
+  /* set up a default pessimal take on drive behavior */
+  d->private->cache_backseekflush=0;
+  d->private->cache_sectors=1200;
+
+  cdmessage(d,"\nChecking drive timing behavior...");
 
   /* find the longest stretch of available audio data */
 
@@ -229,28 +237,156 @@ It's possible to make
   }
 
   if(firstsector==-1){
-    cdmessage(d,"\n\tNo audio on disc; Cannot determine audio caching behavior.\n");
+    cdmessage(d,"\n\tNo audio on disc; Cannot determine timing behavior...");
     return -1;
   }
 
-  while(current <= max && under){
-    int offset = (lastsector - firstsector - current)/2; 
+  /* initial timing data collection of 100 sequential sectors; we need a median, verify an initial seek */
+  {
+    int x;
+    int current=100;
+    int histogram[10000];
+    int latency[current];
+    int retry;
+    offset = (lastsector - firstsector - current)*2/3 + firstsector;
+
+    for(retry=0;retry<max_retries;retry++){
+      int acc=0;
+      int prev=0;
+
+      if(retry){
+	offset-=current+1;
+	offset-=offset/32;
+      }
+      if(offset<firstsector)break;
+      
+      memset(histogram,0,sizeof(histogram));
+      if((ret=d->read_audio(d,NULL,offset+current+1,1))<0){
+	/* media error! grr!  retry elsewhere */
+	cdmessage(d,"\n\tWARNING: unrecoverable media error while performing test"
+		  "\n\treads; picking new location and trying again.");
+	continue;
+      }
+      for(i=0;i<current;i++){
+	if(d->read_audio(d,NULL,offset+i,1)<0){
+	  /* media error! grr!  retry elsewhere */
+	  cdmessage(d,"\n\tWARNING: unrecoverable media error while performing test"
+		    "\n\treads; picking new location and trying again.");
+	  break;
+	}
+	x = d->private->last_milliseconds;
+	if(x>9999)x=9999;
+	if(x<0)x=0;
+	histogram[x]++;
+	latency[i]=x;
+      }
+      if(i<current){
+	offset-=current+1;
+	continue;
+      }	
+
+      for(i=0;i<10000;i++){
+	prev=acc;
+	acc+=histogram[i];
+	if(acc>current/2) break;
+      }
+      
+      median = (i*(acc-prev) + (i-1)*prev)/(float)acc;
+      
+      snprintf(buffer,80,"\n\tsmall seek latency (%d sectors): %d ms",current,latency[0]);
+      cdmessage(d,buffer);
+      snprintf(buffer,80,"\n\tmedian read latency per sector: %.1f ms",median);
+      cdmessage(d,buffer);
+
+      /* verify slow spinup did not compromise median */
+      for(i=1;i<current;i++)
+	if(latency[i]>latency[i-1] || latency[i]<=(median+1.))break;
+      if(i>5){
+	cdmessage(d,"\n\tDrive appears to spin up slowly... retrying...");
+	offset-=current+1;
+	continue;
+      }
+
+      /* verify against spurious latency; any additional 5x blocks that
+	 are not continuous with read start */
+      acc=0;
+      if(median<.6)median=.6;
+      for(i=5;i<current;i++)
+	if(latency[i]>median*10)acc++;
+
+      if(acc){
+	cderror(d,"\n\tWARNING: Read timing displayed bursts of unexpected"
+		"\n\tlatency; retrying for a clean read.\n");
+	continue;
+      }
+	
+      break;
+    }
+
+    if(offset<firstsector){
+      cderror(d,"\n500: Unable to find sufficiently large area of"
+	      "\n\tgood media to perform timing tests.  Aborting.\n");
+      return -500;
+    }
+    if(retry==max_retries){
+      cderror(d,"\n500: Too many retries; aborting analysis.\n");
+      return -500;
+    }    
+  }
+  
+  /* look to see if drive is caching at all; read first sector N
+     times, if any reads are near or under the median latency, we're
+     caching */
+  {
+    for(i=0;i<max_retries;i++){
+      if(d->read_audio(d,NULL,offset,1)==1){
+	if(d->private->last_milliseconds<median*10) break;
+
+      }else{
+	/* error handling */
+      }
+    }
+
+    if(i<max_retries){
+      cdmessage(d,"\n\tCaching test result: DRIVE IS CACHING (bad)\n");
+    }else{
+      cdmessage(d,"\n\tCaching test result: Drive is not caching (good)\n");
+      d->private->cache_sectors=0;
+      return 0;
+    }
+  }
+
+
+
+
+      
+
+
+  /* bisection search on cache size */
+
+  int lo=10;
+  int hi=15000;
+  int current=lo;
+  int under=1;
+  float ms_per_sector = 1./75.*1000./100.;
+  d->nsectors=1;
+  while(current <= hi && under){
+    int offset = (lastsector - firstsector - current)/2+firstsector; 
     int i,j;
     under=0;
 
     {
       char buffer[80];
-      snprintf(buffer,80,"\tTesting reads for caching (%d sectors):\n\t",current);
+      snprintf(buffer,80,"\n\tTesting reads for caching (%d sectors):\n\t",current);
       cdmessage(d,buffer);
     }
 
     for(i=0;i<10;i++){
       int sofar=0;
       int fulltime=0;
-      offset--;
+
       while(sofar<current){
-	for(j=0;;j++){
-	  
+	for(j=0;;j++){	  
 	  int readsectors = d->read_audio(d,NULL,offset+sofar,current-sofar);
 	  if(readsectors<=0){
 	    if(j==2){
@@ -259,7 +395,6 @@ It's possible to make
 	      return(-1);
 	    }
 	  }else{
-	    sofar+=readsectors;
 	    if(d->private->last_milliseconds==-1){
 	      if(j==2){
 		d->enable_cdda(d,0);
@@ -268,35 +403,29 @@ It's possible to make
 	      }
 	    }else{
 
-	      fprintf(stderr,">%d:%dms ",readsectors, d->private->last_milliseconds);
-	      fulltime += d->private->last_milliseconds;
+	      if(sofar==0){
+		fprintf(stderr,">%d:%dms ",readsectors, d->private->last_milliseconds);
+		fulltime = d->private->last_milliseconds;
+	      }
+	      sofar+=readsectors;
 	      break;
 	    }
 	  }
 	}
       }
-      {
-	char buffer[80];
-	snprintf(buffer,80," %d:%fms/sec",i,(float)fulltime/current);
-	cdmessage(d,buffer);
-      }
-      if((float)fulltime/current < ms_per_sector) under=1;
+      if(fulltime < median*10) under=1;
     }
     cdmessage(d,"\n");
 
     current*=2;
   } 
 
-#if 0
-  if(current > max){
-    cdmessage(d,"\nGiving up; drive cache is too large to defeat using overflow.\n");
-    cdmessage(d,"\n(Drives should not cache redbook reads, this drive does anyway."
-	        "\n Worse, the cache is too large to have any hope of defeating."
-	        "\n Cdparanoia has no chance of catching errors from this drive.\n");
 
-    return INT_MAX;
-  }
-#endif
+
+   
+
+  /* XXXXXX IN PROGRESS */
+  cdmessage(d,"\n");
   return 0;
 }
 

@@ -90,12 +90,17 @@ int cdda_open(cdrom_drive *d){
     
   /*  d->select_speed(d,d->maxspeed); most drives are full speed by default */
   if(d->bigendianp==-1)d->bigendianp=data_bigendianp(d);
+  analyze_timing_and_cache(d);
   return(0);
 }
 
 int cdda_speed_set(cdrom_drive *d, int speed)
 {
-  return d->set_speed ? d->set_speed(d, speed) : 0;
+  if(d->set_speed)
+    if(!d->set_speed(d,speed)) return 0;
+      
+  cderror(d,"405: Option not supported by drive\n");
+  return -405;
 }
 
 long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){

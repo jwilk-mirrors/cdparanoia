@@ -654,7 +654,7 @@ int main(int argc,char *argv[]){
   char *force_cdrom_device=NULL;
   char *force_generic_device=NULL;
   char *force_cooked_device=NULL;
-  int force_cdrom_speed=-1;
+  int force_cdrom_speed=0;
   int max_retries=20;
   char *span=NULL;
   int output_type=1; /* 0=raw, 1=wav, 2=aifc */
@@ -937,6 +937,19 @@ int main(int argc,char *argv[]){
     }
   }
 
+  /* We want the speed set to apply to cache and timing testing */
+  if(force_cdrom_speed!=0){
+    char buf[80];
+    sprintf(buf,"\nAttempting to set speed to %dx... ",force_cdrom_speed);
+    report(buf);
+    if(cdda_speed_set(d,force_cdrom_speed)){
+      report("\tFAILED.");
+      exit(1);
+    }else{
+      report("\tdrive returned OK.");
+    }
+  }
+
   switch(cdda_open(d)){
   case -2:case -3:case -4:case -5:
     report("\nUnable to open disc.  Is there an audio CD in the drive?");
@@ -950,9 +963,6 @@ int main(int argc,char *argv[]){
     report("\nUnable to open disc.");
     exit(1);
   }
-
-  /* Determine drive caching behavior for cache-busting purposes */
-  cdda_cache_sectors(d); 
 
   /* Dump the TOC */
   if(query_only || verbose)display_toc(d);
@@ -977,10 +987,6 @@ int main(int argc,char *argv[]){
   for(i=0;i<d->tracks+1;i++)
     d->disc_toc[i].dwStartSector+=toc_offset;
 
-
-  if(force_cdrom_speed!=-1){
-    cdda_speed_set(d,force_cdrom_speed);
-  }
 
   if(d->nsectors==1){
     report("WARNING: The autosensed/selected sectors per read value is\n"
