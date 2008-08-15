@@ -38,6 +38,7 @@
 #include "version.h"
 #include "header.h"
 
+static int verbosedebug;
 extern int verbose;
 extern int quiet;
 
@@ -215,6 +216,8 @@ VERSION"\n"
 
 "OPTIONS:\n"
 "  -v --verbose                    : extra verbose operation\n"
+"  -vv --verbose-debug             : enable additional analysis debugging\n"
+"                                    and testing output for developers\n"
 "  -q --quiet                      : quiet operation\n"
 "  -e --stderr-progress            : force output of progress information to\n"
 "                                    stderr (for wrapper scripts)\n"
@@ -606,6 +609,7 @@ struct option options [] = {
 	{"output-aifc",no_argument,NULL,'a'},
 	{"batch",no_argument,NULL,'B'},
 	{"verbose",no_argument,NULL,'v'},
+	{"verbose-debug",no_argument,NULL,'*'},
 	{"quiet",no_argument,NULL,'q'},
 	{"version",no_argument,NULL,'V'},
 	{"query",no_argument,NULL,'Q'},
@@ -739,6 +743,13 @@ int main(int argc,char *argv[]){
       output_endian=1;
       break;
     case 'v':
+      if(verbose==CDDA_MESSAGE_PRINTIT)
+	verbosedebug=1;
+      verbose=CDDA_MESSAGE_PRINTIT;
+      quiet=0;
+      break;
+    case '*':
+      verbosedebug=1;
       verbose=CDDA_MESSAGE_PRINTIT;
       quiet=0;
       break;
@@ -747,6 +758,7 @@ int main(int argc,char *argv[]){
       break;
     case 'q':
       verbose=CDDA_MESSAGE_FORGETIT;
+      verbosedebug=0;
       quiet=1;
       break;
     case 'e':
@@ -893,6 +905,8 @@ int main(int argc,char *argv[]){
     cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_PRINTIT);
   else
     cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_FORGETIT);
+
+  cdda_debug_set(d,verbosedebug);
 
   /* possibly force hand on endianness of drive, sector request size */
   if(force_cdrom_endian!=-1){

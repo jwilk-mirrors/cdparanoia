@@ -124,6 +124,7 @@ extern cdrom_drive *cdda_identify_test(const char *filename,
 extern int cdda_cache_sectors(cdrom_drive *d);
 extern int cdda_speed_set(cdrom_drive *d, int speed);
 extern void cdda_verbose_set(cdrom_drive *d,int err_action, int mes_action);
+extern void cdda_debug_set(cdrom_drive *d,int active);
 extern char *cdda_messages(cdrom_drive *d);
 extern char *cdda_errors(cdrom_drive *d);
 

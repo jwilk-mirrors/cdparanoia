@@ -212,6 +212,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
   int max_retries=20;
   float median;
   int offset;
+  int debug = d->private->cache_debug;
 
   /* set up a default pessimal take on drive behavior */
   d->private->cache_backseekflush=0;
@@ -263,20 +264,27 @@ int analyze_timing_and_cache(cdrom_drive *d){
       memset(histogram,0,sizeof(histogram));
       if((ret=d->read_audio(d,NULL,offset+current+1,1))<0){
 	/* media error! grr!  retry elsewhere */
-	cdmessage(d,"\n\tWARNING: unrecoverable media error while performing test"
-		  "\n\treads; picking new location and trying again.");
+	cdmessage(d,"\n\tWARNING: media error; picking new location and trying again.");
 	continue;
       }
+
+      if(debug)
+	cdmessage(d,"\n\tSector timings (ms):\n\t");
+
       for(i=0;i<current;i++){
 	if(d->read_audio(d,NULL,offset+i,1)<0){
 	  /* media error! grr!  retry elsewhere */
-	  cdmessage(d,"\n\tWARNING: unrecoverable media error while performing test"
-		    "\n\treads; picking new location and trying again.");
+	  cdmessage(d,"\n\tWARNING: media error; picking new location and trying again.");
 	  break;
 	}
 	x = d->private->last_milliseconds;
 	if(x>9999)x=9999;
 	if(x<0)x=0;
+	if(debug){
+	  snprintf(buffer,80,"%d ",x);
+	  cdmessage(d,buffer);
+	}
+
 	histogram[x]++;
 	latency[i]=x;
       }
@@ -288,21 +296,40 @@ int analyze_timing_and_cache(cdrom_drive *d){
       for(i=0;i<10000;i++){
 	prev=acc;
 	acc+=histogram[i];
-	if(acc>current/2) break;
+	if(acc>current/2){
+	  if(debug){
+	    cdmessage(d,"\n\tSurrounding histogram: ");
+	    if(i){
+	      snprintf(buffer,80,"%dms:%d ",i-1,acc-histogram[i]);
+	      cdmessage(d,buffer);
+	    }
+	    snprintf(buffer,80,"%dms:%d ",i,acc);
+	    cdmessage(d,buffer);
+	    if(i<999){
+	      snprintf(buffer,80,"%dms:%d ",i+1,acc+histogram[i+1]);
+	      cdmessage(d,buffer);
+	    }
+	    cdmessage(d,"\n");
+	  }
+	  break;
+	}
       }
-      
+
       median = (i*(acc-prev) + (i-1)*prev)/(float)acc;
       
-      snprintf(buffer,80,"\n\tsmall seek latency (%d sectors): %d ms",current,latency[0]);
-      cdmessage(d,buffer);
-      snprintf(buffer,80,"\n\tmedian read latency per sector: %.1f ms",median);
-      cdmessage(d,buffer);
+      if(debug){
+	snprintf(buffer,80,"\n\tsmall seek latency (%d sectors): %d ms",current,latency[0]);
+	cdmessage(d,buffer);
+	snprintf(buffer,80,"\n\tmedian read latency per sector: %.1f ms",median);
+	cdmessage(d,buffer);
+      }
 
       /* verify slow spinup did not compromise median */
       for(i=1;i<current;i++)
 	if(latency[i]>latency[i-1] || latency[i]<=(median+1.))break;
       if(i>5){
-	cdmessage(d,"\n\tDrive appears to spin up slowly... retrying...");
+	if(debug)
+	  cdmessage(d,"\n\tDrive appears to spin up slowly... retrying...");
 	offset-=current+1;
 	continue;
       }
@@ -364,14 +391,13 @@ int analyze_timing_and_cache(cdrom_drive *d){
 
   /* bisection search on cache size */
 
-  int lo=10;
+  int lo=1;
   int hi=15000;
   int current=lo;
   int under=1;
-  float ms_per_sector = 1./75.*1000./100.;
   d->nsectors=1;
   while(current <= hi && under){
-    int offset = (lastsector - firstsector - current)/2+firstsector; 
+    int offset = (lastsector - firstsector - (current+1))/2+firstsector; 
     int i,j;
     under=0;
 

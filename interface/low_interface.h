@@ -103,6 +103,7 @@ struct cdda_private_data {
   int last_milliseconds;
   int cache_backseekflush;
   int cache_sectors;
+  int cache_debug;
 };
 
 #define MAX_RETRIES 8
