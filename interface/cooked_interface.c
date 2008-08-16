@@ -19,8 +19,9 @@ static int timed_ioctl(cdrom_drive *d, int fd, int command, void *arg){
   if(ret1<0 || ret3<0){
     d->private->last_milliseconds=-1;
   }else{
-    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000 + (tv2.tv_usec-tv1.tv_usec)/1000;
+    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000. + (tv2.tv_usec-tv1.tv_usec)/1000.;
   }
+  return ret2;
 }
 
 static int cooked_readtoc (cdrom_drive *d){
@@ -99,7 +100,7 @@ static long cooked_read (cdrom_drive *d, void *p, long begin, long sectors){
   retry_count=0;
 
   do {
-    if((err=ioctl(d->ioctl_fd, CDROMREADAUDIO, &arg))){
+    if((err=timed_ioctl(d,d->ioctl_fd, CDROMREADAUDIO, &arg))){
       if(!d->error_retry){
 	ret=-7;
 	goto done;
