@@ -33,7 +33,7 @@ static void tweak_SG_buffer(cdrom_drive *d) {
   do {
     cur <<= 1; reserved = cur * (1<<9);
     err = ioctl(d->cdda_fd, SG_SET_RESERVED_SIZE, &reserved);
-  } while(err >= 0);
+  } while(err >= 0 && (cur*(1<<9) < 0x40000000));
   ioctl(d->cdda_fd, SG_GET_RESERVED_SIZE, &reserved);
 
   /* this doesn't currently ever work, but someday somebody might
@@ -42,9 +42,9 @@ static void tweak_SG_buffer(cdrom_drive *d) {
     table=1;
 
   sprintf(buffer,"\tDMA scatter/gather table entries: %d\n\t"
-      "table entry size: %d bytes\n\t"
-      "maximum theoretical transfer: %d sectors\n",
-      table, reserved, table*reserved/CD_FRAMESIZE_RAW);
+	  "table entry size: %d bytes\n\t"
+	  "maximum theoretical transfer: %d sectors\n",
+	  table, reserved, table*(reserved/CD_FRAMESIZE_RAW));
   cdmessage(d,buffer);
 
   cur=reserved; /* only use one entry for now */
@@ -1655,6 +1655,7 @@ unsigned char *scsi_inquiry(cdrom_drive *d){
 
 int scsi_preinit_drive(cdrom_drive *d){
   d->set_speed = scsi_set_speed;
+  return 0;
 }
 
 int scsi_init_drive(cdrom_drive *d){
