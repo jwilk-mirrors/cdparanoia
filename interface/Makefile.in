@@ -15,7 +15,7 @@ LD=@CC@
 LDFLAGS=@LDFLAGS@ $(FLAGS)
 AR=@AR@
 RANLIB=@RANLIB@
-LIBS = -lm
+LIBS = -lm -lrt
 CPPFLAGS+=-D_REENTRANT
 
 OFILES = scan_devices.o	common_interface.o cooked_interface.o interface.o\

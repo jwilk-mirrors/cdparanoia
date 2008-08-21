@@ -90,7 +90,6 @@ int cdda_open(cdrom_drive *d){
     
   /*  d->select_speed(d,d->maxspeed); most drives are full speed by default */
   if(d->bigendianp==-1)d->bigendianp=data_bigendianp(d);
-  analyze_timing_and_cache(d);
   return(0);
 }
 
@@ -132,10 +131,6 @@ long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
 void cdda_verbose_set(cdrom_drive *d,int err_action, int mes_action){
   d->messagedest=mes_action;
   d->errordest=err_action;
-}
-
-void cdda_debug_set(cdrom_drive *d,int active){
-  d->private->cache_debug=active;
 }
 
 extern char *cdda_messages(cdrom_drive *d){

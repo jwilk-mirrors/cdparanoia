@@ -9,17 +9,17 @@
 #include "low_interface.h"
 #include "common_interface.h"
 #include "utils.h"
-
+#include <time.h> 
 static int timed_ioctl(cdrom_drive *d, int fd, int command, void *arg){
-  struct timeval tv1;
-  struct timeval tv2;
-  int ret1=gettimeofday(&tv1,NULL);
+  struct timespec tv1;
+  struct timespec tv2;
+  int ret1=clock_gettime(CLOCK_MONOTONIC,&tv1);
   int ret2=ioctl(fd, command,arg);
-  int ret3=gettimeofday(&tv2,NULL);
+  int ret3=clock_gettime(CLOCK_MONOTONIC,&tv2);
   if(ret1<0 || ret3<0){
     d->private->last_milliseconds=-1;
   }else{
-    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000. + (tv2.tv_usec-tv1.tv_usec)/1000.;
+    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000. + (tv2.tv_nsec-tv1.tv_nsec)/1000000.;
   }
   return ret2;
 }
@@ -69,7 +69,6 @@ static int cooked_readtoc (cdrom_drive *d){
   d->cd_extra=FixupTOC(d,tracks);
   return(--tracks);  /* without lead-out */
 }
-
 
 /* Set operating speed */
 static int cooked_setspeed(cdrom_drive *d, int speed)
@@ -218,11 +217,6 @@ static void check_exceptions(cdrom_drive *d,exception *list){
   }
 }
 
-
-int cooked_preinit_drive(cdrom_drive *d){
-  d->set_speed = cooked_setspeed;
-}
-
 /* set function pointers to use the ioctl routines */
 int cooked_init_drive (cdrom_drive *d){
   int ret;
@@ -280,6 +274,7 @@ int cooked_init_drive (cdrom_drive *d){
   d->enable_cdda = Dummy;
   d->read_audio = cooked_read;
   d->read_toc = cooked_readtoc;
+  d->set_speed = cooked_setspeed;
   ret=d->tracks=d->read_toc(d);
   if(d->tracks<1)
     return(ret);

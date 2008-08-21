@@ -11,6 +11,20 @@
 #include "low_interface.h"
 #include "common_interface.h"
 #include "utils.h"
+#include <time.h>
+static int timed_ioctl(cdrom_drive *d, int fd, int command, void *arg){
+  struct timespec tv1;
+  struct timespec tv2;
+  int ret1=clock_gettime(CLOCK_MONOTONIC,&tv1);
+  int ret2=ioctl(fd, command,arg);
+  int ret3=clock_gettime(CLOCK_MONOTONIC,&tv2);
+  if(ret1<0 || ret3<0){
+    d->private->last_milliseconds=-1;
+  }else{
+    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000. + (tv2.tv_nsec-tv1.tv_nsec)/1000000.;
+  }
+  return ret2;
+}
 
 /* hook */
 static int Dummy (cdrom_drive *d,int s){
@@ -60,7 +74,7 @@ static void tweak_SG_buffer(cdrom_drive *d) {
    * still fail the wrong way.  This needs some kernel-land investigation.
    */
   if (!getenv("CDDA_IGNORE_BUFSIZE_LIMIT")) {
-    cur=(cur>1024*32?1024*32:cur);
+    cur=(cur>1024*64?1024*64:cur);
   }
   d->nsectors=cur/CD_FRAMESIZE_RAW;
   d->bigbuff=cur;
@@ -110,9 +124,7 @@ static int check_sbp_error(const unsigned char status,
   char ASC = sbp[12];
   char ASCQ = sbp[13];
   
-  if(status==0)
-    return 0;
-
+  if(status==0)return 0;
   if(status==8)return TR_BUSY;
 
   if (sbp[0]) {  
@@ -163,8 +175,8 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
 			       unsigned char bytefill,
 			       int bytecheck,
 			       unsigned char *sense_buffer){
-  struct timeval tv1;
-  struct timeval tv2;
+  struct timespec tv1;
+  struct timespec tv2;
   int tret1,tret2;
   int status = 0;
   struct sg_header *sg_hd=d->private->sg_hd;
@@ -225,7 +237,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   }
 
   sigprocmask (SIG_BLOCK, &(d->sigset), NULL );
-  tret1=gettimeofday(&tv1,NULL);  
+  tret1=clock_gettime(CLOCK_MONOTONIC,&tv1);  
   errno=0;
   status = write(d->cdda_fd, sg_hd, writebytes );
 
@@ -271,7 +283,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
     }
   }
 
-  tret2=gettimeofday(&tv2,NULL);  
+  tret2=clock_gettime(CLOCK_MONOTONIC,&tv2);  
   errno=0;
   status = read(d->cdda_fd, sg_hd, SG_OFF + out_size);
   sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
@@ -310,7 +322,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   if(tret1<0 || tret2<0){
     d->private->last_milliseconds=-1;
   }else{
-    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000 + (tv2.tv_usec-tv1.tv_usec)/1000;
+    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000 + (tv2.tv_nsec-tv1.tv_nsec)/1000000;
   }
   return(0);
 }
@@ -366,7 +378,7 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
       hdr.dxfer_direction = out_size ? SG_DXFER_FROM_DEV : SG_DXFER_NONE;
 
     errno = 0;
-    status = ioctl(d->ioctl_fd, SG_IO, &hdr);
+    status = timed_ioctl(d,d->ioctl_fd, SG_IO, &hdr);
     if (status >= 0 && hdr.status){
       status = check_sbp_error(hdr.status,hdr.sbp);
       if(status) return status;
@@ -392,8 +404,10 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
       return(TR_ILLEGAL);
     }
   }
-  
-  d->private->last_milliseconds = hdr.duration;
+
+  /* Can't rely on .duration because we can't be certain kernel has HZ set to something useful */
+  /* d->private->last_milliseconds = hdr.duration; */
+
   errno = 0;
   return 0;
 }
@@ -773,12 +787,38 @@ static int scsi_set_speed (cdrom_drive *d, int speed){
   unsigned char cmd[12]={0xBB, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0};
   unsigned char sense[SG_MAX_SENSE];
 
-  speed=speed*44100*4/1024;
+  if(speed>=0)
+    speed=speed*44100*4/1024;
+  else
+    speed=-1;
   cmd[2] = (speed >> 8) & 0xFF;
   cmd[3] = (speed) & 0xFF;
-  ret=handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
+  return handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
 
-  return check_sbp_error(ret,sense);
+}
+
+/* 'abuse' the set read ahead into manipulating the cache */
+static int mmc_cache_clear (cdrom_drive *d, int begin, int sectors){
+  int ret;
+  char b[80];
+  unsigned char cmd[12]={0xA7, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  unsigned char sense[SG_MAX_SENSE];
+  int end=begin+sectors;
+  begin--;
+
+  if(begin<0)return -1;
+
+  cmd[2] = (begin >> 24) & 0xFF;
+  cmd[3] = (begin >> 16) & 0xFF;
+  cmd[4] = (begin >> 8) & 0xFF;
+  cmd[5] = (begin) & 0xFF;
+
+  cmd[6] = (end >> 24) & 0xFF;
+  cmd[7] = (end >> 16) & 0xFF;
+  cmd[8] = (end >> 8) & 0xFF;
+  cmd[9] = (end) & 0xFF;
+
+  return handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
 }
 
 /* These do one 'extra' copy in the name of clean code */
@@ -1154,6 +1194,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
 	}
 	
 	if(i>0)return(i);
+       
       }else
 	break;
     }
@@ -1526,42 +1567,63 @@ static int verify_read_command(cdrom_drive *d){
   return(-6);
 }
 
-static void check_fua_bit(cdrom_drive *d){
-  int16_t *buff=malloc(CD_FRAMESIZE_RAW);
+static void check_cache(cdrom_drive *d){
   long i;
 
-  if(d->read_audio==scsi_read_mmc)return;
-  if(d->read_audio==scsi_read_mmc2)return;
-  if(d->read_audio==scsi_read_mmc3)return;
-  if(d->read_audio==scsi_read_mmcB)return;
-  if(d->read_audio==scsi_read_mmc2B)return;
-  if(d->read_audio==scsi_read_mmc3B)return;
+  if(d->read_audio==scsi_read_mmc ||
+     d->read_audio==scsi_read_mmc2 ||
+     d->read_audio==scsi_read_mmc3 ||
+     d->read_audio==scsi_read_mmcB ||
+     d->read_audio==scsi_read_mmc2B ||
+     d->read_audio==scsi_read_mmc3B){
 
-  cdmessage(d,"This command set may use a Force Unit Access bit.");
-  cdmessage(d,"\nChecking drive for FUA bit support...\n");
-  
-  d->enable_cdda(d,1);
-  d->fua=1;
-  
-  for(i=1;i<=d->tracks;i++){
-    if(cdda_track_audiop(d,i)==1){
-      long firstsector=cdda_track_firstsector(d,i);
-      long lastsector=cdda_track_lastsector(d,i);
-      long sector=(firstsector+lastsector)>>1;
-      
-      if(d->read_audio(d,buff,sector,1)>0){
-	cdmessage(d,"\tDrive accepted FUA bit.\n");
-	d->enable_cdda(d,0);
-	free(buff);
-	return;
+    cdmessage(d,"\nThis command set may allow read cache control.");
+    cdmessage(d,"\nChecking drive for SET READ AHEAD command...\n");
+
+    for(i=1;i<=d->tracks;i++){
+      if(cdda_track_audiop(d,i)==1){
+	long firstsector=cdda_track_firstsector(d,i);
+	long lastsector=cdda_track_lastsector(d,i);
+	
+	if(mmc_cache_clear(d,firstsector+1,lastsector-firstsector-1)==0){
+	  cdmessage(d,"\tDrive accepted SET READ AHEAD command.\n");
+	  d->private->cache_clear=mmc_cache_clear;
+	  return;
+	}
       }
     }
-  }
+    cdmessage(d,"\tDrive rejected SET READ AHEAD command; using fallback.\n");
   
-  d->fua=0;
-  cdmessage(d,"\tDrive rejected FUA bit.\n");
-  free(buff);
-  return;
+  }else{
+
+    cdmessage(d,"This command set may use a Force Unit Access bit.");
+    cdmessage(d,"\nChecking drive for FUA bit support...\n");
+    
+    d->enable_cdda(d,1);
+    d->fua=1;
+    
+    for(i=1;i<=d->tracks;i++){
+      if(cdda_track_audiop(d,i)==1){
+	long firstsector=cdda_track_firstsector(d,i);
+	long lastsector=cdda_track_lastsector(d,i);
+	long sector=(firstsector+lastsector)>>1;
+	
+	if(d->read_audio(d,NULL,sector,1)>0){
+	  cdmessage(d,"\tDrive accepted FUA bit.\n");
+	  d->enable_cdda(d,0);
+	  return;
+	}
+      }
+    }
+    
+    d->fua=0;
+    cdmessage(d,"\tDrive rejected FUA bit.\n");
+
+    /* we only use the FUA bit as a possible extra layer of
+       redundancy; too many drives accept it, but still don't force
+       unit access. Still use the old cachebusting algo. */
+    return;
+  }
 }
 
 static int check_atapi(cdrom_drive *d){
@@ -1653,11 +1715,6 @@ unsigned char *scsi_inquiry(cdrom_drive *d){
   return (d->private->sg_buffer);
 }
 
-int scsi_preinit_drive(cdrom_drive *d){
-  d->set_speed = scsi_set_speed;
-  return 0;
-}
-
 int scsi_init_drive(cdrom_drive *d){
   int ret;
 
@@ -1701,6 +1758,7 @@ int scsi_init_drive(cdrom_drive *d){
 
   d->read_toc = (!memcmp(d->drive_model, "IMS", 3) && !d->is_atapi) ? scsi_read_toc2 : 
     scsi_read_toc;
+  d->set_speed = scsi_set_speed;
 
   if(!d->is_atapi){
     unsigned sector_size= get_orig_sectorsize(d);
@@ -1720,7 +1778,7 @@ int scsi_init_drive(cdrom_drive *d){
   d->opened=1;
 
   if((ret=verify_read_command(d)))return(ret);
-  check_fua_bit(d);
+  check_cache(d);
 
   d->error_retry=1;
   d->private->sg_hd=realloc(d->private->sg_hd,d->nsectors*CD_FRAMESIZE_RAW + SG_OFF + 128);

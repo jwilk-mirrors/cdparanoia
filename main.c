@@ -38,7 +38,6 @@
 #include "version.h"
 #include "header.h"
 
-static int verbosedebug;
 extern int verbose;
 extern int quiet;
 
@@ -216,8 +215,6 @@ VERSION"\n"
 
 "OPTIONS:\n"
 "  -v --verbose                    : extra verbose operation\n"
-"  -vv --verbose-debug             : enable additional analysis debugging\n"
-"                                    and testing output for developers\n"
 "  -q --quiet                      : quiet operation\n"
 "  -e --stderr-progress            : force output of progress information to\n"
 "                                    stderr (for wrapper scripts)\n"
@@ -609,7 +606,6 @@ struct option options [] = {
 	{"output-aifc",no_argument,NULL,'a'},
 	{"batch",no_argument,NULL,'B'},
 	{"verbose",no_argument,NULL,'v'},
-	{"verbose-debug",no_argument,NULL,'*'},
 	{"quiet",no_argument,NULL,'q'},
 	{"version",no_argument,NULL,'V'},
 	{"query",no_argument,NULL,'Q'},
@@ -743,13 +739,6 @@ int main(int argc,char *argv[]){
       output_endian=1;
       break;
     case 'v':
-      if(verbose==CDDA_MESSAGE_PRINTIT)
-	verbosedebug=1;
-      verbose=CDDA_MESSAGE_PRINTIT;
-      quiet=0;
-      break;
-    case '*':
-      verbosedebug=1;
       verbose=CDDA_MESSAGE_PRINTIT;
       quiet=0;
       break;
@@ -758,7 +747,6 @@ int main(int argc,char *argv[]){
       break;
     case 'q':
       verbose=CDDA_MESSAGE_FORGETIT;
-      verbosedebug=0;
       quiet=1;
       break;
     case 'e':
@@ -906,8 +894,6 @@ int main(int argc,char *argv[]){
   else
     cdda_verbose_set(d,CDDA_MESSAGE_PRINTIT,CDDA_MESSAGE_FORGETIT);
 
-  cdda_debug_set(d,verbosedebug);
-
   /* possibly force hand on endianness of drive, sector request size */
   if(force_cdrom_endian!=-1){
     d->bigendianp=force_cdrom_endian;
@@ -951,19 +937,6 @@ int main(int argc,char *argv[]){
     }
   }
 
-  /* We want the speed set to apply to cache and timing testing */
-  if(force_cdrom_speed!=0){
-    char buf[80];
-    sprintf(buf,"\nAttempting to set speed to %dx... ",force_cdrom_speed);
-    report(buf);
-    if(cdda_speed_set(d,force_cdrom_speed)){
-      report("\tFAILED.");
-      exit(1);
-    }else{
-      report("\tdrive returned OK.");
-    }
-  }
-
   switch(cdda_open(d)){
   case -2:case -3:case -4:case -5:
     report("\nUnable to open disc.  Is there an audio CD in the drive?");
@@ -976,6 +949,18 @@ int main(int argc,char *argv[]){
   default:
     report("\nUnable to open disc.");
     exit(1);
+  }
+
+  if(force_cdrom_speed!=0){
+    char buf[80];
+    sprintf(buf,"\nAttempting to set speed to %dx... ",force_cdrom_speed);
+    report(buf);
+    if(cdda_speed_set(d,force_cdrom_speed)){
+      report("\tFAILED.");
+      exit(1);
+    }else{
+      report("\tdrive returned OK.");
+    }
   }
 
   /* Dump the TOC */

@@ -99,11 +99,9 @@ typedef struct sg_io_hdr
 struct cdda_private_data {
   struct sg_header *sg_hd;
   unsigned char *sg_buffer; /* points into sg_hd */
-
   int last_milliseconds;
-  int cache_backseekflush;
-  int cache_sectors;
-  int cache_debug;
+
+  int  (*cache_clear)  (struct cdrom_drive *d, int lba, int sectors);
 };
 
 #define MAX_RETRIES 8
@@ -111,10 +109,8 @@ struct cdda_private_data {
 #define MIN_BIG_BUFF_SIZE 4096
 #define SG_OFF sizeof(struct sg_header)
 
-extern int  cooked_preinit_drive (cdrom_drive *d);
 extern int  cooked_init_drive (cdrom_drive *d);
 extern unsigned char *scsi_inquiry (cdrom_drive *d);
-extern int  scsi_preinit_drive (cdrom_drive *d);
 extern int  scsi_init_drive (cdrom_drive *d);
 #ifdef CDDA_TEST
 extern int  test_init_drive (cdrom_drive *d);

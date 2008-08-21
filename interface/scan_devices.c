@@ -265,8 +265,6 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
   d->nsectors=-1;
   d->private=calloc(1,sizeof(*d->private));
   idmessage(messagedest,messages,"\t\tCDROM sensed: %s\n",description);
-
-  cooked_preinit_drive(d);
   return(d);
 }
 
@@ -755,8 +753,6 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   strscat(d->drive_model,p+32,4);
 
   idmessage(messagedest,messages,"\nCDROM model sensed sensed: %s",d->drive_model);
-
-  scsi_preinit_drive(d);
   return(d);
   
 cdda_identify_scsi_fail:
