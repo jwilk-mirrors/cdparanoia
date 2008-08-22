@@ -37,9 +37,7 @@
 #include "report.h"
 #include "version.h"
 #include "header.h"
-
-extern int verbose;
-extern int quiet;
+#include "cachetest.h"
 
 static long parse_offset(cdrom_drive *d, char *offset, int begin){
   long track=-1;
@@ -265,7 +263,11 @@ VERSION"\n"
 "                                    retries without progress.\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
 "  -Y --disable-extra-paranoia     : only do cdda2wav-style overlap checking\n"
-"  -X --abort-on-skip              : abort on imperfect reads/skips\n\n"
+"  -X --abort-on-skip              : abort on imperfect reads/skips\n"
+"  -U --cache-test                 : run a complete analysis of drive caching\n"
+"                                    behavior; verifies that cdparanoia is\n"
+"                                    correctly modelling a sprcific drive's\n"
+"                                    cache behavior.\n\n"
 
 "OUTPUT SMILIES:\n"
 "  :-)   Normal operation, low/no jitter\n"
@@ -582,7 +584,7 @@ static void callback(long inpos, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:o:O:d:g:k:S:prRwafvqVQhZz::YXWBi:Tt:l:";
+const char *optstring = "escCn:o:O:d:g:k:S:prRwafvqVQhZz::YXWBi:Tt:l:U";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -610,6 +612,7 @@ struct option options [] = {
 	{"version",no_argument,NULL,'V'},
 	{"query",no_argument,NULL,'Q'},
 	{"help",no_argument,NULL,'h'},
+	{"cache-test",no_argument,NULL,'U'},
 	{"disable-paranoia",no_argument,NULL,'Z'},
 	{"disable-extra-paranoia",no_argument,NULL,'Y'},
 	{"abort-on-skip",no_argument,NULL,'X'},
@@ -661,6 +664,7 @@ int main(int argc,char *argv[]){
   int output_endian=0; /* -1=host, 0=little, 1=big */
   int query_only=0;
   int batch=0,i;
+  int run_cache_test=0;
 
   /* full paranoia, but allow skipping */
   int paranoia_mode=PARANOIA_MODE_FULL^PARANOIA_MODE_NEVERSKIP; 
@@ -767,6 +771,9 @@ int main(int argc,char *argv[]){
     case 'Z':
       paranoia_mode=PARANOIA_MODE_DISABLE; 
       break;
+    case 'U':
+      run_cache_test=1;
+      break;
     case 'z':
       if (optarg) {
         max_retries = atoi (optarg);
@@ -807,7 +814,7 @@ int main(int argc,char *argv[]){
       else{
 	logfile=fopen(optarg,"w");
 	if(logfile==NULL){
-	  report3("Cannot open log summary file %s: %s",(char*)optarg,
+	  report("Cannot open log summary file %s: %s",(char*)optarg,
 		  strerror(errno));
 	  exit(1);
 	}
@@ -962,6 +969,9 @@ int main(int argc,char *argv[]){
       report("\tdrive returned OK.");
     }
   }
+
+  if(run_cache_test)
+    return analyze_timing_and_cache(d);
 
   /* Dump the TOC */
   if(query_only || verbose)display_toc(d);
@@ -1166,13 +1176,13 @@ int main(int argc,char *argv[]){
 	    
 	    out=open(outfile_name,O_RDWR|O_CREAT|O_TRUNC,0666);
 	    if(out==-1){
-	      report3("Cannot open specified output file %s: %s",outfile_name,
+	      report("Cannot open specified output file %s: %s",outfile_name,
 		      strerror(errno));
 	      cdda_close(d);
 	      d=NULL;
 	      exit(1);
 	    }
-	    report2("outputting to %s\n",outfile_name);
+	    report("outputting to %s\n",outfile_name);
 	    if(logfile){
 	      fprintf(logfile,"outputting to %s\n",outfile_name);
 	      fflush(logfile);
@@ -1202,13 +1212,13 @@ int main(int argc,char *argv[]){
 	  
 	  out=open(outfile_name,O_RDWR|O_CREAT|O_TRUNC,0666);
 	  if(out==-1){
-	    report3("Cannot open default output file %s: %s",outfile_name,
+	    report("Cannot open default output file %s: %s",outfile_name,
 		    strerror(errno));
 	    cdda_close(d);
 	    d=NULL;
 	    exit(1);
 	  }
-	  report2("outputting to %s\n",outfile_name);
+	  report("outputting to %s\n",outfile_name);
 	  if(logfile){
 	    fprintf(logfile,"outputting to %s\n",outfile_name);
 	    fflush(logfile);
@@ -1237,7 +1247,7 @@ int main(int argc,char *argv[]){
 	  if(buffering_write(out,
 			     ((char *)offset_buffer)+offset_buffer_used,
 			     CD_FRAMESIZE_RAW-offset_buffer_used)){
-	    report2("Error writing output: %s",strerror(errno));
+	    report("Error writing output: %s",strerror(errno));
 	    exit(1);
 	  }
 	}
@@ -1282,7 +1292,7 @@ int main(int argc,char *argv[]){
 
 	  if(buffering_write(out,((char *)readbuf)+offset_skip,
 			     CD_FRAMESIZE_RAW-offset_skip)){
-	    report2("Error writing output: %s",strerror(errno));
+	    report("Error writing output: %s",strerror(errno));
 	    exit(1);
 	  }
 	  offset_skip=0;
@@ -1327,7 +1337,7 @@ int main(int argc,char *argv[]){
 
 	    if(buffering_write(out,(char *)offset_buffer,
 			       offset_buffer_used)){
-	      report2("Error writing output: %s",strerror(errno));
+	      report("Error writing output: %s",strerror(errno));
 	      exit(1);
 	    }
 	  }
@@ -1336,7 +1346,7 @@ int main(int argc,char *argv[]){
 	buffering_close(out);
 	if(skipped_flag){
 	  /* remove the file */
-	  report2("\nRemoving aborted file: %s",outfile_name);
+	  report("\nRemoving aborted file: %s",outfile_name);
 	  unlink(outfile_name);
 	  /* make the cursor correct if we have another track */
 	  if(batch_track!=-1){

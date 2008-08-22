@@ -130,6 +130,8 @@ extern int cdda_close(cdrom_drive *d);
 extern int cdda_open(cdrom_drive *d);
 extern long cdda_read(cdrom_drive *d, void *buffer,
 		       long beginsector, long sectors);
+extern int cdda_clear_cache(cdrom_drive *d, int lba, int sectors);
+extern int cdda_milliseconds(cdrom_drive *d);
 
 extern long cdda_track_firstsector(cdrom_drive *d,int track);
 extern long cdda_track_lastsector(cdrom_drive *d,int track);
@@ -199,8 +201,6 @@ static char *strerror_tr[]={
 404: No medium present
 405: Option not supported by drive
 
-500: Drive timing analysis read failure
-501: Drive timing analysis indeterminate
 */
 #endif
 

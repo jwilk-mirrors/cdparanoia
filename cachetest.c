@@ -23,8 +23,15 @@
    drive will tell if it caches redbook data.  None should, many do,
    and there's no way in (eg) MMAC/ATAPI to tell a drive not to.  SCSI
    drives have a FUA facility, but it's not clear how many ignore it.
-   For that reason, we need to empirically determine cache size used
-   for reads */
+   MMC does specify some cache side effect as part of SET READ AHEAD,
+   but it's not clear we can rely on them.  For that reason, we need
+   to empirically determine cache size and strategy used for reads. */
+
+#include <string.h>
+#include <stdio.h>
+#include "interface/cdda_interface.h"
+#include "report.h"
+#include "cachetest.h"
 
 int analyze_timing_and_cache(cdrom_drive *d){
 
@@ -34,13 +41,11 @@ int analyze_timing_and_cache(cdrom_drive *d){
      average transfer times; on slow setups, the speed of a drive
      reading sectors via PIO will not be reliably distinguishable from
      the same drive returning data from the cache via pio.  We need
-     something even more noticable and reliable: the seek time.  A
-     seek will reliably be approximately 1.5 orders of magnitude
-     faster than a sequential sector access or cache hit, and slower
-     systems will also tend to have slower seeks.  It is unlikely we'd
-     ever see a seek latency of under ~10ms given the synchronization
-     requirements of a CD and the maximum possible rotational
-     velocity.
+     something even more noticable and reliable: the seek time. It is
+     unlikely we'd ever see a seek latency of under ~10ms given the
+     synchronization requirements of a CD and the maximum possible
+     rotational velocity. A cache hit would always be faster, even
+     with PIO.
 
      Further complicating things, we have to watch the data collection
      carefully as we're not always going to be on an unloaded system,
@@ -63,13 +68,12 @@ int analyze_timing_and_cache(cdrom_drive *d){
   int max_retries=20;
   float median;
   int offset;
-  int debug = d->private->cache_debug;
 
   /* set up a default pessimal take on drive behavior */
   //d->private->cache_backseekflush=0;
   //d->private->cache_sectors=1200;
 
-  cdmessage(d,"\nChecking drive timing behavior...");
+  reportC("\nChecking drive timing behavior...");
 
   /* find the longest stretch of available audio data */
 
@@ -89,7 +93,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
   }
 
   if(firstsector==-1){
-    cdmessage(d,"\n\tNo audio on disc; Cannot determine timing behavior...");
+    reportC("\n\tNo audio on disc; Cannot determine timing behavior...");
     return -1;
   }
 
@@ -113,28 +117,24 @@ int analyze_timing_and_cache(cdrom_drive *d){
       if(offset<firstsector)break;
       
       memset(histogram,0,sizeof(histogram));
-      if((ret=d->read_audio(d,NULL,offset+current+1,1))<0){
+      if((ret=cdda_read(d,NULL,offset+current+1,1))<0){
 	/* media error! grr!  retry elsewhere */
-	cdmessage(d,"\n\tWARNING: media error; picking new location and trying again.");
+	reportC("\n\tWARNING: media error; picking new location and trying again.");
 	continue;
       }
 
-      if(debug)
-	cdmessage(d,"\n\tSector timings (ms):\n\t");
+      reportC("\n\tSector timings (ms):\n\t");
 
       for(i=0;i<current;i++){
-	if(d->read_audio(d,NULL,offset+i,1)<0){
+	if(cdda_read(d,NULL,offset+i,1)<0){
 	  /* media error! grr!  retry elsewhere */
-	  cdmessage(d,"\n\tWARNING: media error; picking new location and trying again.");
+	  reportC("\n\tWARNING: media error; picking new location and trying again.");
 	  break;
 	}
-	x = d->private->last_milliseconds;
+	x = cdda_milliseconds(d);
 	if(x>9999)x=9999;
 	if(x<0)x=0;
-	if(debug){
-	  snprintf(buffer,80,"%d ",x);
-	  cdmessage(d,buffer);
-	}
+	reportC("%d ",x);
 
 	histogram[x]++;
 	latency[i]=x;
@@ -148,39 +148,28 @@ int analyze_timing_and_cache(cdrom_drive *d){
 	prev=acc;
 	acc+=histogram[i];
 	if(acc>current/2){
-	  if(debug){
-	    cdmessage(d,"\n\tSurrounding histogram: ");
-	    if(i){
-	      snprintf(buffer,80,"%dms:%d ",i-1,acc-histogram[i]);
-	      cdmessage(d,buffer);
-	    }
-	    snprintf(buffer,80,"%dms:%d ",i,acc);
-	    cdmessage(d,buffer);
-	    if(i<999){
-	      snprintf(buffer,80,"%dms:%d ",i+1,acc+histogram[i+1]);
-	      cdmessage(d,buffer);
-	    }
-	    cdmessage(d,"\n");
-	  }
+	  reportC("\n\tSurrounding histogram: ");
+	  if(i)
+	    reportC("%dms:%d ",i-1,acc-histogram[i]);
+	  
+	  reportC("%dms:%d ",i,acc);
+	  if(i<999)
+	    reportC("%dms:%d ",i+1,acc+histogram[i+1]);
+	  reportC("\n");
 	  break;
 	}
       }
 
       median = (i*(acc-prev) + (i-1)*prev)/(float)acc;
       
-      if(debug){
-	snprintf(buffer,80,"\n\tsmall seek latency (%d sectors): %d ms",current,latency[0]);
-	cdmessage(d,buffer);
-	snprintf(buffer,80,"\n\tmedian read latency per sector: %.1f ms",median);
-	cdmessage(d,buffer);
-      }
+      reportC("\n\tsmall seek latency (%d sectors): %d ms",current,latency[0]);
+      reportC("\n\tmedian read latency per sector: %.1f ms",median);
 
       /* verify slow spinup did not compromise median */
       for(i=1;i<current;i++)
 	if(latency[i]>latency[i-1] || latency[i]<=(median+1.))break;
       if(i>5){
-	if(debug)
-	  cdmessage(d,"\n\tDrive appears to spin up slowly... retrying...");
+	reportC("\n\tDrive appears to spin up slowly... retrying...");
 	offset-=current+1;
 	continue;
       }
@@ -193,8 +182,8 @@ int analyze_timing_and_cache(cdrom_drive *d){
 	if(latency[i]>median*10)acc++;
 
       if(acc){
-	cderror(d,"\n\tWARNING: Read timing displayed bursts of unexpected"
-		"\n\tlatency; retrying for a clean read.\n");
+	report("\n\tWARNING: Read timing displayed bursts of unexpected"
+	       "\n\tlatency; retrying for a clean read.\n");
 	continue;
       }
 	
@@ -202,12 +191,12 @@ int analyze_timing_and_cache(cdrom_drive *d){
     }
 
     if(offset<firstsector){
-      cderror(d,"\n500: Unable to find sufficiently large area of"
+      report("\n500: Unable to find sufficiently large area of"
 	      "\n\tgood media to perform timing tests.  Aborting.\n");
       return -500;
     }
     if(retry==max_retries){
-      cderror(d,"\n500: Too many retries; aborting analysis.\n");
+      report("\n500: Too many retries; aborting analysis.\n");
       return -500;
     }    
   }
@@ -218,7 +207,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
   {
     for(i=0;i<max_retries;i++){
       if(d->read_audio(d,NULL,offset,1)==1){
-	if(d->private->last_milliseconds<median*10) break;
+	if(cdda_milliseconds(d)<median*10) break;
 
       }else{
 	/* error handling */
@@ -226,10 +215,9 @@ int analyze_timing_and_cache(cdrom_drive *d){
     }
 
     if(i<max_retries){
-      cdmessage(d,"\n\tCaching test result: DRIVE IS CACHING (bad)\n");
+      reportC("\n\tCaching test result: DRIVE IS CACHING (bad)\n");
     }else{
-      cdmessage(d,"\n\tCaching test result: Drive is not caching (good)\n");
-      d->private->cache_sectors=0;
+      reportC("\n\tCaching test result: Drive is not caching (good)\n");
       return 0;
     }
   }
@@ -240,60 +228,47 @@ int analyze_timing_and_cache(cdrom_drive *d){
       
 
 
-  /* bisection search on cache size */
+  /* search on cache size; cache hits are fast, seeks are not, so a
+     linear search through cache hits up to a miss are faster than a
+     bisection */
 
   int lo=1;
   int hi=15000;
   int current=lo;
   int under=1;
+  offset = firstsector;
+
+  reportC("\n");
+    
   while(current <= hi && under){
-    int offset = (lastsector - firstsector - (current+1))/2+firstsector; 
     int i,j;
     under=0;
 
-    {
-      char buffer[80];
-      snprintf(buffer,80,"\n\tTesting reads for caching (%d sectors):\n\t",current);
-      cdmessage(d,buffer);
-    }
+    reportC("\r\tInitial fast search for cache size... %d",current-1);
 
-    for(i=0;i<10;i++){
-      int sofar=0;
-      int fulltime=0;
-
-      while(sofar<current){
-	for(j=0;;j++){	  
-	  int readsectors = d->read_audio(d,NULL,offset+sofar,1);
-	  if(readsectors<=0){
+    for(i=0;i<10 && !under;i++){
+      for(j=0;;j++){	  
+	int ret1 = cdda_read(d,NULL,offset+current-1,1);
+	int ret2 = cdda_read(d,NULL,offset,1);
+	if(ret1<=0 || ret2<=0){
+	  if(j==2){
+	    reportC("\n\tRead error while performing drive cache checks; aborting test.\n");
+	    return(-1);
+	  }
+	}else{
+	  if(cdda_milliseconds(d)==-1){
 	    if(j==2){
-	      d->enable_cdda(d,0);
-	      cdmessage(d,"\n\tRead error while performing drive cache checks; aborting test.\n");
+	      reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
 	      return(-1);
 	    }
 	  }else{
-	    if(d->private->last_milliseconds==-1){
-	      if(j==2){
-		d->enable_cdda(d,0);
-		cdmessage(d,"\n\tTiming error while performing drive cache checks; aborting test.\n");
-		return(-1);
-	      }
-	    }else{
-
-	      if(sofar==0){
-		fprintf(stderr,">%d:%dms ",readsectors, d->private->last_milliseconds);
-		fulltime = d->private->last_milliseconds;
-	      }
-	      sofar+=readsectors;
-	      break;
-	    }
+	    if(cdda_milliseconds(d)<10)under=1;
+	    break;
 	  }
 	}
       }
-      if(fulltime < median*10) under=1;
     }
-    cdmessage(d,"\n");
-
-    current*=2;
+    current++;
   } 
 
 
@@ -301,7 +276,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
    
 
   /* XXXXXX IN PROGRESS */
-  cdmessage(d,"\n");
+  reportC("\n");
   return 0;
 }
 

@@ -1,3 +1,5 @@
-extern void report(char *s);
-extern void report2(char *s, char *s2);
-extern void report3(char *s, char *s2, char *s3);
+extern int verbose;
+extern int quiet;
+
+#define report(...) if(!quiet){fprintf(stderr, __VA_ARGS__);fputc('\n',stderr);}
+#define reportC(...) if(!quiet){fprintf(stderr, __VA_ARGS__);}

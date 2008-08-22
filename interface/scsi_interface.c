@@ -73,14 +73,24 @@ static void tweak_SG_buffer(cdrom_drive *d) {
    * Updated: but we don't always get -ENOMEM.  Sometimes USB drives 
    * still fail the wrong way.  This needs some kernel-land investigation.
    */
+  /* additional reason to use a low sector count by default: the
+     paranoia code now includes code to watch timing during operations
+     that should produce seeks, assuming that cachebusting works
+     properly.  If the machine in question is using PIO, larger atomic
+     reads will require enough time to mask seeks. */
+
   if (!getenv("CDDA_IGNORE_BUFSIZE_LIMIT")) {
-    cur=(cur>1024*64?1024*64:cur);
+    cur=(cur>1024*32?1024*32:cur);
+  }else{
+    cdmessage(d,"\tEnvironment variable CDDA_IGNORE_BUFSIZE_LIMIT set,\n"
+	      "\t\tforcing maximum possible sector size.  This can break\n"
+	      "\t\tspectacularly; use with caution!\n");
   }
   d->nsectors=cur/CD_FRAMESIZE_RAW;
   d->bigbuff=cur;
 
   sprintf(buffer,"\tSetting default read size to %d sectors (%d bytes).\n\n",
-      d->nsectors,d->nsectors*CD_FRAMESIZE_RAW);
+	  d->nsectors,d->nsectors*CD_FRAMESIZE_RAW);
 
   if(cur==0) exit(1);
 
@@ -289,7 +299,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );
   memcpy(sense_buffer,sg_hd->sense_buffer,SG_MAX_SENSE);
 
-  if (status<0)return(TR_EREAD);
+  if (status<0)return status;
 
   if(status != SG_OFF + out_size || sg_hd->result){
     if(errno==0)errno=EIO;
@@ -383,7 +393,7 @@ static int sgio_handle_scsi_cmd(cdrom_drive *d,
       status = check_sbp_error(hdr.status,hdr.sbp);
       if(status) return status;
     }
-    if (status < 0) return TR_EREAD;
+    if (status < 0) return status;
   }
 
   /* Failed/Partial DMA transfers occasionally get through.  Why?  No clue,
@@ -1584,15 +1594,24 @@ static void check_cache(cdrom_drive *d){
       if(cdda_track_audiop(d,i)==1){
 	long firstsector=cdda_track_firstsector(d,i);
 	long lastsector=cdda_track_lastsector(d,i);
-	
-	if(mmc_cache_clear(d,firstsector+1,lastsector-firstsector-1)==0){
+	int ret;
+
+	if((ret=mmc_cache_clear(d,firstsector+1,lastsector-firstsector-1))==0){
 	  cdmessage(d,"\tDrive accepted SET READ AHEAD command.\n");
 	  d->private->cache_clear=mmc_cache_clear;
 	  return;
 	}
+	if(ret==-EPERM){
+	  cderror(d,"\nWARNING: Kernel block command filter is refusing to pass the\n"
+		      "         SET_READ_AHEAD command. Please see:\n"
+		      "         http://www.xiph.org/paranoia/trouble.html#blockfilter\n\n"
+		      "         for more information on correcting or working around\n"
+		      "         the problem.\n\n");
+	  break;
+	}
       }
     }
-    cdmessage(d,"\tDrive rejected SET READ AHEAD command; using fallback.\n");
+    cdmessage(d,"\tSET READ AHEAD command failed; using fallback.\n");
   
   }else{
 

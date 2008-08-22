@@ -7,7 +7,6 @@
 extern long buffering_write(int outf, char *buffer, long num);
 extern int buffering_close(int fd);
 
-
 /* I wonder how many alignment issues this is gonna trip in the
    future...  it shouldn't trip any...  I guess we'll find out :) */
 
