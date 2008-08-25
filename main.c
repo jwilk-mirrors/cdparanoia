@@ -773,6 +773,7 @@ int main(int argc,char *argv[]){
       break;
     case 'U':
       run_cache_test=1;
+      query_only=1;
       break;
     case 'z':
       if (optarg) {

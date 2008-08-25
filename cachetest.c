@@ -97,31 +97,21 @@ int analyze_timing_and_cache(cdrom_drive *d){
     return -1;
   }
 
-  /* initial timing data collection of 100 sequential sectors; we need a median, verify an initial seek */
-  {
+  /* Dump some initial timing data to give a little context for human
+     eyes.  This isn't actually used in timing anywhere. */
+  if(verbose){
     int x;
-    int current=100;
-    int histogram[10000];
-    int latency[current];
-    int retry;
-    offset = (lastsector - firstsector - current)*2/3 + firstsector;
+    int current=300;
+    int acc=0;
+    int prev=0;
 
-    for(retry=0;retry<max_retries;retry++){
-      int acc=0;
-      int prev=0;
+    offset = firstsector;
 
-      if(retry){
-	offset-=current+1;
-	offset-=offset/32;
-      }
-      if(offset<firstsector)break;
-      
-      memset(histogram,0,sizeof(histogram));
-      if((ret=cdda_read(d,NULL,offset+current+1,1))<0){
-	/* media error! grr!  retry elsewhere */
-	reportC("\n\tWARNING: media error; picking new location and trying again.");
-	continue;
-      }
+    if((ret=cdda_read(d,NULL,offset+current+1,1))<0){
+      /* media error! grr!  retry elsewhere */
+      reportC("\n\tWARNING: media error; picking new location and trying again.");
+      continue;
+    }
 
       reportC("\n\tSector timings (ms):\n\t");
 
@@ -279,4 +269,5 @@ int analyze_timing_and_cache(cdrom_drive *d){
   reportC("\n");
   return 0;
 }
+
 
