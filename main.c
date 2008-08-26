@@ -196,7 +196,7 @@ static void display_toc(cdrom_drive *d){
 	    (int)(audiolen%75));
       report(buffer);
   }
-  report("");
+  report(" ");
 }
 
 static void usage(FILE *f){
@@ -212,11 +212,20 @@ VERSION"\n"
 "  cdparanoia [options] <span> [outfile]\n\n"
 
 "OPTIONS:\n"
+"  -A --analyze-drive              : run and log a complete analysis of drive\n"
+"                                    caching, timing and reading behavior;\n"
+"                                    verifies that cdparanoia is correctly\n"
+"                                    modelling a sprcific drive's cache and\n"
+"                                    read behavior. Implies -vQL\n\n"
 "  -v --verbose                    : extra verbose operation\n"
 "  -q --quiet                      : quiet operation\n"
 "  -e --stderr-progress            : force output of progress information to\n"
 "                                    stderr (for wrapper scripts)\n"
-"  -l --log-summary         <file> : save result summary to file\n"
+"  -l --log-summary [<file>]       : save result summary to file, default\n"
+"                                    filename cdparanoia.log\n"
+"  -L --log-debug   [<file>]       : save detailed device autosense and\n"
+"                                    debugging output to file, default\n"
+"                                    filename cdparanoia.log\n"
 "  -V --version                    : print version info and quit\n"
 "  -Q --query                      : autosense drive, query disc and quit\n"
 "  -B --batch                      : 'batch' mode (saves each track to a\n"
@@ -247,7 +256,8 @@ VERSION"\n"
 "  -g --force-generic-device <dev> : use specified generic scsi device and\n"
 "                                    force use of the old SG kernel\n"
 "                                    interface. -g cannot be used with -k.\n"
-"  -S --force-read-speed <n>       : read from device at specified speed\n"
+"  -S --force-read-speed <n>       : read from device at specified speed; -1\n"
+"                                    indicates full speed.\n"
 "  -t --toc-offset <n>             : Add <n> sectors to the values reported\n"
 "                                    when addressing tracks. May be negative\n"
 "  -T --toc-bias                   : Assume that the beginning offset of \n"
@@ -263,11 +273,7 @@ VERSION"\n"
 "                                    retries without progress.\n"
 "  -Z --disable-paranoia           : disable all paranoia checking\n"
 "  -Y --disable-extra-paranoia     : only do cdda2wav-style overlap checking\n"
-"  -X --abort-on-skip              : abort on imperfect reads/skips\n"
-"  -U --cache-test                 : run a complete analysis of drive caching\n"
-"                                    behavior; verifies that cdparanoia is\n"
-"                                    correctly modelling a sprcific drive's\n"
-"                                    cache behavior.\n\n"
+"  -X --abort-on-skip              : abort on imperfect reads/skips\n\n"
 
 "OUTPUT SMILIES:\n"
 "  :-)   Normal operation, low/no jitter\n"
@@ -584,7 +590,7 @@ static void callback(long inpos, int function){
     memset(dispcache,' ',graph);
 }
 
-const char *optstring = "escCn:o:O:d:g:k:S:prRwafvqVQhZz::YXWBi:Tt:l:U";
+const char *optstring = "escCn:o:O:d:g:k:S:prRwafvqVQhZz::YXWBi:Tt:l::L::A";
 
 struct option options [] = {
 	{"stderr-progress",no_argument,NULL,'e'},
@@ -612,14 +618,15 @@ struct option options [] = {
 	{"version",no_argument,NULL,'V'},
 	{"query",no_argument,NULL,'Q'},
 	{"help",no_argument,NULL,'h'},
-	{"cache-test",no_argument,NULL,'U'},
+	{"analyze-drive",no_argument,NULL,'A'},
 	{"disable-paranoia",no_argument,NULL,'Z'},
 	{"disable-extra-paranoia",no_argument,NULL,'Y'},
 	{"abort-on-skip",no_argument,NULL,'X'},
 	{"disable-fragmentation",no_argument,NULL,'F'},
 	{"output-info",required_argument,NULL,'i'},
 	{"never-skip",optional_argument,NULL,'z'},
-	{"log-summary",required_argument,NULL,'l'},
+	{"log-summary",optional_argument,NULL,'l'},
+	{"log-debug",optional_argument,NULL,'L'},
 
 	{NULL,0,NULL,0}
 };
@@ -665,6 +672,11 @@ int main(int argc,char *argv[]){
   int query_only=0;
   int batch=0,i;
   int run_cache_test=0;
+
+  char *logfile_name=NULL;
+  char *reportfile_name=NULL;
+  int logfile_open=0;
+  int reportfile_open=0;
 
   /* full paranoia, but allow skipping */
   int paranoia_mode=PARANOIA_MODE_FULL^PARANOIA_MODE_NEVERSKIP; 
@@ -771,9 +783,11 @@ int main(int argc,char *argv[]){
     case 'Z':
       paranoia_mode=PARANOIA_MODE_DISABLE; 
       break;
-    case 'U':
+    case 'A':
       run_cache_test=1;
       query_only=1;
+      reportfile_open=1;
+      verbose=CDDA_MESSAGE_PRINTIT;
       break;
     case 'z':
       if (optarg) {
@@ -809,18 +823,18 @@ int main(int argc,char *argv[]){
       toc_offset=atoi(optarg);
       break;
     case 'l':
-      if(logfile && logfile != stdout)fclose(logfile);
-      if(!strcmp(optarg,"-"))
-	logfile=stdout;
-      else{
-	logfile=fopen(optarg,"w");
-	if(logfile==NULL){
-	  report("Cannot open log summary file %s: %s",(char*)optarg,
-		  strerror(errno));
-	  exit(1);
-	}
-      }
-
+      if(logfile_name)free(logfile_name);
+      logfile_name=NULL;
+      if(optarg)
+	logfile_name=strdup(optarg);
+      logfile_open=1;
+      break;
+    case 'L':
+      if(reportfile_name)free(reportfile_name);
+      reportfile_name=NULL;
+      if(optarg)
+	reportfile_name=strdup(optarg);
+      reportfile_open=1;
       break;
     case 'O':
       sample_offset=atoi(optarg);
@@ -831,16 +845,63 @@ int main(int argc,char *argv[]){
     }
   }
 
+  if(logfile_open){
+    if(logfile_name==NULL)
+      logfile_name=strdup("cdparanoia.log");
+    if(!strcmp(logfile_name,"-")){
+      logfile=stdout;
+      logfile_open=0;
+    }else{
+      logfile=fopen(logfile_name,"w");
+      if(logfile==NULL){
+	report("Cannot open log summary file %s: %s",logfile_name,
+	       strerror(errno));
+	exit(1);
+      }
+    }
+  }
+  if(reportfile_open){
+    if(reportfile_name==NULL)
+      reportfile_name=strdup("cdparanoia.log");
+    if(!strcmp(reportfile_name,"-")){
+      reportfile=stdout;
+      reportfile_open=0;
+    }else{
+      if(logfile_name && !strcmp(reportfile_name,logfile_name)){
+	reportfile=logfile;
+	reportfile_open=0;
+      }else{
+	reportfile=fopen(reportfile_name,"w");
+	if(reportfile==NULL){
+	  report("Cannot open debug log file %s: %s",reportfile_name,
+		 strerror(errno));
+	  exit(1);
+	}
+      }
+    }
+  }
+    
   if(logfile){
     /* log command line and version */
     int i;
     for (i = 0; i < argc; i++) 
       fprintf(logfile,"%s ",argv[i]);
     fprintf(logfile,"\n");
-    
-    fprintf(logfile,VERSION);
-    fprintf(logfile,"\n");
+
+    if(reportfile!=logfile){
+      fprintf(logfile,VERSION);
+      fprintf(logfile,"\n");
+    }
     fflush(logfile);
+  }
+
+  if(reportfile && reportfile!=logfile){
+    /* log command line */
+    int i;
+    for (i = 0; i < argc; i++) 
+      fprintf(reportfile,"%s ",argv[i]);
+    fprintf(reportfile,"\n");
+    fflush(reportfile);
   }
 
   if(optind>=argc && !query_only){
@@ -887,7 +948,7 @@ int main(int argc,char *argv[]){
 	    report("\n");
 	    exit(1);
 	  }else
-	    report("");
+	    report(" ");
 	}
       }
 
@@ -959,18 +1020,20 @@ int main(int argc,char *argv[]){
     exit(1);
   }
 
-  if(force_cdrom_speed!=0){
-    char buf[80];
-    sprintf(buf,"\nAttempting to set speed to %dx... ",force_cdrom_speed);
-    report(buf);
-    if(cdda_speed_set(d,force_cdrom_speed)){
-      report("\tFAILED.");
-      exit(1);
-    }else{
+  if(force_cdrom_speed==0)force_cdrom_speed=-1;
+  if(force_cdrom_speed!=-1){
+    report("\nAttempting to set speed to %dx... ",force_cdrom_speed);
+  }
+  if(cdda_speed_set(d,force_cdrom_speed)){
+    if(force_cdrom_speed!=-1){
+      report("\tFAILED. Continuing anyway...");
+    }
+  }else{
+    if(force_cdrom_speed!=-1){
       report("\tdrive returned OK.");
     }
   }
-
+  
   if(run_cache_test)
     return analyze_timing_and_cache(d);
 
@@ -1370,7 +1433,9 @@ int main(int argc,char *argv[]){
   
   cdda_close(d);
   d=NULL;
-  if(logfile && logfile != stdout)
+  if(logfile_open)
     fclose(logfile);
+  if(reportfile_open)
+    fclose(reportfile);
   return 0;
 }

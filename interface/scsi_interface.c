@@ -792,8 +792,6 @@ static int scsi_read_toc2 (cdrom_drive *d){
 }
 
 static int scsi_set_speed (cdrom_drive *d, int speed){
-  int ret;
-  char b[80];
   unsigned char cmd[12]={0xBB, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0};
   unsigned char sense[SG_MAX_SENSE];
 
@@ -804,13 +802,10 @@ static int scsi_set_speed (cdrom_drive *d, int speed){
   cmd[2] = (speed >> 8) & 0xFF;
   cmd[3] = (speed) & 0xFF;
   return handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
-
 }
 
 /* 'abuse' the set read ahead into manipulating the cache */
 static int mmc_cache_clear (cdrom_drive *d, int begin, int sectors){
-  int ret;
-  char b[80];
   unsigned char cmd[12]={0xA7, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   unsigned char sense[SG_MAX_SENSE];
   int end=begin+sectors;
