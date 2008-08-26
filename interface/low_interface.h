@@ -16,6 +16,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include <sys/ioctl.h>
 #include <sys/stat.h>
@@ -99,6 +100,7 @@ typedef struct sg_io_hdr
 struct cdda_private_data {
   struct sg_header *sg_hd;
   unsigned char *sg_buffer; /* points into sg_hd */
+  clockid_t clock;
   int last_milliseconds;
 
   int  (*cache_clear)  (struct cdrom_drive *d, int lba, int sectors);

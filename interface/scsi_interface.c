@@ -15,9 +15,9 @@
 static int timed_ioctl(cdrom_drive *d, int fd, int command, void *arg){
   struct timespec tv1;
   struct timespec tv2;
-  int ret1=clock_gettime(CLOCK_MONOTONIC,&tv1);
+  int ret1=clock_gettime(d->private->clock,&tv1);
   int ret2=ioctl(fd, command,arg);
-  int ret3=clock_gettime(CLOCK_MONOTONIC,&tv2);
+  int ret3=clock_gettime(d->private->clock,&tv2);
   if(ret1<0 || ret3<0){
     d->private->last_milliseconds=-1;
   }else{
@@ -247,7 +247,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
   }
 
   sigprocmask (SIG_BLOCK, &(d->sigset), NULL );
-  tret1=clock_gettime(CLOCK_MONOTONIC,&tv1);  
+  tret1=clock_gettime(d->private->clock,&tv1);  
   errno=0;
   status = write(d->cdda_fd, sg_hd, writebytes );
 
@@ -293,7 +293,7 @@ static int sg2_handle_scsi_cmd(cdrom_drive *d,
     }
   }
 
-  tret2=clock_gettime(CLOCK_MONOTONIC,&tv2);  
+  tret2=clock_gettime(d->private->clock,&tv2);  
   errno=0;
   status = read(d->cdda_fd, sg_hd, SG_OFF + out_size);
   sigprocmask ( SIG_UNBLOCK, &(d->sigset), NULL );

@@ -107,8 +107,9 @@ int analyze_timing_and_cache(cdrom_drive *d){
     double sum;
     double sumsq;
     int sofar;
-    double best=0;
+    int best=0;
     int bestcount=0;
+    int iterating=0;
 
     offset = lastsector-firstsector-current-1;
 
@@ -118,7 +119,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
       int m = offset/4500;
       int s = (offset-m*4500)/75;
       int f = offset-m*4500-s*75;
-      if(bestcount==10){
+      if(iterating){
 	reportC("\n");
       }else{
 	printC("\r");
@@ -167,7 +168,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
       {
 	double mean = sum/(float)(current-1);
 	double stddev = sqrt( (sumsq/(float)(current-1) - mean*mean));
-	double upper= mean+((isnan(stddev) || stddev<1.)?1.:stddev);
+	double upper= mean+((isnan(stddev) || stddev*2<1.)?1.:stddev*2);
 	int j;
 	
 	mean=0;
@@ -186,17 +187,21 @@ int analyze_timing_and_cache(cdrom_drive *d){
 	logC("\n\tAverage read latency: %.2fms/sector (raw speed: %.1fx)",mean,1000./75./mean);
 	logC("\n\tRead latency standard deviation: %.2fms/sector",stddev);
 
-	if(bestcount<10){
-	  if(1./mean>best){
-	    best=1./mean;
+	sofar=mean*current;
+	if(!iterating){
+	  if(-sofar<best){
+	    best=-sofar;
 	    bestcount=0;
-	  }else
-	    bestcount++;
+	  }else{
+	    bestcount+=sofar;
+	    if(bestcount>sofar && bestcount>2000)
+	      iterating=1;
+	  }
 	}
       }
     next:
 
-      if(bestcount==10){
+      if(iterating){
 	offset = (offset-firstsector+44999)/45000*45000+firstsector;
 	offset-=45000;
 	printC("               ");
@@ -216,7 +221,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
   int hi=15000;
   int current=0;
   int under=1;
-  offset = firstsector+1000;
+  offset = firstsector;
 
   while(current <= hi && under){
     int i,j;
@@ -262,16 +267,18 @@ int analyze_timing_and_cache(cdrom_drive *d){
 	logC("seek_read=%d:%d\n",ret2,cdda_milliseconds(d));
 	
 	if(ret1<=0 || ret2<=0){
-	  if(j==2){
-	    reportC("\n\tRead error while performing drive cache checks; aborting test.\n");
+	  offset+=current+100;
+	  if(j==10 || offset+current>lastsector){
+	    reportC("\n\tToo many read errors while performing drive cache checks;"
+		    "\n\t  aborting test.\n\n");
 	    return(-1);
 	  }
+	  reportC("\n\tRead error while performing drive cache checks;"
+		  "\n\t  choosing new offset and trying again.\n");
 	}else{
 	  if(cdda_milliseconds(d)==-1){
-	    if(j==2){
-	      reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
-	      return(-1);
-	    }
+	    reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
+	    return(-1);
 	  }else{
 	    if(cdda_milliseconds(d)<9)under=1;
 	    break;

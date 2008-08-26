@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <pwd.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include "cdda_interface.h"
@@ -264,6 +265,11 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
   d->private=calloc(1,sizeof(*d->private));
+  {
+    /* goddamnit */
+    struct timespec tv;
+    d->private->clock=(clock_gettime(CLOCK_MONOTONIC,&tv)<0?CLOCK_REALTIME:CLOCK_MONOTONIC);
+  }
   idmessage(messagedest,messages,"\t\tCDROM sensed: %s\n",description);
   return(d);
 }
@@ -669,6 +675,11 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   d->nsectors=-1;
   d->messagedest = messagedest;
   d->private=calloc(1,sizeof(*d->private));
+  {
+    /* goddamnit */
+    struct timespec tv;
+    d->private->clock=(clock_gettime(CLOCK_MONOTONIC,&tv)<0?CLOCK_REALTIME:CLOCK_MONOTONIC);
+  }
   if(use_sgio){
     d->interface=SGIO_SCSI;
     d->private->sg_buffer=(unsigned char *)(d->private->sg_hd=malloc(MAX_BIG_BUFF_SIZE));

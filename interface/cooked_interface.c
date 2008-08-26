@@ -13,9 +13,9 @@
 static int timed_ioctl(cdrom_drive *d, int fd, int command, void *arg){
   struct timespec tv1;
   struct timespec tv2;
-  int ret1=clock_gettime(CLOCK_MONOTONIC,&tv1);
+  int ret1=clock_gettime(d->private->clock,&tv1);
   int ret2=ioctl(fd, command,arg);
-  int ret3=clock_gettime(CLOCK_MONOTONIC,&tv2);
+  int ret3=clock_gettime(d->private->clock,&tv2);
   if(ret1<0 || ret3<0){
     d->private->last_milliseconds=-1;
   }else{
