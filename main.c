@@ -256,8 +256,9 @@ VERSION"\n"
 "  -g --force-generic-device <dev> : use specified generic scsi device and\n"
 "                                    force use of the old SG kernel\n"
 "                                    interface. -g cannot be used with -k.\n"
-"  -S --force-read-speed <n>       : read from device at specified speed; -1\n"
-"                                    indicates full speed.\n"
+"  -S --force-read-speed <n>       : read from device at specified speed; by\n"
+"                                    default, cdparanoia sets drive to full\n"
+"                                    speed.\n"
 "  -t --toc-offset <n>             : Add <n> sectors to the values reported\n"
 "                                    when addressing tracks. May be negative\n"
 "  -T --toc-bias                   : Assume that the beginning offset of \n"
@@ -1023,15 +1024,14 @@ int main(int argc,char *argv[]){
   if(force_cdrom_speed==0)force_cdrom_speed=-1;
   if(force_cdrom_speed!=-1){
     report("\nAttempting to set speed to %dx... ",force_cdrom_speed);
-  }
-  if(cdda_speed_set(d,force_cdrom_speed)){
-    if(force_cdrom_speed!=-1){
-      report("\tFAILED. Continuing anyway...");
-    }
   }else{
-    if(force_cdrom_speed!=-1){
-      report("\tdrive returned OK.");
-    }
+    report("\nAttempting to set cdrom to full speed... ");
+  }
+
+  if(cdda_speed_set(d,force_cdrom_speed)){
+    report("\tFAILED. Continuing anyway...");
+  }else{
+    report("\tdrive returned OK.");
   }
   
   if(run_cache_test)
