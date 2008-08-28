@@ -37,7 +37,6 @@
 #include "report.h"
 #include "version.h"
 #include "header.h"
-#include "cachetest.h"
 
 static long parse_offset(cdrom_drive *d, char *offset, int begin){
   long track=-1;
@@ -892,6 +891,8 @@ int main(int argc,char *argv[]){
     if(reportfile!=logfile){
       fprintf(logfile,VERSION);
       fprintf(logfile,"\n");
+      fprintf(logfile,"Using cdda library version: %s\n",cdda_version());
+      fprintf(logfile,"Using paranoia library version: %s\n",paranoia_version());
     }
     fflush(logfile);
   }
@@ -917,6 +918,8 @@ int main(int argc,char *argv[]){
     span=copystring(argv[optind]);
 
   report(VERSION);
+  report("Using cdda library version: %s",cdda_version());
+  report("Using paranoia library version: %s",paranoia_version());
 
   /* Query the cdrom/disc; we may need to override some settings */
 
@@ -1034,8 +1037,27 @@ int main(int argc,char *argv[]){
     report("\tdrive returned OK.");
   }
   
-  if(run_cache_test)
-    return analyze_timing_and_cache(d);
+  if(run_cache_test){
+    int warn=paranoia_analyze_verify(d, stderr, reportfile);
+    
+    if(warn==0){
+      reportC("\nDrive tests OK with Paranoia.\n");
+      return 0;
+    }
+
+    if(warn==1)
+      reportC("\nWARNING! PARANOIA MAY NOT BE TRUSTWORTHY WITH THIS DRIVE!\n"
+	      "\nThe Paranoia library may not model this CDROM drive's cache"
+	      "\ncorrectly according to this analysis run. Analysis is not"
+	      "\nalways accurate (it can be fooled by machine load or random"
+	      "\nkernel latencies), but if a failed result happens more often"
+	      "\nthan one time in twenty on an unloaded machine, please mail"
+	      "\nthe %s file produced by this failed analysis to"
+	      "\nparanoia-dev@xiph.org to assist developers in extending"
+	      "\nParanoia to handle this CDROM properly.\n\n",reportfile_name);
+    return 1;
+  }
+
 
   /* Dump the TOC */
   if(query_only || verbose)display_toc(d);

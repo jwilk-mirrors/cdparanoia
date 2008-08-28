@@ -16,6 +16,7 @@
 #define MIN_SECTOR_BACKUP    16     /* sectors */
 #define JIGGLE_MODULO        15     /* sectors */
 #define MIN_SILENCE_BOUNDARY 1024   /* 16 bit words */
+#define CACHEMODEL_SECTORS   1200
 
 #define min(x,y) ((x)>(y)?(y):(x))
 #define max(x,y) ((x)<(y)?(y):(x))

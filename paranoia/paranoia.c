@@ -2710,3 +2710,7 @@ void paranoia_overlapset(cdrom_paranoia *p, long overlap){
   p->dynoverlap=overlap*CD_FRAMEWORDS;
   p->stage1.offpoints=-1; 
 }
+
+char *paranoia_version(void){
+  return VERSIONNUM;
+}

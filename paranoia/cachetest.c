@@ -1,40 +1,36 @@
 /*
- * Copyright: GNU Public License 2 applies
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2, or (at your option)
- *   any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * cdparanoia (C) 2008 Monty <monty@xiph.org>
+ * GNU Lesser General Public License 2.1 applies
+ * Copyright (C) 2008 Monty <monty@xiph.org>
  *
  */
 
+/* this is in the paranoia library because the analysis is matched to
+   cache modelling of a specific library version, not matched to the
+   specific application (eg, cdparanoia version, which is simply a
+   wrapper around the libs) */
+
 /* we can ask most drives what their various caches' sizes are, but no
    drive will tell if it caches redbook data.  None should, many do,
-   and there's no way in (eg) MMAC/ATAPI to tell a drive not to.  SCSI
-   drives have a FUA facility, but it's not clear how many ignore it.
-   MMC does specify some cache side effect as part of SET READ AHEAD,
-   but it's not clear we can rely on them.  For that reason, we need
-   to empirically determine cache size and strategy used for reads. */
+   and there's no way in (eg) MMC/ATAPI to tell a cdrom drive not to
+   cache when accessing audio.  SCSI drives have a FUA facility, but
+   it's not clear how many ignore it.  MMC does specify some cache
+   side effect as part of SET READ AHEAD, but it's not clear we can
+   rely on them.  For that reason, we need to empirically determine
+   cache size and strategy used for reads. */
 
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-#include "interface/cdda_interface.h"
-#include "report.h"
-#include "cachetest.h"
+#include "../interface/cdda_interface.h"
+#include "p_block.h"
 
-int analyze_timing_and_cache(cdrom_drive *d){
+#define reportC(...) {if(progress){fprintf(progress, __VA_ARGS__);}	\
+    if(log){fprintf(log, __VA_ARGS__);}}
+#define printC(...) {if(progress){fprintf(progress, __VA_ARGS__);}}
+#define logC(...) {if(log){fprintf(log, __VA_ARGS__);}}
+
+
+int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 
   /* Some assumptions about timing: 
 
@@ -68,6 +64,7 @@ int analyze_timing_and_cache(cdrom_drive *d){
   int max_retries=20;
   float median;
   int offset;
+  int warn=0;
 
   /* set up a default pessimal take on drive behavior */
   //d->private->cache_backseekflush=0;
@@ -289,7 +286,10 @@ int analyze_timing_and_cache(cdrom_drive *d){
   } 
 
   printC("\r");
-  if(current>1){
+  if(current==hi){
+    reportC("\tWARNING: Cannot determine drive cache size or behavior!          \n");
+    return 1;
+  }else if(current>1){
     reportC("\tApproximate random access cache size: %d sectors                 \n",current-1);
   }else{
     reportC("\tDrive does not cache nonlinear access                            \n");
@@ -299,19 +299,76 @@ int analyze_timing_and_cache(cdrom_drive *d){
   /* this drive caches; Determine if the detailed caching behavior fits our model. */
 
   /* does the readahead cache exceed the maximum Paranoia currently expects? */
+  if(current-1 > CACHEMODEL_SECTORS){
+    reportC("\nWARNING: This drive appears to be caching more sectors of\n"
+	    "           readahead than Paranoia can currently handle!\n");
+    warn=1;
+
+  }
+
+  /* This is similar to the Fast search above, but just in case the
+     cache is being tracked as multiple areas that are treated
+     differently if non-contiguous.... */
+  {
+    int seekoff = current*3;
+    reportC("\nVerifying that readahead cache is contiguous");
+    under=0;
+  
+    for(i=0;i<30 && !under;i++){
+      printC(".");
+      for(j=0;;j++){
+	int ret1,ret2;
+
+	if(offset+seekoff>lastsector){
+	  reportC("\n\tOut of readable space on CDROM while performing drive checks;"
+		  "\n\t  aborting test.\n\n");
+	  return(-1);
+	}
+	
+
+	ret1 = cdda_read(d,NULL,offset+seekoff,1);
+	logC("\t\t>>> %d:%d ",offset+current,cdda_milliseconds(d));
+	ret2 = cdda_read(d,NULL,offset,1);
+	logC("%d:%d\n",offset,cdda_milliseconds(d));
+	
+	if(ret1<=0 || ret2<=0){
+	  offset+=current+100;
+	  if(j==10){
+	    reportC("\n\tToo many read errors while performing drive cache checks;"
+		    "\n\t  aborting test.\n\n");
+	    return(-1);
+	  }
+	  reportC("\n\tRead error while performing drive cache checks;"
+		  "\n\t  choosing new offset and trying again.\n");
+	}else{
+	  if(cdda_milliseconds(d)==-1){
+	    reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
+	    return(-1);
+	  }else{
+	    if(cdda_milliseconds(d)<9)under=1;
+	    break;
+	  }
+	}
+      }
+    }
+    if(under){
+      reportC("\nWARNING: Drive cache does not appear to be contiguous!\n");
+      warn=1;
+    }else{
+      reportC("\n\tdone.  Drive cache tests as contiguous.\n");
+    }
+  }
+
+  /* does a read beyond shift the cache or dump it? */
 
   /* Verify that a read that begins before the cached readahead dumps
      the entire readahead cache */
 
-  /* Verify that reads that begin after the apparently cached
-     readahead either dump the cache *or* cause the cached area to
-     shift later in one contiguous piece */
-  
   /* Check to see that cdda_clear_cache clears the specified cache area */
 
-  /* XXXXXX IN PROGRESS */
-  reportC("\n");
-  return 0;
+  /* Does cdda_clear_cache result in noncontiguous cache areas? */
+
+  return warn;
 }
 
 

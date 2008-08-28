@@ -7,4 +7,5 @@
  ******************************************************************/
 
 
-#define VERSION "cdparanoia III release 10.2pre (August 11, 2008)\n"
+#define VERSIONNUM "10.2pre"
+#define VERSION "cdparanoia III release " VERSIONNUM " (August 11, 2008)\n"

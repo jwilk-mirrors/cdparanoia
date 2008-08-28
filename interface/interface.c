@@ -12,6 +12,11 @@
 #include "low_interface.h"
 #include "common_interface.h"
 #include "utils.h"
+#include "../version.h"
+
+char *cdda_version(void){
+  return VERSIONNUM;
+}
 
 static void _clean_messages(cdrom_drive *d){
   if(d){
