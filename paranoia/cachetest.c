@@ -235,6 +235,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
      bisection */
   {
     int under=1;
+    int onex=0;
     current=0;
     offset = firstsector+10;
     
@@ -243,6 +244,20 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
       under=0;
       current++;
       
+      if(onex){
+	if(speed==-1){
+	  logC("\tAttempting to reset read speed to full... ");
+	}else{
+	  logC("\tAttempting to reset read speed to %dx... ",speed);
+	}
+	if(cdda_speed_set(d,speed)){
+	  logC("failed.\n");
+	}else{
+	  logC("drive said OK\n");
+	}
+	onex=0;
+      }
+
       printC("\r");
       reportC("\tFast search for approximate cache size... %d sectors            ",current-1);
       logC("\n");
@@ -264,6 +279,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 	      }else{
 		logC("drive said OK\n");
 	      }
+	      onex=0;
 	    }
 	    printC(".");
 	    logC("\t\t>>> ");
@@ -295,7 +311,9 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 	      reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
 	      return(-1);
 	    }else{
-	      if(cdda_milliseconds(d)<9)under=1;
+	      if(cdda_milliseconds(d)<9){
+		under=1;
+	      }
 	      break;
 	    }
 	  }
@@ -354,8 +372,8 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
       
       readahead=lower+gran;
 
-      printC("\r");
-      reportC("\tTesting background readahead past read cursor... %d",lower);
+      printC("\r\tTesting background readahead past read cursor... %d",lower);
+      logC("\tTesting background readahead past read cursor... %d",readahead);
       printC("           \b\b\b\b\b\b\b\b\b\b\b");
       for(i=0;i<10;i++){
 	int sofar=0,ret,retry=0;
@@ -384,7 +402,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 	/* seek to offset+cachesize+readahead */
 	ret = cdda_read(d,NULL,offset+cachesize+readahead-1,1);
 	if(ret<=0)break;
-	logC("ahead=%d:%d\n",cachesize+readahead-1,cdda_milliseconds(d));
+	logC("ahead=%d:%d\n",readahead,cdda_milliseconds(d));
 	if(cdda_milliseconds(d)<9){
 	  under=1;
 	  break;
