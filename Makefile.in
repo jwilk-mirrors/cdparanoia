@@ -25,7 +25,7 @@ INCLUDEDIR=@includedir@
 LIBDIR=@libdir@
 PWD = $(shell pwd)
 
-OFILES = main.o report.o header.o buffering_write.o cachetest.o
+OFILES = main.o report.o header.o buffering_write.o
 
 export STATIC 
 export VERSION

@@ -18,7 +18,7 @@ AR=@AR@
 RANLIB=@RANLIB@
 CPPFLAGS+=-D_REENTRANT
 
-OFILES = paranoia.o p_block.o overlap.o gap.o isort.o
+OFILES = paranoia.o p_block.o overlap.o gap.o isort.o cachetest.o
 #TFILES = isort.t gap.t p_block.t paranoia.t
 
 LIBS = ../interface/libcdda_interface.a -lm

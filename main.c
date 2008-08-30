@@ -1041,7 +1041,7 @@ int main(int argc,char *argv[]){
     int warn=paranoia_analyze_verify(d, stderr, reportfile);
     
     if(warn==0){
-      reportC("\nDrive tests OK with Paranoia.\n");
+      reportC("\nDrive tests OK with Paranoia.\n\n");
       return 0;
     }
 

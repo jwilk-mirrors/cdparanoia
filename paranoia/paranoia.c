@@ -76,6 +76,7 @@
 #include <math.h>
 #include "../interface/cdda_interface.h"
 #include "../interface/smallft.h"
+#include "../version.h"
 #include "p_block.h"
 #include "cdda_paranoia.h"
 #include "overlap.h"
