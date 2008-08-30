@@ -279,7 +279,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 	      }else{
 		logC("drive said OK\n");
 	      }
-	      onex=0;
+	      onex=1;
 	    }
 	    printC(".");
 	    logC("\t\t>>> ");
