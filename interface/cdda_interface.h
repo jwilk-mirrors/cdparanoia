@@ -123,6 +123,7 @@ extern cdrom_drive *cdda_identify_test(const char *filename,
 
 extern char *cdda_version();
 extern int cdda_speed_set(cdrom_drive *d, int speed);
+extern int cdda_speed_get(cdrom_drive *d);
 extern void cdda_verbose_set(cdrom_drive *d,int err_action, int mes_action);
 extern char *cdda_messages(cdrom_drive *d);
 extern char *cdda_errors(cdrom_drive *d);

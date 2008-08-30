@@ -78,6 +78,8 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
   int rollbehind;
   int cachegran;
   float waypoint[10]={-1,-1,-1,-1, -1,-1,-1,-1, -1,-1};
+  int speed = cdda_speed_get(d);
+  if(speed<=0)speed=-1;
 
   /* set up a default pessimal take on drive behavior */
   //d->private->cache_backseekflush=0;
@@ -313,7 +315,18 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
     reportC("\tDrive does not cache nonlinear access                            \n");
     return 0;
   }
-   
+  
+  if(speed==-1){
+    logC("\tAttempting to reset read speed to full... ");
+  }else{
+    logC("\tAttempting to reset read speed to %d... ",speed);
+  }
+  if(cdda_speed_set(d,speed)){
+    logC("failed.\n");
+  }else{
+    logC("drive said OK\n");
+  }
+
   /* The readahead cache size ascertained above is likely qualified by
      background 'rollahead'; that is, the drive's readahead process is
      often working ahead of our actual linear reads, and if reads stop
