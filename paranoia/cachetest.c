@@ -342,18 +342,23 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
   */
 
   {
-    int under=1;
+    int upper=hi;
+    int lower=0;
+    int gran=64;
     readahead=0;
     
-    while(under && readahead<hi){
-      under=0;
-      readahead++;
-      printC("\r");
-      reportC("\tTesting background readahead past read cursor... %d",readahead-1);
+    while(lower+1<upper){
+      int under=0;
+      if(lower+gran>=upper)
+	gran>>=3;
       
+      readahead=lower+gran;
+
+      printC("\r");
+      reportC("\tTesting background readahead past read cursor... %d",lower);
+      printC("           \b\b\b\b\b\b\b\b\b\b\b");
       for(i=0;i<10;i++){
 	int sofar=0,ret,retry=0;
-	printC(".          \b\b\b\b\b\b\b\b\b\b");
 	logC("\n\t\t%d >>> ",i);
 	
 	while(sofar<cachesize){
@@ -371,7 +376,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 	
 	/* Pause 5x what we'd predict is needed to let the readahead process work. */
 	{
-	  int usec=ms_per_sector_at(offset,waypoint)*(cachesize+readahead)*(2+i)*1000;
+	  int usec=ms_per_sector_at(offset,waypoint)*(cachesize+readahead)*(4+i)*500;
 	  logC("sleep=%dus ",usec);
 	  usleep(usec);
 	}
@@ -384,16 +389,23 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 	  under=1;
 	  break;
 	}
+	printC(".");
+      }
+      
+      if(under){
+	lower=readahead;
+      }else{
+	upper=readahead;
       }
     }
+    readahead=lower;
   }
-  readahead--;
   logC("\n");
   printC("\r");
   if(readahead==0){
-    reportC("\tDrive does not read ahead past read cursor (very strange)  \n");
+    reportC("\tDrive does not read ahead past read cursor (very strange)     \n");
   }else{
-    reportC("\tDrive readahead past read cursor: %d sector(s)             \n",readahead);
+    reportC("\tDrive readahead past read cursor: %d sector(s)                \n",readahead);
   }
   
   reportC("\tTesting cache tail cursor");
