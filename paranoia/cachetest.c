@@ -86,6 +86,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
   //d->private->cache_sectors=1200;
 
   reportC("\n=================== Checking drive cache/timing behavior ===================\n");
+  d->error_retry=0;
 
   /* find the longest stretch of available audio data */
 
@@ -220,10 +221,10 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
       if(iterating){
 	offset = (offset-firstsector+44999)/45000*45000+firstsector;
 	offset-=45000;
-	printC("               ");
+	printC("                 ");
       }else{
 	offset--;
-	printC(" spinning up...");
+	printC(" spinning up...  ");
       }
     }
   }
@@ -372,15 +373,15 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
       
       readahead=lower+gran;
 
-      printC("\r\tTesting background readahead past read cursor... %d",lower);
-      logC("\tTesting background readahead past read cursor... %d",readahead);
+      printC("\r");
+      printC("\tTesting background readahead past read cursor... %d/%d",lower,readahead);
       printC("           \b\b\b\b\b\b\b\b\b\b\b");
       for(i=0;i<10;i++){
 	int sofar=0,ret,retry=0;
 	logC("\n\t\t%d >>> ",i);
 	
 	while(sofar<cachesize){
-	  ret = cdda_read(d,NULL,offset+sofar,1);
+	  ret = cdda_read(d,NULL,offset+sofar,cachesize-sofar);
 	  if(ret<=0)goto error;
 	  logC("%d:%d ",ret,cdda_milliseconds(d));
 
@@ -394,7 +395,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 	
 	/* Pause 5x what we'd predict is needed to let the readahead process work. */
 	{
-	  int usec=ms_per_sector_at(offset,waypoint)*(cachesize+readahead)*(4+i)*500;
+	  int usec=ms_per_sector_at(offset,waypoint)*(readahead)*(4+i)*500;
 	  logC("sleep=%dus ",usec);
 	  usleep(usec);
 	}
@@ -513,9 +514,12 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
       ret = cdda_read(d,NULL,offset+sofar,1);
       if(ret<=0)break;
       logC("%d:%d ",sofar,cdda_milliseconds(d));
-      if(cdda_milliseconds(d)>8) break;
+      if(cdda_milliseconds(d)>8){
+	cachegran=sofar+1;
+	break;
+      }
+      cachegran=sofar;
     }
-    cachegran=sofar;
   error2:
     if(ret<=0){
       offset+=cachesize;
@@ -531,6 +535,8 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
     }
   }
   
+  cachegran -= rollbehind;
+
   logC("\n");
   printC("\r");
   reportC("\tCache tail granularity: %d sector(s)                      \n",cachegran);
