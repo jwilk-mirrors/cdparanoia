@@ -432,7 +432,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
 
 	/* what we'd predict is needed to let the readahead process work. */
 	{
-	  int usec=mspersector*(readahead)*(2+i)*1000;
+	  int usec=mspersector*(readahead)*(4+i)*500;
 	  int max= 13000*2*readahead; /* corresponds to .5x */
 	  if(usec>max)usec=max;
 	  logC("sleep=%dus ",usec);
@@ -466,7 +466,7 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
     reportC("\tDrive readahead past read cursor: %d sector(s)                \n",readahead);
   }
   
-  reportC("\tTesting cache tail cursor");
+  reportC("\tTesting cache tail cursor...");
 
   while(1){
     rollbehind=cachesize;
@@ -518,7 +518,19 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
       }
     }
 
-    /* verify that the drive timing didn't suddenly change */XXXXXXXXX
+    /* verify that the drive timing didn't suddenly change */
+    {
+      float newms=retime_drive(d, progress, log, offset, readahead, mspersector);
+      if(newms > mspersector*1.2){
+	mspersector=newms;
+	printC("\r");
+	reportC("\tDrive timing changed during test; retrying...");
+	continue;
+      }
+    }
+    break;
+
+  }
   
   logC("\n");
   printC("\r");
@@ -529,55 +541,68 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
   }
   
   reportC("\tTesting granularity of cache tail");
-  cachegran=cachesize+1;
-  
-  for(i=0;i<10 && cachegran;i++){
-    int sofar=0,ret,retry=0;
-    logC("\n\t\t>>> ");
-    printC(".");
-    while(sofar<cachesize+1){
-      ret = cdda_read(d,NULL,offset+sofar,cachesize-sofar+1);
-      if(ret<=0)goto error2;
-      logC("%d:%d ",ret,cdda_milliseconds(d));
-      sofar+=ret;
-    }
-    
-    /* Pause what we'd predict is needed to let the readahead process work. */
-    {
-      int usec=mspersector*readahead*(2+i)*1000;
-      int max= 13000*2*readahead; /* corresponds to .5x */
-      if(usec>max)usec=max;
-      logC("\n\t\tsleeping %d microseconds",usec);
-      usleep(usec);
+
+  while(1){
+    cachegran=cachesize+1;
+    for(i=0;i<10 && cachegran;i++){
+      int sofar=0,ret,retry=0;
+      logC("\n\t\t>>> ");
+      printC(".");
+      while(sofar<cachesize+1){
+	ret = cdda_read(d,NULL,offset+sofar,cachesize-sofar+1);
+	if(ret<=0)goto error2;
+	logC("%d:%d ",ret,cdda_milliseconds(d));
+	sofar+=ret;
+      }
+      
+      /* Pause what we'd predict is needed to let the readahead process work. */
+      {
+	int usec=mspersector*readahead*5000;
+	logC("\n\t\tsleeping %d microseconds",usec);
+	usleep(usec);
+      }
+      
+      /* read backwards until we seek */
+      logC("\n\t\t<<< ");
+      sofar=cachegran;
+      while(sofar){
+	sofar--;
+	ret = cdda_read(d,NULL,offset+sofar,1);
+	if(ret<=0)break;
+	logC("%d:%d ",sofar,cdda_milliseconds(d));
+	if(cdda_milliseconds(d)>8){
+	  cachegran=sofar+1;
+	  break;
+	}
+	cachegran=sofar;
+      }
+    error2:
+      if(ret<=0){
+	offset+=cachesize;
+	retry++;
+	if(retry>10 || offset+cachesize>lastsector){
+	  reportC("\n\tToo many read errors while performing drive cache checks;"
+		  "\n\t  aborting test.\n\n");
+	  return(-1);
+	}
+	reportC("\n\tRead error while performing drive cache checks;"
+		"\n\t  choosing new offset and trying again.\n");
+	continue;
+      }
     }
 
-    /* read backwards until we seek */
-    logC("\n\t\t<<< ");
-    sofar=cachegran;
-    while(sofar){
-      sofar--;
-      ret = cdda_read(d,NULL,offset+sofar,1);
-      if(ret<=0)break;
-      logC("%d:%d ",sofar,cdda_milliseconds(d));
-      if(cdda_milliseconds(d)>8){
-	cachegran=sofar+1;
-	break;
+    /* verify that the drive timing didn't suddenly change */
+    {
+      float newms=retime_drive(d, progress, log, offset, readahead, mspersector);
+      if(newms > mspersector*1.2){
+	mspersector=newms;
+	printC("\r");
+	reportC("\tDrive timing changed during test; retrying...");
+	continue;
       }
-      cachegran=sofar;
     }
-  error2:
-    if(ret<=0){
-      offset+=cachesize;
-      retry++;
-      if(retry>10 || offset+cachesize>lastsector){
-	reportC("\n\tToo many read errors while performing drive cache checks;"
-		"\n\t  aborting test.\n\n");
-	return(-1);
-      }
-      reportC("\n\tRead error while performing drive cache checks;"
-	      "\n\t  choosing new offset and trying again.\n");
-      continue;
-    }
+    break;
+    
   }
   
   cachegran -= rollbehind;
