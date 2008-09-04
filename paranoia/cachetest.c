@@ -64,30 +64,21 @@ static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int le
     }
   }
   
-  /* ignore upper outliers; we may have gotten random bursts of latency */
+  /* we count even the upper outliers because the drive is almost
+     certainly reading ahead and that will work itself out as we keep
+     reading to catch up.  Besides-- the tests would rather see too
+     slow a timing than too fast; the timing data is used as an
+     optimization when sleeping. */
   {
     double mean = sum/(float)(len-1);
     double stddev = sqrt( (sumsq/(float)(len-1) - mean*mean));
-    double upper= mean+((isnan(stddev) || stddev*2<1.)?1.:stddev*2);
-    int ms=0;
-
-    mean=0;
-    sofar=0;
-    for(j=1;j<i;j++){
-      double per = latency[j]/(double)sectors[j];
-      if(per<=upper){
-	ms+=latency[j];
-	sofar+=sectors[j];
-      }
-    }
-    mean=ms/(double)sofar;
     
     printC("%4dms seek, %.2fms/sec read [%.1fx]",latency[0],mean,1000./75./mean);
     logC("\n\tInitial seek latency (%d sectors): %dms",len,latency[0]);
     logC("\n\tAverage read latency: %.2fms/sector (raw speed: %.1fx)",mean,1000./75./mean);
     logC("\n\tRead latency standard deviation: %.2fms/sector",stddev);
     
-    return (int)rint(mean*sofar);
+    return sum;
   }
 }
 
