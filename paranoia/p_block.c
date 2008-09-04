@@ -319,7 +319,7 @@ cdrom_paranoia *paranoia_init(cdrom_drive *d){
   p->fragments=new_list((void *)&i_vfragment_constructor,
 			(void *)&i_v_fragment_destructor);
 
-  p->readahead=600;
+  p->readahead=CACHEMODEL_SECTORS;
   p->sortcache=sort_alloc(p->readahead*CD_FRAMEWORDS);
   p->d=d;
   p->dynoverlap=MAX_SECTOR_OVERLAP*CD_FRAMEWORDS;
@@ -334,3 +334,10 @@ cdrom_paranoia *paranoia_init(cdrom_drive *d){
   return(p);
 }
 
+/* sectors < 0 indicates a query.  Returns the number of sectors before the call */
+int paranoia_cachemodel_size(cdrom_paranoia *p,int sectors){
+  int ret = p->readahead;
+  if(sectors>=0)
+    p->readahead=sectors;
+  return ret;
+}

@@ -47,6 +47,5 @@ extern int16_t *paranoia_read(cdrom_paranoia *p,void(*callback)(long,int));
 extern int16_t *paranoia_read_limited(cdrom_paranoia *p,void(*callback)(long,int),int maxretries);
 extern void paranoia_free(cdrom_paranoia *p);
 extern void paranoia_overlapset(cdrom_paranoia *p,long overlap);
-extern int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log);
-
+extern int paranoia_cachemodel_size(cdrom_paranoia *p,int sectors);
 #endif

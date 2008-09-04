@@ -1,13 +1,23 @@
 /*
- * GNU Lesser General Public License 2.1 applies
- * Copyright (C) 2008 Monty <monty@xiph.org>
+ * Copyright: GNU Public License 2 applies
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation; either version 2, or (at your option)
+ *   any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * cdparanoia (C) 2008 Monty <monty@xiph.org>
  *
  */
-
-/* this is in the paranoia library because the analysis is matched to
-   cache modelling of a specific library version, not matched to the
-   specific application (eg, cdparanoia version, which is simply a
-   wrapper around the libs) */
 
 /* we can ask most drives what their various caches' sizes are, but no
    drive will tell if it caches redbook data.  None should, many do,
@@ -21,8 +31,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-#include "../interface/cdda_interface.h"
-#include "p_block.h"
+#include "interface/cdda_interface.h"
+#include "paranoia/cdda_paranoia.h"
+#include "version.h"
 
 #define reportC(...) {if(progress){fprintf(progress, __VA_ARGS__);}	\
     if(log){fprintf(log, __VA_ARGS__);}}
@@ -39,7 +50,7 @@ static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int le
   int ret;
 
   logC("\n");
-  
+
   for(i=0,sofar=0;sofar<len;i++){
     int toread = (i==0?1:len-sofar);
     int ret;
@@ -104,7 +115,7 @@ static float retime_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, in
   return oldmean;
 }
 
-int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
+int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 
   /* Some assumptions about timing: 
 
@@ -145,12 +156,19 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
   int readahead;
   int rollbehind;
   int cachegran;
-  int speed = cdda_speed_get(d);
   float mspersector;
   if(speed<=0)speed=-1;
 
   reportC("\n=================== Checking drive cache/timing behavior ===================\n");
   d->error_retry=0;
+
+  /* verify the lib and cache analysis match */
+  if(strcmp(VERSIONNUM,paranoia_version())){
+    reportC("\nWARNING: cdparanoia application (and thus the cache tests) does not match the"
+	    "\ninstalled (or in use) libcdda_paranoia.so library.  The final verdict of this"
+	    "\ntesting may or may not be accurate for the actual version of the paranoia"
+	    "library.  Continuing anyway...\n\n");
+  }
 
   /* find the longest stretch of available audio data */
 
@@ -603,16 +621,6 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
   reportC("\tCache tail granularity: %d sector(s)                      \n",cachegran);
 
 
-  /* this drive caches; Determine if the detailed caching behavior fits our model. */
-
-  /* does the readahead cache exceed the maximum Paranoia currently expects? */
-  if(cachesize > CACHEMODEL_SECTORS){
-    reportC("\nWARNING: This drive appears to be caching more sectors of\n"
-	    "           readahead than Paranoia can currently handle!\n");
-    warn=1;
-
-  }
-
   /* This is similar to the Fast search above, but just in case the
      cache is being tracked as multiple areas that are treated
      differently if non-contiguous.... */
@@ -695,6 +703,21 @@ int paranoia_analyze_verify(cdrom_drive *d, FILE *progress, FILE *log){
   /* Check to see that cdda_clear_cache clears the specified cache area */
 
   /* Does cdda_clear_cache result in noncontiguous cache areas? */
+
+
+
+  /* does the readahead cache exceed the maximum Paranoia currently expects? */
+  {
+    cdrom_paranoia *p=paranoia_init(d);
+    if(cachesize > paranoia_cachemodel_size(p,-1)){
+      reportC("\nWARNING: This drive appears to be caching more sectors of\n"
+	      "           readahead than Paranoia can currently handle!\n");
+      warn=1;
+      
+    }
+    paranoia_free(p);
+  }
+
 
   return warn;
 }

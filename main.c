@@ -38,6 +38,8 @@
 #include "version.h"
 #include "header.h"
 
+extern int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed);
+
 static long parse_offset(cdrom_drive *d, char *offset, int begin){
   long track=-1;
   long hours=-1;
@@ -1038,7 +1040,7 @@ int main(int argc,char *argv[]){
   }
   
   if(run_cache_test){
-    int warn=paranoia_analyze_verify(d, stderr, reportfile);
+    int warn=analyze_cache(d, stderr, reportfile, force_cdrom_speed);
     
     if(warn==0){
       reportC("\nDrive tests OK with Paranoia.\n\n");

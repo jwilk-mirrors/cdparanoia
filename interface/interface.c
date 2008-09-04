@@ -101,19 +101,10 @@ int cdda_open(cdrom_drive *d){
 int cdda_speed_set(cdrom_drive *d, int speed)
 {
   if(d->set_speed)
-    if(!d->set_speed(d,speed)){
-      d->private->speed=speed;
-      return 0;
-    }
-      
+    if(!d->set_speed(d,speed))return 0;
+  
   cderror(d,"405: Option not supported by drive\n");
   return -405;
-}
-
-/* -1 is 'full speed', 0 is 'unknown' */
-int cdda_speed_get(cdrom_drive *d)
-{
-  return d->private->speed;
 }
 
 long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){

@@ -102,7 +102,6 @@ struct cdda_private_data {
   unsigned char *sg_buffer; /* points into sg_hd */
   clockid_t clock;
   int last_milliseconds;
-  int speed;
 
   int  (*cache_clear)  (struct cdrom_drive *d, int lba, int sectors);
 };
