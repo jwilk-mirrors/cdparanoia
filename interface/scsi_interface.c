@@ -792,7 +792,7 @@ static int scsi_read_toc2 (cdrom_drive *d){
 }
 
 static int scsi_set_speed (cdrom_drive *d, int speed){
-  unsigned char cmd[12]={0xBB, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0};
+  unsigned char cmd[12]={0xBB, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0, 0, 0};
   unsigned char sense[SG_MAX_SENSE];
 
   if(speed>=0)
@@ -806,9 +806,9 @@ static int scsi_set_speed (cdrom_drive *d, int speed){
 
 /* 'abuse' the set read ahead into manipulating the cache */
 static int mmc_cache_clear (cdrom_drive *d, int begin, int sectors){
-  unsigned char cmd[12]={0xA7, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  unsigned char cmd[12]={0xA7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   unsigned char sense[SG_MAX_SENSE];
-  int end=begin+sectors;
+  int end=begin+sectors,ret;
   begin--;
 
   if(begin<0)return -1;
@@ -823,7 +823,8 @@ static int mmc_cache_clear (cdrom_drive *d, int begin, int sectors){
   cmd[8] = (end >> 8) & 0xFF;
   cmd[9] = (end) & 0xFF;
 
-  return handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
+  ret = handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
+  return ret;
 }
 
 /* These do one 'extra' copy in the name of clean code */
@@ -1097,6 +1098,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
   retry_count=0;
   
   while(1) {
+
     if((err=map(d,(p?buffer:NULL),begin,sectors,sense))){
       if(d->report_all){
 	char b[256];

@@ -35,6 +35,8 @@
 #include "paranoia/cdda_paranoia.h"
 #include "version.h"
 
+#define MIN_SEEK_MS 10
+
 #define reportC(...) {if(progress){fprintf(progress, __VA_ARGS__);}	\
     if(log){fprintf(log, __VA_ARGS__);}}
 #define printC(...) {if(progress){fprintf(progress, __VA_ARGS__);}}
@@ -342,7 +344,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	      reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
 	      return(-1);
 	    }else{
-	      if(cdda_milliseconds(d)<9){
+	      if(cdda_milliseconds(d)<MIN_SEEK_MS){
 		under=1;
 	      }
 	      break;
@@ -429,7 +431,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	    reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
 	    return(-1);
 	  }else{
-	    if(cdda_milliseconds(d)<9)under=1;
+	    if(cdda_milliseconds(d)<MIN_SEEK_MS)under=1;
 	    break;
 	  }
 	}
@@ -518,7 +520,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	ret = cdda_read(d,NULL,offset+cachesize+readahead-1,1);
 	if(ret<=0)break;
 	logC("seek=%d:%d:%d",offset+cachesize+readahead-1,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)<9){
+	if(cdda_milliseconds(d)<MIN_SEEK_MS){
 	  under=1;
 	  break;
 	}else if(i&1){
@@ -572,7 +574,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	ret = cdda_read(d,NULL,offset+sofar,1);
 	if(ret<=0)break;
 	logC("%d:%d:%d ",sofar,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)>8){
+	if(cdda_milliseconds(d)>=MIN_SEEK_MS){
 	  rollbehind=sofar+1;
 	  break;
 	}
@@ -645,7 +647,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	ret = cdda_read(d,NULL,offset+sofar,1);
 	if(ret<=0)break;
 	logC("%d:%d:%d ",offset+sofar,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)>8){
+	if(cdda_milliseconds(d)>=MIN_SEEK_MS){
 	  cachegran=sofar+1;
 	  break;
 	}
@@ -748,7 +750,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	ret = cdda_read(d,NULL,loc,1);
 	if(ret<=0)goto error3;
 	logC("%d:%d:%d ",loc,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)<9) fail=1;
+	if(cdda_milliseconds(d)<MIN_SEEK_MS) fail=1;
       }
       continue;
 
