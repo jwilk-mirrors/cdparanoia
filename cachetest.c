@@ -44,7 +44,7 @@
 #define printC(...) {if(progress){fprintf(progress, __VA_ARGS__);}}
 #define logC(...) {if(log){fprintf(log, __VA_ARGS__);}}
 
-static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int len){
+static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int len, int initial_seek){
   int i,j,x;
   int latency=0;
   double sum=0;
@@ -55,7 +55,7 @@ static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int le
   logC("\n");
 
   for(i=0,sofar=0;sofar<len;i++){
-    int toread = (i==0?1:len-sofar);
+    int toread = (i==0 && initial_seek?1:len-sofar);
     int ret;
     /* first read should also trigger a short seek; one sector so seek duration dominates */
     if((ret=cdda_read_timed(d,NULL,lba+sofar,toread,&x))<=0){
@@ -69,7 +69,7 @@ static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int le
     logC("%d:%d:%d ",lba+sofar,ret,x);
     
     sofar+=ret;
-    if(i){
+    if(i || !initial_seek){
       sum+=x;
       sumsq+= x*x /(float)ret;
     }else
@@ -85,8 +85,11 @@ static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int le
     double mean = sum/(float)(len-1);
     double stddev = sqrt( (sumsq/(float)(len-1) - mean*mean));
     
-    printC("%4dms seek, %.2fms/sec read [%.1fx]",latency,mean,1000./75./mean);
-    logC("\n\tInitial seek latency (%d sectors): %dms",len,latency);
+    if(initial_seek){
+      printC("%4dms seek, %.2fms/sec read [%.1fx]",latency,mean,1000./75./mean);
+      logC("\n\tInitial seek latency (%d sectors): %dms",len,latency);
+    }
+
     logC("\n\tAverage read latency: %.2fms/sector (raw speed: %.1fx)",mean,1000./75./mean);
     logC("\n\tRead latency standard deviation: %.2fms/sector",stddev);
     
@@ -106,7 +109,7 @@ static float retime_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, in
   printC("\bo");
   logC("\n\tRetiming drive...                               ");
   
-  total = time_drive(d,NULL,log,lba,sectors);
+  total = time_drive(d,NULL,log,lba,sectors,1);
   newmean = total/(float)sectors;
 
   logC("\n\tOld mean=%.2fms/sec, New mean=%.2fms/sec\n",oldmean,newmean);
@@ -226,7 +229,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	continue;
       }
   
-      sofar=time_drive(d,progress, log, offset, current);
+      sofar=time_drive(d,progress, log, offset, current, 1);
       if(offset==firstsector)mspersector = sofar/(float)current;
       if(sofar==-404)
 	return -1;
@@ -531,7 +534,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	if(x<MIN_SEEK_MS){
 	  under=1;
 	  break;
-	}else if(i&1){
+	}else if(i%3==1){
 	  /* retime the drive just to be conservative */
 	  mspersector=retime_drive(d, progress, log, offset, readahead, mspersector);
 	}
@@ -715,12 +718,12 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
   {
     float cachems;
     float readms;
-    int readsize = cachesize+readahead-rollbehind-4;
+    int readsize = cachesize+readahead-rollbehind-8;
     int retry;
 
-    if(readsize>cachesize-1)readsize=cachesize-4;
+    if(readsize>cachesize-1)readsize=cachesize-1;
 
-    if(readsize<8){
+    if(readsize<7){
       reportC("\tCache size (minus rollbehind) too small to test cache speed.\n");
     }else{
       reportC("\tTesting cache transfer speed...");
@@ -728,8 +731,15 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       /* cache timing isn't dependent on rotational speed, so get a good
 	 read and then just hammer the cache; we will only need to do it once */
 
+      /* we need to time the cache using the most conservative
+	 possible read pattern; many drives will flush cache on *any*
+	 nonlinear access, but not if the read starts from the same
+	 point.  The original cache size verification algo knows this,
+	 and we need to do it the same way here (this the '0' for
+	 'initial_seek' on time_drve */
+
       while(1){
-	int ret=time_drive(d, NULL, log, offset, readsize);
+	int ret=time_drive(d, NULL, log, offset, readsize, 0);
 	if(ret==-404) return -1;
 	if(ret>0)break;
 	retry++;
@@ -747,8 +757,8 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	int sectors=0;
 	int spinner=0;
 	while(elapsed<5000){
-	  sectors += (readsize-1);
-	  elapsed += time_drive(d, NULL, log, offset, readsize);
+	  sectors += readsize;
+	  elapsed += time_drive(d, NULL, log, offset, readsize, 0);
 	  spinner = elapsed*5/1000%4;
 	  printC("\b%c",(spinner==0?'o':(spinner==1?'O':(spinner==2?'o':'.'))));
 	}
@@ -767,19 +777,20 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	/* now do the read/backseek combo */
 	reportC("\tTesting that backseek flushes cache...");
 	{
+	  int total=0;
 	  int elapsed=0;
 	  int sectors=0;
 	  int spinner=0;
 	  int retry=0;
-	  while(elapsed<5000){
+	  while(elapsed<5000 && total<25){ /* don't kill the drive */
 	    int ret;
 	    while(1){
 	      /* need to force seek/flush, but don't kill the drive */
 	      int seekpos = offset+cachesize+20000;
 	      if(seekpos>lastsector-150)seekpos=lastsector-150;
 	      ret=cdda_read(d, NULL, seekpos, 1);
-	      if(ret>0) ret=time_drive(d, NULL, log, offset+1, readsize);
-	      if(ret>=0) ret=time_drive(d, NULL, log, offset, readsize);
+	      if(ret>0) ret=time_drive(d, NULL, log, offset+1, readsize, 1);
+	      if(ret>=0) ret=time_drive(d, NULL, log, offset, readsize, 1);
 
 	      if(ret<=0){
 		retry++;
@@ -795,7 +806,8 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	    
 	    sectors += (readsize-1);
 	    elapsed += ret;
-	    
+	    total++;
+
 	    spinner = elapsed*5/1000%4;
 	    printC("\b%c",(spinner==0?'o':(spinner==1?'O':(spinner==2?'o':'.'))));
 	  }
