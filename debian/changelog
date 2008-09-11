@@ -1,3 +1,12 @@
+cdparanoia (3a10.2-1) unstable; urgency=high
+
+  * SG_IO support
+  * Significant drive cache modelling/handling upgrade: 
+    REQUIRED FOR CORRECTNESS on many modern cdrom drives
+  * Built-in offline drive analysis and testing 
+	
+ -- Monty <monty@xiph.org>  Thu, 11 Sep 2008 17:20:00 -0500
+
 cdparanoia (3a9.8-1) unstable; urgency=low
 
   * general updates for new kernel series
