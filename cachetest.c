@@ -594,8 +594,8 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	  }
 	  break;
 	}
+	if(sofar==0)rollbehind=0;
       }
-      if(sofar==0)rollbehind=0;
 
     error:
       if(ret<=0){
@@ -672,8 +672,8 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	  }
 	  break;
 	}
+	if(sofar==0)cachegran=0;
       }
-      if(sofar==0)cachegran=0;
 
     error2:
       if(ret<=0){
