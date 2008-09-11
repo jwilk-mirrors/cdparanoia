@@ -73,14 +73,10 @@ static void tweak_SG_buffer(cdrom_drive *d) {
    * Updated: but we don't always get -ENOMEM.  Sometimes USB drives 
    * still fail the wrong way.  This needs some kernel-land investigation.
    */
-  /* additional reason to use a low sector count by default: the
-     paranoia code now includes code to watch timing during operations
-     that should produce seeks, assuming that cachebusting works
-     properly.  If the machine in question is using PIO, larger atomic
-     reads will require enough time to mask seeks. */
+  /* Bumping to 55 sector transfer max --Monty */
 
   if (!getenv("CDDA_IGNORE_BUFSIZE_LIMIT")) {
-    cur=(cur>1024*32?1024*32:cur);
+    cur=((cur+CD_FRAMESIZE_RAW-1)/CD_FRAMESIZE_RAW>55?55*CD_FRAMESIZE_RAW:cur);
   }else{
     cdmessage(d,"\tEnvironment variable CDDA_IGNORE_BUFSIZE_LIMIT set,\n"
 	      "\t\tforcing maximum possible sector size.  This can break\n"
@@ -804,29 +800,6 @@ static int scsi_set_speed (cdrom_drive *d, int speed){
   return handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
 }
 
-/* 'abuse' the set read ahead into manipulating the cache */
-static int mmc_cache_clear (cdrom_drive *d, int begin, int sectors){
-  unsigned char cmd[12]={0xA7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  unsigned char sense[SG_MAX_SENSE];
-  int end=begin+sectors,ret;
-  begin--;
-
-  if(begin<0)return -1;
-
-  cmd[2] = (begin >> 24) & 0xFF;
-  cmd[3] = (begin >> 16) & 0xFF;
-  cmd[4] = (begin >> 8) & 0xFF;
-  cmd[5] = (begin) & 0xFF;
-
-  cmd[6] = (end >> 24) & 0xFF;
-  cmd[7] = (end >> 16) & 0xFF;
-  cmd[8] = (end >> 8) & 0xFF;
-  cmd[9] = (end) & 0xFF;
-
-  ret = handle_scsi_cmd(d,cmd,12,0,0,0,0,sense);
-  return ret;
-}
-
 /* These do one 'extra' copy in the name of clean code */
 
 static int i_read_28 (cdrom_drive *d, void *p, long begin, long sectors, unsigned char *sense){
@@ -1099,7 +1072,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
   
   while(1) {
 
-    if(mmc_cache_clear (d, begin, sectors) || (err=map(d,(p?buffer:NULL),begin,sectors,sense))){
+    if((err=map(d,(p?buffer:NULL),begin,sectors,sense))){
       if(d->report_all){
 	char b[256];
 
@@ -1577,40 +1550,12 @@ static int verify_read_command(cdrom_drive *d){
 static void check_cache(cdrom_drive *d){
   long i;
 
-  if(d->read_audio==scsi_read_mmc ||
+  if(!(d->read_audio==scsi_read_mmc ||
      d->read_audio==scsi_read_mmc2 ||
      d->read_audio==scsi_read_mmc3 ||
      d->read_audio==scsi_read_mmcB ||
      d->read_audio==scsi_read_mmc2B ||
-     d->read_audio==scsi_read_mmc3B){
-
-    cdmessage(d,"\nThis command set may allow read cache control.");
-    cdmessage(d,"\nChecking drive for SET READ AHEAD command...\n");
-
-    for(i=1;i<=d->tracks;i++){
-      if(cdda_track_audiop(d,i)==1){
-	long firstsector=cdda_track_firstsector(d,i);
-	long lastsector=cdda_track_lastsector(d,i);
-	int ret;
-
-	if((ret=mmc_cache_clear(d,firstsector+1,lastsector-firstsector-1))==0){
-	  cdmessage(d,"\tDrive accepted SET READ AHEAD command.\n");
-	  d->private->cache_clear=mmc_cache_clear;
-	  return;
-	}
-	if(ret==-EPERM){
-	  cderror(d,"\nWARNING: Kernel block command filter is refusing to pass the\n"
-		      "         SET_READ_AHEAD command. Please see:\n"
-		      "         http://www.xiph.org/paranoia/trouble.html#blockfilter\n\n"
-		      "         for more information on correcting or working around\n"
-		      "         the problem.\n\n");
-	  break;
-	}
-      }
-    }
-    cdmessage(d,"\tSET READ AHEAD command failed; using fallback.\n");
-  
-  }else{
+       d->read_audio==scsi_read_mmc3B)){
 
     cdmessage(d,"This command set may use a Force Unit Access bit.");
     cdmessage(d,"\nChecking drive for FUA bit support...\n");

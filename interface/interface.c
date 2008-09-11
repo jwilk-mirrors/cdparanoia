@@ -107,7 +107,8 @@ int cdda_speed_set(cdrom_drive *d, int speed)
   return -405;
 }
 
-long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
+long cdda_read_timed(cdrom_drive *d, void *buffer, long beginsector, long sectors, int *ms){
+  if(ms)*ms= -1;
   if(d->opened){
     if(sectors>0){
       sectors=d->read_audio(d,buffer,beginsector,sectors);
@@ -126,6 +127,7 @@ long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
 	}
       }	
     }
+    if(ms)*ms=d->private->last_milliseconds;
     return(sectors);
   }
   
@@ -133,23 +135,8 @@ long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
   return(-400);
 }
 
-/* Failure to clear the cache returns an error code but does not add a
-   message to the message queue; this allows simpler code that assumes
-   it can always issue a cache request, even if it's possible/likely
-   it won't succeed */
-int cdda_clear_cache(cdrom_drive *d, int lba, int sectors){
-  if(!d->opened)return -400;
-  if(!d->private->cache_clear) return -405;
-  return d->private->cache_clear(d,lba,sectors);
-}
-
-/* Returns a (pessimistic) millisecond value for the duration of the
-   last CDROM command; useful for looking for seek operations in the
-   paranoia code. Does not return errors, only < 0 for no
-   measurement.*/
-int cdda_milliseconds(cdrom_drive *d){
-  if(!d->opened)return -1;
-  return d->private->last_milliseconds;
+long cdda_read(cdrom_drive *d, void *buffer, long beginsector, long sectors){
+  return cdda_read_timed(d,buffer,beginsector,sectors,NULL);
 }
 
 void cdda_verbose_set(cdrom_drive *d,int err_action, int mes_action){

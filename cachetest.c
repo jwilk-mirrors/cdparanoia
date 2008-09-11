@@ -35,7 +35,9 @@
 #include "paranoia/cdda_paranoia.h"
 #include "version.h"
 
-#define MIN_SEEK_MS 10
+/* not strictly just seeks, but also recapture and read resume when
+   reading/readahead is suspended and idling */
+#define MIN_SEEK_MS 6
 
 #define reportC(...) {if(progress){fprintf(progress, __VA_ARGS__);}	\
     if(log){fprintf(log, __VA_ARGS__);}}
@@ -44,8 +46,7 @@
 
 static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int len){
   int i,j,x;
-  int latency[len];
-  int sectors[len];
+  int latency=0;
   double sum=0;
   double sumsq=0;
   int sofar;
@@ -57,24 +58,22 @@ static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int le
     int toread = (i==0?1:len-sofar);
     int ret;
     /* first read should also trigger a short seek; one sector so seek duration dominates */
-    if((ret=cdda_read(d,NULL,lba+sofar,toread))<=0){
+    if((ret=cdda_read_timed(d,NULL,lba+sofar,toread,&x))<=0){
       /* media error! grr!  retry elsewhere */
       if(ret==-404)return -404;
       return -1;
     }
 
-    x = cdda_milliseconds(d);
     if(x>9999)x=9999;
     if(x<0)x=0;
     logC("%d:%d:%d ",lba+sofar,ret,x);
     
-    latency[i]=x;
-    sectors[i]=ret;
     sofar+=ret;
     if(i){
       sum+=x;
       sumsq+= x*x /(float)ret;
-    }
+    }else
+      latency=x;
   }
   
   /* we count even the upper outliers because the drive is almost
@@ -86,8 +85,8 @@ static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int le
     double mean = sum/(float)(len-1);
     double stddev = sqrt( (sumsq/(float)(len-1) - mean*mean));
     
-    printC("%4dms seek, %.2fms/sec read [%.1fx]",latency[0],mean,1000./75./mean);
-    logC("\n\tInitial seek latency (%d sectors): %dms",len,latency[0]);
+    printC("%4dms seek, %.2fms/sec read [%.1fx]",latency,mean,1000./75./mean);
+    logC("\n\tInitial seek latency (%d sectors): %dms",len,latency);
     logC("\n\tAverage read latency: %.2fms/sector (raw speed: %.1fx)",mean,1000./75./mean);
     logC("\n\tRead latency standard deviation: %.2fms/sector",stddev);
     
@@ -143,7 +142,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
      we're consistently hitting latency on the same sector during
      initial collection, may need to move past it. */
 
-  int i,j,ret;
+  int i,j,ret,x,x0;
   int firstsector=-1;
   int lastsector=-1;
   int firsttest=-1;
@@ -261,7 +260,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
     }
   }
 
-  reportC("\n\nAnalyzing readahead cache access...\n");
+  reportC("\n\nAnalyzing cache behavior...\n");
   
   /* search on cache size; cache hits are fast, seeks are not, so a
      linear search through cache hits up to a miss are faster than a
@@ -295,13 +294,13 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       reportC("\tFast search for approximate cache size... %d sectors            ",current-1);
       logC("\n");
       
-      for(i=0;i<15 && !under;i++){
+      for(i=0;i<25 && !under;i++){
 	for(j=0;;j++){
 	  int ret1,ret2;
-	  if(i>=5){
+	  if(i>=15){
 	    int sofar=0;
 	    
-	    if(i==5){
+	    if(i==15){
 	      printC("\r");
 	      reportC("\tSlow verify for approximate cache size... %d sectors",current-1);
 	      logC("\n");
@@ -318,17 +317,29 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	    logC("\t\t>>> ");
 	    
 	    while(sofar<current){
-	      ret1 = cdda_read(d,NULL,offset+sofar,current-sofar);
-	      logC("slow_read=%d:%d:%d ",offset+sofar,ret1,cdda_milliseconds(d));
+	      ret1 = cdda_read_timed(d,NULL,offset+sofar,current-sofar,&x);
+	      logC("slow_read=%d:%d:%d ",offset+sofar,ret1,x);
 	      if(ret1<=0)break;
 	      sofar+=ret1;
 	    }
 	  }else{
-	    ret1 = cdda_read(d,NULL,offset+current-1,1);
-	    logC("\t\t>>> fast_read=%d:%d:%d ",offset+current-1,ret1,cdda_milliseconds(d));
+	    ret1 = cdda_read_timed(d,NULL,offset+current-1,1,&x);
+	    logC("\t\t>>> fast_read=%d:%d:%d ",offset+current-1,ret1,x);
+
+	    /* Some drives are 'easily distracted' when readahead is
+	       running ahead of the read cursor, causing accesses of
+	       the earliest sectors in the cache to show bursty
+	       latency. If there's no seek here after a borderline
+	       long read of the earliest sector in the cache, then the
+	       cache must not have been dumped yet. */
+
+	    if(ret==1 && i && x<MIN_SEEK_MS){ 
+	      under=1;
+	      break;
+	    }
 	  }
-	  ret2 = cdda_read(d,NULL,offset,1);
-	  logC("seek_read=%d:%d:%d\n",offset,ret2,cdda_milliseconds(d));
+	  ret2 = cdda_read_timed(d,NULL,offset,1,&x);
+	  logC("seek_read=%d:%d:%d\n",offset,ret2,x);
 	  
 	  if(ret1<=0 || ret2<=0){
 	    offset+=current+100;
@@ -340,11 +351,11 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	    reportC("\n\tRead error while performing drive cache checks;"
 		    "\n\t  choosing new offset and trying again.\n");
 	  }else{
-	    if(cdda_milliseconds(d)==-1){
+	    if(x==-1){
 	      reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
 	      return(-1);
 	    }else{
-	      if(cdda_milliseconds(d)<MIN_SEEK_MS){
+	      if(x<MIN_SEEK_MS){
 		under=1;
 	      }
 	      break;
@@ -378,7 +389,6 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
     }
     paranoia_free(p);
   }
-
   if(speed==-1){
     logC("\tAttempting to reset read speed to full... ");
   }else{
@@ -389,8 +399,6 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
   }else{
     logC("drive said OK\n");
   }
-
-  goto fornow;
 
   /* This is similar to the Fast search above, but just in case the
      cache is being tracked as multiple areas that are treated
@@ -412,10 +420,10 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	}
 	
 
-	ret1 = cdda_read(d,NULL,offset+seekoff,1);
-	logC("\t\t>>> %d:%d:%d ",offset+seekoff,ret1,cdda_milliseconds(d));
-	ret2 = cdda_read(d,NULL,offset,1);
-	logC("seek_read:%d:%d:%d\n",offset,ret2,cdda_milliseconds(d));
+	ret1 = cdda_read_timed(d,NULL,offset+seekoff,1,&x);
+	logC("\t\t>>> %d:%d:%d ",offset+seekoff,ret1,x);
+	ret2 = cdda_read_timed(d,NULL,offset,1,&x);
+	logC("seek_read:%d:%d:%d\n",offset,ret2,x);
 	
 	if(ret1<=0 || ret2<=0){
 	  offset+=cachesize+100;
@@ -427,11 +435,11 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	  reportC("\n\tRead error while performing drive cache checks;"
 		  "\n\t  choosing new offset and trying again.\n");
 	}else{
-	  if(cdda_milliseconds(d)==-1){
+	  if(x==-1){
 	    reportC("\n\tTiming error while performing drive cache checks; aborting test.\n");
 	    return(-1);
 	  }else{
-	    if(cdda_milliseconds(d)<MIN_SEEK_MS)under=1;
+	    if(x<MIN_SEEK_MS)under=1;
 	    break;
 	  }
 	}
@@ -463,7 +471,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
   {
     int lower=0;
     int gran=64;
-    int it=2;
+    int it=3;
     int tests=0;
     int under=1;
     readahead=0;
@@ -473,7 +481,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       if(tests>8 && gran<64){
 	gran<<=3;
 	tests=0;
-	it=2;
+	it=3;
       }
       if(gran && !under){
 	gran>>=3;
@@ -493,9 +501,9 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	logC("\n\t\t%d >>> ",i);
 
 	while(sofar<cachesize){
-	  ret = cdda_read(d,NULL,offset+sofar,cachesize-sofar);
+	  ret = cdda_read_timed(d,NULL,offset+sofar,cachesize-sofar,&x);
 	  if(ret<=0)goto error;
-	  logC("%d:%d:%d ",offset+sofar,ret,cdda_milliseconds(d));
+	  logC("%d:%d:%d ",offset+sofar,ret,x);
 
 	  /* some drives can lose sync and perform an internal resync,
 	     which can also cause readahead to restart.  If we see
@@ -509,7 +517,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 
 	/* what we'd predict is needed to let the readahead process work. */
 	{
-	  int usec=mspersector*(readahead)*(4+i)*500;
+	  int usec=mspersector*(readahead)*(6+i)*200;
 	  int max= 13000*2*readahead; /* corresponds to .5x */
 	  if(usec>max)usec=max;
 	  logC("sleep=%dus ",usec);
@@ -517,10 +525,10 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	}
 	
 	/* seek to offset+cachesize+readahead */
-	ret = cdda_read(d,NULL,offset+cachesize+readahead-1,1);
+	ret = cdda_read_timed(d,NULL,offset+cachesize+readahead-1,1,&x);
 	if(ret<=0)break;
-	logC("seek=%d:%d:%d",offset+cachesize+readahead-1,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)<MIN_SEEK_MS){
+	logC("seek=%d:%d:%d",offset+cachesize+readahead-1,ret,x);
+	if(x<MIN_SEEK_MS){
 	  under=1;
 	  break;
 	}else if(i&1){
@@ -543,7 +551,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
     reportC("\tDrive readahead past read cursor: %d sector(s)                \n",readahead);
   }
   
-  reportC("\tTesting cache tail cursor...");
+   reportC("\tTesting cache tail cursor...");
 
   while(1){
     rollbehind=cachesize;
@@ -553,15 +561,15 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       logC("\n\t\t>>> ");
       printC(".");
       while(sofar<cachesize){
-	ret = cdda_read(d,NULL,offset+sofar,cachesize-sofar);
+	ret = cdda_read_timed(d,NULL,offset+sofar,cachesize-sofar,&x);
 	if(ret<=0)goto error;
-	logC("%d:%d:%d ",offset+sofar,ret,cdda_milliseconds(d));
+	logC("%d:%d:%d ",offset+sofar,ret,x);
 	sofar+=ret;
       }
     
       /* Pause what we'd predict is needed to let the readahead process work. */
       {
-	int usec=mspersector*readahead*5000;
+	int usec=mspersector*readahead*1500;
 	logC("\n\t\tsleeping %d microseconds",usec);
 	usleep(usec);
       }
@@ -571,10 +579,10 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       sofar=rollbehind;
       while(sofar>0){
 	sofar--;
-	ret = cdda_read(d,NULL,offset+sofar,1);
+	ret = cdda_read_timed(d,NULL,offset+sofar,1,&x);
 	if(ret<=0)break;
-	logC("%d:%d:%d ",sofar,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)>=MIN_SEEK_MS){
+	logC("%d:%d:%d ",sofar,ret,x);
+	if(x>=MIN_SEEK_MS){
 	  rollbehind=sofar+1;
 	  break;
 	}
@@ -616,7 +624,6 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
   }else{
     reportC("\tCache tail rollbehind: %d sector(s)                        \n",rollbehind);
   }
-  
   reportC("\tTesting granularity of cache tail");
 
   while(1){
@@ -626,15 +633,15 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       logC("\n\t\t>>> ");
       printC(".");
       while(sofar<cachesize+1){
-	ret = cdda_read(d,NULL,offset+sofar,cachesize-sofar+1);
+	ret = cdda_read_timed(d,NULL,offset+sofar,cachesize-sofar+1,&x);
 	if(ret<=0)goto error2;
-	logC("%d:%d:%d ",offset+sofar,ret,cdda_milliseconds(d));
+	logC("%d:%d:%d ",offset+sofar,ret,x);
 	sofar+=ret;
       }
       
       /* Pause what we'd predict is needed to let the readahead process work. */
       {
-	int usec=mspersector*readahead*5000;
+	int usec=mspersector*readahead*1500;
 	logC("\n\t\tsleeping %d microseconds",usec);
 	usleep(usec);
       }
@@ -644,10 +651,10 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       sofar=cachegran;
       while(sofar){
 	sofar--;
-	ret = cdda_read(d,NULL,offset+sofar,1);
+	ret = cdda_read_timed(d,NULL,offset+sofar,1,&x);
 	if(ret<=0)break;
-	logC("%d:%d:%d ",offset+sofar,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)>=MIN_SEEK_MS){
+	logC("%d:%d:%d ",offset+sofar,ret,x);
+	if(x>=MIN_SEEK_MS){
 	  cachegran=sofar+1;
 	  break;
 	}
@@ -704,83 +711,113 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
      or another and thus need to guard against slow bus transfer times
      [eg, no DMA] swamping the actual read time from media. */
 
-  /* sample cache access for ten realtime seconds. */
-  //{
-    //int cachems;
+  /* sample cache access for five realtime seconds. */
+  {
+    float cachems;
+    float readms;
+    int readsize = cachesize+readahead-rollbehind-4;
+    int retry;
 
-    //reportC("\nVerifying that seeking before cache dumps readahead...");
-    //reportC("\n\tSampling cache timing... ");
-  //}
+    if(readsize>cachesize-1)readsize=cachesize-4;
 
- fornow:
-  /* Check to see that cdda_clear_cache clears the specified cache area */
-  if(cdda_clear_cache(d,firstsector+100,10)==-405){
-    reportC("\tDrive/kernel does not allow cache management commands\n");
-  }else{
-    int fail=0;
-    int success=0;
-    int errors=0;
+    if(readsize<8){
+      reportC("\tCache size (minus rollbehind) too small to test cache speed.\n");
+    }else{
+      reportC("\tTesting cache transfer speed...");
+      
+      /* cache timing isn't dependent on rotational speed, so get a good
+	 read and then just hammer the cache; we will only need to do it once */
 
-    reportC("\tTesting cache management commands...");
-    
-    for(i=0;i<10 && !fail;i++){
-      int sofar=0,ret,retry=0;
-      if(offset-1<firstsector)offset++;
-
-      /* fill the readahead. */
-      logC("\n\t\t>>> ");
-      printC(".");
-      while(sofar<cachesize){
-	ret = cdda_read(d,NULL,offset+sofar,cachesize-sofar);
-	if(ret<=0)goto error3;
-	logC("%d:%d:%d ",offset+sofar,ret,cdda_milliseconds(d));
-	sofar+=ret;
+      while(1){
+	int ret=time_drive(d, NULL, log, offset, readsize);
+	if(ret==-404) return -1;
+	if(ret>0)break;
+	retry++;
+	if(retry==10){
+	  reportC("\n\tToo many read errors while performing drive cache checks;"
+		  "\n\t  aborting test.\n\n");
+	  return(-1);
+	}
+	reportC("\n\tRead error while performing drive cache checks;"
+		"\n\t  choosing new offset and trying again.\n");
       }
       
-      /* clear the readahead. */
-      ret=cdda_clear_cache(d,offset,cachesize);
-      logC("\n\t\tcdda_clear_cache(%d,%d)=%d ",offset,cachesize,ret);
-      logC("\n\t\t<<< ");
-
-      if(ret==0)success++;
-	
-      /* reread an area ahead of the rollback, checking for seek */
       {
-	int loc=offset+cachesize/2;//+cachesize - ((cachesize - rollbehind)*(i>>1)/5) - 1;
-	ret = cdda_read(d,NULL,loc,1);
-	if(ret<=0)goto error3;
-	logC("%d:%d:%d ",loc,ret,cdda_milliseconds(d));
-	if(cdda_milliseconds(d)<MIN_SEEK_MS) fail=1;
+	int elapsed=0;
+	int sectors=0;
+	int spinner=0;
+	while(elapsed<5000){
+	  sectors += (readsize-1);
+	  elapsed += time_drive(d, NULL, log, offset, readsize);
+	  spinner = elapsed*5/1000%4;
+	  printC("\b%c",(spinner==0?'o':(spinner==1?'O':(spinner==2?'o':'.'))));
+	}
+	printC("\r");
+	logC("\n");
+	cachems = elapsed/(float)sectors;
+	reportC("\t        Cache read speed: %.2fms/sector [%dx]\n",
+		cachems,(int)(1000./75./cachems));
       }
-      continue;
 
-    error3:
-      errors++;
-      if(errors<5){
-	reportC("\n\tRead error while performing drive cache checks; trying again.\n");
+      if(cachems*3>mspersector){
+	reportC("\tCache access insufficiently faster than media access to\n"
+		"\t\tperform cache backseek tests\n\n");
       }else{
-	reportC("\n\tToo many read errors while performing drive cache checks;"
-		"\n\t  aborting test.\n\n");
-	return(-1);
-      }	
-    }
+	
+	/* now do the read/backseek combo */
+	reportC("\tTesting that backseek flushes cache...");
+	{
+	  int elapsed=0;
+	  int sectors=0;
+	  int spinner=0;
+	  int retry=0;
+	  while(elapsed<5000){
+	    int ret;
+	    while(1){
+	      /* need to force seek/flush, but don't kill the drive */
+	      int seekpos = offset+cachesize+20000;
+	      if(seekpos>lastsector-150)seekpos=lastsector-150;
+	      ret=cdda_read(d, NULL, seekpos, 1);
+	      if(ret>0) ret=time_drive(d, NULL, log, offset+1, readsize);
+	      if(ret>=0) ret=time_drive(d, NULL, log, offset, readsize);
 
-    if(fail){
-      warn=1;
-      reportC("\nWARNING: Drive supports cache management commands, but does not"
-	      "\n         implement commands correctly/according to spec. This"
-	      "\n         will almost certainly break Paranoia.\n");
-    }else{
-      if(success){
-	printC("\r");
-	reportC("\tCache management commands clear cache as mandated by spec   ");
-      }else{
-	printC("\r");
-	reportC("\tDrive rejected cache management commands... odd, but not fatal");
+	      if(ret<=0){
+		retry++;
+		if(retry==10){
+		  reportC("\n\tToo many read errors while performing drive cache checks;"
+			  "\n\t  aborting test.\n\n");
+		  return(-1);
+		}
+		reportC("\n\tRead error while performing drive cache checks; retrying...");
+	      }else
+		break;
+	    }
+	    
+	    sectors += (readsize-1);
+	    elapsed += ret;
+	    
+	    spinner = elapsed*5/1000%4;
+	    printC("\b%c",(spinner==0?'o':(spinner==1?'O':(spinner==2?'o':'.'))));
+	  }
+	
+	  printC("\r");
+	  logC("\n");
+	  readms = elapsed/(float)sectors;
+	  reportC("\t        Access speed after backseek: %.2fms/sector [%dx]\n",
+		  readms,(int)(1000./75./readms));
+	  if(readms*2. < mspersector ||
+	     cachems*2. > readms){
+	    reportC("\tWARNING: Read timing after backseek faster than expected!\n"
+		    "\t         It's possible/likely that this drive is not\n"
+		    "\t         flushing the readahead cache on backward seeks!\n\n");
+	    warn=1;
+	  }else{
+	    reportC("\tBackseek flushes the cache as expected\n");
+	  }
+	}
       }
     }
   }
-  /* Does cdda_clear_cache result in noncontiguous cache areas? */
 
 
 
