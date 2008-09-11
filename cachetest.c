@@ -632,7 +632,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 
   while(1){
     cachegran=cachesize+1;
-    for(i=0;i<10 && cachegran;i++){
+    for(i=0;i<10 && cachegran;){
       int sofar=0,ret,retry=0;
       logC("\n\t\t>>> ");
       printC(".");
@@ -659,7 +659,12 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	if(ret<=0)break;
 	logC("%d:%d:%d ",offset+sofar,ret,x);
 	if(x>=MIN_SEEK_MS){
-	  cachegran=sofar+1;
+	  if(cachegran == sofar+1){
+	    i++;
+	  }else{
+	    cachegran=sofar+1;
+	    i=0;
+	  }
 	  break;
 	}
 	cachegran=sofar;
