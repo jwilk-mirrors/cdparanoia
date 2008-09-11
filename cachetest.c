@@ -729,7 +729,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
   {
     float cachems;
     float readms;
-    int readsize = cachesize+readahead-rollbehind-8;
+    int readsize = cachesize-rollbehind-8;
     int retry;
 
     if(readsize>cachesize-1)readsize=cachesize-1;
