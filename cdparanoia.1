@@ -1,6 +1,6 @@
-.TH CDPARANOIA 1 "12 May 2008"
+.TH CDPARANOIA 1 "11 Sep 2008"
 .SH NAME
-cdparanoia 10.0 (Paranoia release III) \- an audio CD reading utility which includes extra data verification features
+cdparanoia 10.2 (Paranoia release III) \- an audio CD reading utility which includes extra data verification features
 .SH SYNOPSIS
 .B cdparanoia
 .RB [ options ]
@@ -21,17 +21,16 @@ adds extra-robust data verification, synchronization, error handling
 and scratch reconstruction capability.
 .SH OPTIONS
 
+.TP 
+.B \-A --analyze-drive
+Run and log a complete analysis of drive caching, timing and reading behavior;
+verifies that cdparanoia is correctly modelling a sprcific drive's cache and
+read behavior. Implies -vQL.
+
 .TP
 .B \-v --verbose
 Be absurdly verbose about the autosensing and reading process. Good
 for setup and debugging.
-
-.TP
-.B \-vv --verbose-debug
-In addition to verbose output, enable additional testing and debugging
-output for various analysis heuristics.  This option is intended to
-assist developers in remotely refining heuristics for problematic
-hardware.
 
 .TP
 .B \-q --quiet
@@ -42,8 +41,12 @@ Do not print any progress or error information during the reading process.
 Force output of progress information to stderr (for wrapper scripts).
 
 .TP
-.B \-l --log-summary file
-Save result summary to file.
+.B \-l --log-summary [file]
+Save result summary to file, default filename cdparanoia.log.
+
+.TP
+.B \-L --log-debug [file]
+Save detailed device autosense and debugging output to a file, default filename cdparanoia.log.
 
 .TP
 .B \-V --version

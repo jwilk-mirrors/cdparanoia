@@ -28,6 +28,7 @@
    rely on them.  For that reason, we need to empirically determine
    cache size and strategy used for reads. */
 
+#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -45,12 +46,11 @@
 #define logC(...) {if(log){fprintf(log, __VA_ARGS__);}}
 
 static int time_drive(cdrom_drive *d, FILE *progress, FILE *log, int lba, int len, int initial_seek){
-  int i,j,x;
+  int i,x;
   int latency=0;
   double sum=0;
   double sumsq=0;
   int sofar;
-  int ret;
 
   logC("\n");
 
@@ -145,7 +145,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
      we're consistently hitting latency on the same sector during
      initial collection, may need to move past it. */
 
-  int i,j,ret,x,x0;
+  int i,j,ret=0,x;
   int firstsector=-1;
   int lastsector=-1;
   int firsttest=-1;
@@ -250,7 +250,6 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	  }
 	}
       }
-    next:
 
       if(iterating){
 	offset = (offset-firstsector+44999)/45000*45000+firstsector;
@@ -299,7 +298,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       
       for(i=0;i<25 && !under;i++){
 	for(j=0;;j++){
-	  int ret1,ret2;
+	  int ret1=0,ret2=0;
 	  if(i>=15){
 	    int sofar=0;
 	    
@@ -501,7 +500,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
       reportC("\tTesting background readahead past read cursor... %d",readahead);
       printC("           \b\b\b\b\b\b\b\b\b\b\b");
       for(i=0;i<it;i++){
-	int sofar=0,ret,retry=0;
+	int sofar=0,ret;
 	logC("\n\t\t%d >>> ",i);
 
 	while(sofar<cachesize){
@@ -561,7 +560,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
     rollbehind=cachesize;
     
     for(i=0;i<10 && rollbehind;){
-      int sofar=0,ret,retry=0;
+      int sofar=0,ret=0,retry=0;
       logC("\n\t\t>>> ");
       printC(".");
       while(sofar<cachesize){
@@ -639,7 +638,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
   while(1){
     cachegran=cachesize+1;
     for(i=0;i<10 && cachegran;){
-      int sofar=0,ret,retry=0;
+      int sofar=0,ret=0,retry=0;
       logC("\n\t\t>>> ");
       printC(".");
       while(sofar<cachesize+1){
@@ -732,7 +731,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
     float cachems;
     float readms;
     int readsize = cachesize-rollbehind-8;
-    int retry;
+    int retry=0;
 
     if(readsize>cachesize-1)readsize=cachesize-1;
 

@@ -348,7 +348,7 @@ long callbegin;
 long callend;
 long callscript=0;
 
-static char *callback_strings[15]={"wrote",
+static char *callback_strings[16]={"wrote",
                                    "finished",
 				   "read",
 				   "verify",
@@ -362,7 +362,8 @@ static char *callback_strings[15]={"wrote",
 				   "overlap",
 				   "dropped",
 				   "duped",
-				   "transport error"};
+				   "transport error",
+                                   "cache error"};
 
 static int skipped_flag=0;
 static int abort_on_skip=0;
@@ -390,12 +391,27 @@ static void callback(long inpos, int function){
   static int slevel=0;
   static int slast=0;
   static int stimeout=0;
+  static int cacheerr=0;
   char *smilie="= :-)";
   
   if(callscript)
     fprintf(stderr,"##: %d [%s] @ %ld\n",
 	    function,(function>=-2&&function<=13?callback_strings[function+2]:
 		      ""),inpos);
+  else{
+    if(function==PARANOIA_CB_CACHEERR){
+      if(!cacheerr){
+	fprintf(stderr,
+		"\rWARNING: The CDROM drive appears to be seeking impossibly quickly.\n"
+		"This could be due to timer bugs, a drive that really is improbably fast,\n"
+		"or, most likely, a bug in cdparanoia's cache modelling.\n\n"
+		"Please consider using the -A option to perform an analysis run, then mail\n"
+		"the cdparanoia.log file produced by the analysis to paranoia-dev@xiph.org\n"
+		"to assist developers in correcting the problem.\n\n");
+      }
+      cacheerr++;
+    }
+  }
 
   if(!quiet){
     long test;
@@ -460,12 +476,17 @@ static void callback(long inpos, int function){
 	    break;
 	  case PARANOIA_CB_READERR:
 	    slevel=6;
-	    if(dispcache[position]!='V')
+	    if(dispcache[position]!='V' && dispcache[position]!='C')
 	      dispcache[position]='e';
+	    break;
+	  case PARANOIA_CB_CACHEERR:
+	    slevel=8;
+	    dispcache[position]='C';
 	    break;
 	  case PARANOIA_CB_SKIP:
 	    slevel=8;
-	    dispcache[position]='V';
+	    if(dispcache[position]!='C')
+	      dispcache[position]='V';
 	    break;
 	  case PARANOIA_CB_OVERLAP:
 	    overlap=osector;

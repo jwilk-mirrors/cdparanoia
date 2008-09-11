@@ -142,9 +142,11 @@ typedef struct cdrom_paranoia{
   linked_list *fragments; /* fragments of blocks that have been 'verified' */
   sort_info *sortcache;
 
-  int readahead;          /* sectors of readahead in each readop */
+  /* cache tracking */
+  int cdcache_size;
+  int cdcache_begin;
+  int cdcache_end;
   int jitter;           
-  long lastread;
 
   int enable;
   long cursor;

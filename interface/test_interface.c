@@ -65,6 +65,11 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
 
   if(!fd)fd=fdopen(d->cdda_fd,"r");
 
+  if(begin<lastread)
+    d->private->last_milliseconds=20;
+  else
+    d->private->last_milliseconds=sectors;
+
 #ifdef CDDA_TEST_UNDERRUN
   sectors-=1;
 #endif
@@ -158,7 +163,6 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
     }else
       rbytes=fread(inner_buf,1,this_bytes,fd);
 
-    d->private->last_milliseconds=this_bytes/2352./75./20.*1000.;
 
     bytes_so_far+=rbytes;
     if(rbytes==0)break;
@@ -173,9 +177,9 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
 #else
 #ifdef CDDA_TEST_SOMEJITTER
     jitter_flag=(drand48()>.9?1:0);
-  los_flag=(drand48()>.9?1:0);
+    los_flag=(drand48()>.9?1:0);
 #else
-  los_flag=1;
+    los_flag=1;
 #endif
 #endif
 #endif

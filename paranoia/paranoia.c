@@ -84,6 +84,8 @@
 #include "isort.h"
 #include <errno.h>
 
+#define MIN_SEEK_MS 6
+
 static inline long re(root_block *root){
   if(!root)return(-1);
   if(!root->vector)return(-1);
@@ -126,7 +128,6 @@ enum  {
   FLAGS_UNREAD  =0x2, /**< unread, hence missing and unmatchable */
   FLAGS_VERIFIED=0x4  /**< block read and verified */
 } paranoia_read_flags;
-
 
 /**** matching and analysis code *****************************************/
 
@@ -2226,6 +2227,54 @@ long paranoia_seek(cdrom_paranoia *p,long seek,int mode){
   return(ret);
 }
 
+static void cdrom_cache_update(cdrom_paranoia *p, int lba, int sectors){
+
+  if(lba+sectors > p->cdcache_size){
+    int end = lba+sectors;
+    lba=end-p->cdcache_size;
+    sectors = end-lba;
+  }
+    
+  if(lba < p->cdcache_begin){
+    /* a backseek flushes the cache */
+    p->cdcache_begin=lba;
+    p->cdcache_end=lba+sectors;
+  }else{
+    if(lba+sectors>p->cdcache_end)
+      p->cdcache_end = lba+sectors;
+    if(lba+sectors-p->cdcache_size > p->cdcache_begin){
+      if(lba+sectors-p->cdcache_size < p->cdcache_end){
+	p->cdcache_begin = lba+sectors-p->cdcache_size;
+      }else{
+	p->cdcache_begin = lba;
+      }
+    }
+  }
+}
+
+static void cdrom_cache_handler(cdrom_paranoia *p, int lba, void(*callback)(long,int)){
+  int seekpos;
+  int ms;
+  if(lba>=p->cdcache_end)return; /* nothing to do */
+
+  if(lba<0)lba=0;
+
+  if(lba<p->cdcache_begin){
+    /* should always trigger a backseek so let's do that here and look for the timing */
+    seekpos=(lba==0 || lba-1<cdda_disc_firstsector(p->d) ? lba : lba-1); /* keep reads linear when possible */
+  }else{
+    int pre = p->cdcache_begin-1;
+    int post = lba+p->cdcache_size;
+
+    seekpos = (pre<cdda_disc_firstsector(p->d) ? post : pre);
+  }
+
+  if(cdda_read_timed(p->d,NULL,seekpos,1,&ms)==1)
+    if(seekpos<p->cdcache_begin && ms<MIN_SEEK_MS)
+      callback(seekpos*CD_FRAMEWORDS,PARANOIA_CB_CACHEERR);
+  cdrom_cache_update(p,seekpos,1);
+  return;
+}
 
 
 /* ===========================================================================
@@ -2270,7 +2319,7 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
    drives with unaddressable sectors behave more often). */
       
   long readat,firstread;
-  long totaltoread=p->readahead;
+  long totaltoread=p->cdcache_size;
   long sectatonce=p->d->nsectors;
   long driftcomp=(float)p->dyndrift/CD_FRAMEWORDS+.5;
   c_block *new=NULL;
@@ -2293,16 +2342,12 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
   
   if(p->enable&(PARANOIA_MODE_VERIFY|PARANOIA_MODE_OVERLAP)){
     
-    /* we want to jitter the read alignment boundary */
     long target;
     if(rv(root)==NULL || rb(root)>beginword)
       target=p->cursor-dynoverlap; 
     else
       target=re(root)/(CD_FRAMEWORDS)-dynoverlap;
 	
-    if(target+MIN_SECTOR_BACKUP>p->lastread && target<=p->lastread)
-      target=p->lastread-MIN_SECTOR_BACKUP;
-      
     /* we want to jitter the read alignment boundary, as some
        drives, beginning from a specific point, will tend to
        lose bytes between sectors in the same place.  Also, as
@@ -2311,8 +2356,8 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
     
     readat=(target&(~((long)JIGGLE_MODULO-1)))+p->jitter;
     if(readat>target)readat-=JIGGLE_MODULO;
-    p->jitter++;
-    if(p->jitter>=JIGGLE_MODULO)p->jitter=0;
+    p->jitter--;
+    if(p->jitter<0)p->jitter+=JIGGLE_MODULO;
      
   }else{
     readat=p->cursor; 
@@ -2338,19 +2383,15 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
   sofar=0;
   firstread=-1;
   
-  /* Issue each of the low-level reads until we've read enough sectors
-   * to exhaust the drive's cache.
+  /* we have a read span; flush the drive cache if needed */
+  cdrom_cache_handler(p, readat, callback);
+
+  /* Issue each of the low-level reads; the optimal read size is
+   * approximately the cachemodel's cdrom cache size.  The only reason
+   * to read less would be memory considerations.
    *
    * p->readahead   = total number of sectors to read
    * p->d->nsectors = number of sectors to read per request
-   *
-   * The driver determines this latter number, which is the maximum
-   * number of sectors the kernel can reliably read per request.  In
-   * old Linux kernels, there was a hard limit of 8 sectors per read.
-   * While this limit has since been removed, certain motherboards
-   * can't handle DMA requests larger than 64K.  And other operating
-   * systems may have similar limitations.  So the method of splitting
-   * up reads is still useful.
    */
 
   /* actual read loop */
@@ -2393,6 +2434,7 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
        * cases, you take what part of the read you know is good, and
        * you get substantially better performance. --Monty
        */
+
       if((thisread=cdda_read(p->d,buffer+sofar*CD_FRAMEWORDS,adjread,
 			    secread))<secread){
 
@@ -2440,21 +2482,12 @@ c_block *i_read_c_block(cdrom_paranoia *p,long beginword,long endword,
 	  flags[sofar*CD_FRAMEWORDS+i]|=FLAGS_EDGE;
       }
 
-
-      /* Move the read cursor ahead by the number of sectors we attempted
-       * to read.
-       *
-       * "???: Again, why not move it ahead by the number actually
-       * read?"  Because adding zero would not be moving
-       * ahead. --Monty
-       */
-      p->lastread=adjread+secread;
-      
       if(adjread+secread-1==p->current_lastsector)
 	new->lastsector=-1;
       
       if(callback)(*callback)((adjread+secread-1)*CD_FRAMEWORDS,PARANOIA_CB_READ);
       
+      cdrom_cache_update(p,adjread,secread);
       sofar+=secread;
       readat=adjread+secread; 
     }else /* secread <= 0 */
