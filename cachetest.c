@@ -587,7 +587,12 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 	if(ret<=0)break;
 	logC("%d:%d:%d ",sofar,ret,x);
 	if(x>=MIN_SEEK_MS){
-	  rollbehind=sofar+1;
+	  if(rollbehind != sofar+1){
+	    rollbehind=sofar+1;
+	    i=0;
+	  }else{
+	    i++;
+	  }
 	  break;
 	}
 	rollbehind=sofar;
