@@ -560,7 +560,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
   while(1){
     rollbehind=cachesize;
     
-    for(i=0;i<10 && rollbehind;i++){
+    for(i=0;i<10 && rollbehind;){
       int sofar=0,ret,retry=0;
       logC("\n\t\t>>> ");
       printC(".");
