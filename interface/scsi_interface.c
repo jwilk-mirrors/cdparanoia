@@ -1099,7 +1099,7 @@ static long scsi_read_map (cdrom_drive *d, void *p, long begin, long sectors,
   
   while(1) {
 
-    if((err=map(d,(p?buffer:NULL),begin,sectors,sense))){
+    if(mmc_cache_clear (d, begin, sectors) || (err=map(d,(p?buffer:NULL),begin,sectors,sense))){
       if(d->report_all){
 	char b[256];
 
