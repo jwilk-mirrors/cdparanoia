@@ -71,9 +71,7 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
       offset[chars]='\0';
       track=atoi(offset);
       if(track<0 || track>d->tracks){ /*take track 0 as pre-gap of 1st track*/
-	char buffer[256];
-	sprintf(buffer,"Track #%ld does not exist.",track);
-	report(buffer);
+	report("Track #%ld does not exist.",track);
 	exit(1);
       }
     }
@@ -174,29 +172,22 @@ static void display_toc(cdrom_drive *d){
   
   for(i=1;i<=d->tracks;i++)
     if(cdda_track_audiop(d,i)>0){
-      char buffer[256];
 
       long sec=cdda_track_firstsector(d,i);
       long off=cdda_track_lastsector(d,i)-sec+1;
       
-      sprintf(buffer,
-	      "%3d.  %7ld [%02d:%02d.%02d]  %7ld [%02d:%02d.%02d]  %s %s %s",
-	      i,
-	      off,(int)(off/(60*75)),(int)((off/75)%60),(int)(off%75),
-	      sec,(int)(sec/(60*75)),(int)((sec/75)%60),(int)(sec%75),
-	      cdda_track_copyp(d,i)?"  OK":"  no",
-	      cdda_track_preemp(d,i)?" yes":"  no",
-	      cdda_track_channels(d,i)==2?" 2":" 4");
-      report(buffer);
+      report("%3d.  %7ld [%02d:%02d.%02d]  %7ld [%02d:%02d.%02d]  %s %s %s",
+	     i,
+	     off,(int)(off/(60*75)),(int)((off/75)%60),(int)(off%75),
+	     sec,(int)(sec/(60*75)),(int)((sec/75)%60),(int)(sec%75),
+	     cdda_track_copyp(d,i)?"  OK":"  no",
+	     cdda_track_preemp(d,i)?" yes":"  no",
+	     cdda_track_channels(d,i)==2?" 2":" 4");
       audiolen+=off;
     }
-  {
-    char buffer[256];
-    sprintf(buffer, "TOTAL %7ld [%02d:%02d.%02d]    (audio only)",
-	    audiolen,(int)(audiolen/(60*75)),(int)((audiolen/75)%60),
-	    (int)(audiolen%75));
-      report(buffer);
-  }
+  report("TOTAL %7ld [%02d:%02d.%02d]    (audio only)",
+	 audiolen,(int)(audiolen/(60*75)),(int)((audiolen/75)%60),
+	 (int)(audiolen%75));
   report(" ");
 }
 
@@ -941,8 +932,10 @@ int main(int argc,char *argv[]){
     span=copystring(argv[optind]);
 
   report(VERSION);
-  report("Using cdda library version: %s",cdda_version());
-  report("Using paranoia library version: %s",paranoia_version());
+  if(verbose){
+    report("Using cdda library version: %s",cdda_version());
+    report("Using paranoia library version: %s",paranoia_version());
+  }
 
   /* Query the cdrom/disc; we may need to override some settings */
 
@@ -1009,14 +1002,10 @@ int main(int argc,char *argv[]){
       d=NULL;
       exit(1);
     }
-    {
-      char buffer[256];
-      sprintf(buffer,"Forcing default to read %d sectors; "
-	      "ignoring preset and autosense",force_cdrom_sectors);
-      report(buffer);
-      d->nsectors=force_cdrom_sectors;
-      d->bigbuff=force_cdrom_sectors*CD_FRAMESIZE_RAW;
-    }
+    report("Forcing default to read %d sectors; "
+	   "ignoring preset and autosense",force_cdrom_sectors);
+    d->nsectors=force_cdrom_sectors;
+    d->bigbuff=force_cdrom_sectors*CD_FRAMESIZE_RAW;
   }
   if(force_cdrom_overlap!=-1){
     if(force_cdrom_overlap<0 || force_cdrom_overlap>75){
@@ -1025,12 +1014,8 @@ int main(int argc,char *argv[]){
       d=NULL;
       exit(1);
     }
-    {
-      char buffer[256];
-      sprintf(buffer,"Forcing search overlap to %d sectors; "
-	      "ignoring autosense",force_cdrom_overlap);
-      report(buffer);
-    }
+    report("Forcing search overlap to %d sectors; "
+	   "ignoring autosense",force_cdrom_overlap);
   }
 
   switch(cdda_open(d)){
@@ -1051,13 +1036,16 @@ int main(int argc,char *argv[]){
   if(force_cdrom_speed!=-1){
     report("\nAttempting to set speed to %dx... ",force_cdrom_speed);
   }else{
-    report("\nAttempting to set cdrom to full speed... ");
+    if(verbose)
+      report("\nAttempting to set cdrom to full speed... ");
   }
 
   if(cdda_speed_set(d,force_cdrom_speed)){
-    report("\tFAILED. Continuing anyway...");
+    if(verbose || force_cdrom_speed!=-1)
+      report("\tCDROM speed set FAILED. Continuing anyway...");
   }else{
-    report("\tdrive returned OK.");
+    if(verbose)
+      report("\tdrive returned OK.");
   }
   
   if(run_cache_test){
@@ -1168,7 +1156,6 @@ int main(int argc,char *argv[]){
     }
 
     {
-      char buffer[250];
       int track1=cdda_sector_gettrack(d,first_sector);
       int track2=cdda_sector_gettrack(d,last_sector);
       long off1=first_sector-cdda_track_firstsector(d,track1);
@@ -1181,12 +1168,11 @@ int main(int argc,char *argv[]){
 	  exit(1);
 	}
 
-      sprintf(buffer,"Ripping from sector %7ld (track %2d [%d:%02d.%02d])\n"
-	      "\t  to sector %7ld (track %2d [%d:%02d.%02d])\n",first_sector,
-	      track1,(int)(off1/(60*75)),(int)((off1/75)%60),(int)(off1%75),
-	      last_sector,
-	      track2,(int)(off2/(60*75)),(int)((off2/75)%60),(int)(off2%75));
-      report(buffer);
+      report("Ripping from sector %7ld (track %2d [%d:%02d.%02d])\n"
+	     "\t  to sector %7ld (track %2d [%d:%02d.%02d])\n",first_sector,
+	     track1,(int)(off1/(60*75)),(int)((off1/75)%60),(int)(off1%75),
+	     last_sector,
+	     track2,(int)(off2/(60*75)),(int)((off2/75)%60),(int)(off2%75));
       
     }
 
