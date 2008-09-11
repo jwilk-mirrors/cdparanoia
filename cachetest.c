@@ -338,6 +338,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
 
 	    if(ret==1 && i && x<MIN_SEEK_MS){ 
 	      under=1;
+	      logC("\n");
 	      break;
 	    }
 	  }
@@ -724,7 +725,7 @@ int analyze_cache(cdrom_drive *d, FILE *progress, FILE *log, int speed){
     if(readsize>cachesize-1)readsize=cachesize-1;
 
     if(readsize<7){
-      reportC("\tCache size (minus rollbehind) too small to test cache speed.\n");
+      reportC("\tCache size (considering rollbehind) too small to test cache speed.\n");
     }else{
       reportC("\tTesting cache transfer speed...");
       
