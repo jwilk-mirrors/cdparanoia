@@ -73,10 +73,10 @@ static void tweak_SG_buffer(cdrom_drive *d) {
    * Updated: but we don't always get -ENOMEM.  Sometimes USB drives 
    * still fail the wrong way.  This needs some kernel-land investigation.
    */
-  /* Bumping to 55 sector transfer max --Monty */
+  /* Bumping to 64kB  transfer max --Monty */
 
   if (!getenv("CDDA_IGNORE_BUFSIZE_LIMIT")) {
-    cur=((cur+CD_FRAMESIZE_RAW-1)/CD_FRAMESIZE_RAW>55?55*CD_FRAMESIZE_RAW:cur);
+    cur=(cur>1024*64?1024*64:cur);
   }else{
     cdmessage(d,"\tEnvironment variable CDDA_IGNORE_BUFSIZE_LIMIT set,\n"
 	      "\t\tforcing maximum possible sector size.  This can break\n"

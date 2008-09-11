@@ -1,5 +1,5 @@
-cdparanoia III release 10.0 README
-[May 12, 2008]
+cdparanoia III release 10.2 README
+[September 11, 2008]
 
 Monty <monty@xiph.org>
 
@@ -15,8 +15,8 @@ http://www.xiph.org/paranoia/
 COPYING
 =======
 
-cdparanoia (the command line tool) is released under the GPLv3.  The
-interface and paranoia libraries are covered by the LGPLv3.
+cdparanoia (the command line tool) is released under the GPLv2.  The
+interface and paranoia libraries are covered by the LGPLv2.1.
 
 Requirements
 ============
@@ -56,11 +56,14 @@ Requirements
 	(/dev/sg?) files in /dev. Most distributions already have the 
 	/dev/sg? files. (kernels older than 2.6)
 
-3. A Linux 2.2.x, 2.3.x, 2.4.x, 2.5.x or 2.6.x kernel 
+3. A Linux 2.4.x, 2.5.x or 2.6.x kernel 
 
-/proc filesystem support is no longer needed, although you'll
-certainly want to have it for other packages.  Cdparanoia does not
-require threading, IPC or sound card support.
+Timing changes as of cdparanoia 10.2 likely mandate the use of a 2.4
+or later kernel (tested).  Older kernels may be missing the realtime
+clock infrastructure now needed for the beefed up cache paranoia added
+to 10.2.
+
+Cdparanoia does not require threading, IPC or sound card support.
 
 Compiling cdparanoia
 ==================

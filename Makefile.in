@@ -64,7 +64,7 @@ slib:
 
 install:
 	$(INSTALL) -d -m 0755 $(BINDIR)
-	$(INSTALL) -m 4755 -o root $(srcdir)/cdparanoia $(BINDIR)
+	$(INSTALL) -m 755 $(srcdir)/cdparanoia $(BINDIR)
 	$(INSTALL) -d -m 0755 $(MANDIR)
 	$(INSTALL) -d -m 0755 $(MANDIR)/man1
 	$(INSTALL) -m 0644 $(srcdir)/cdparanoia.1 $(MANDIR)/man1

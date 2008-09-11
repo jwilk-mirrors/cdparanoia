@@ -25,7 +25,7 @@
 
 #undef  CDDA_TEST_ALLJITTER
 #undef  CDDA_TEST_SOMEJITTER
-#undef CDDA_TEST_SEEKJITTER
+#undef  CDDA_TEST_SEEKJITTER
 
 static int test_readtoc (cdrom_drive *d){
   int tracks=0;
