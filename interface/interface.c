@@ -90,11 +90,11 @@ int cdda_open(cdrom_drive *d){
       }
   }
 
+  if(d->bigendianp==-1)d->bigendianp=data_bigendianp(d);
+
   if((ret=d->enable_cdda(d,1)))
     return(ret);
     
-  /*  d->select_speed(d,d->maxspeed); most drives are full speed by default */
-  if(d->bigendianp==-1)d->bigendianp=data_bigendianp(d);
   return(0);
 }
 
