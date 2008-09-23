@@ -84,7 +84,7 @@ typedef struct cdrom_drive{
   int is_atapi;
   int is_mmc;
 
-  cdda_private_data_t *private;
+  cdda_private_data_t *private_data;
   void         *reserved;
   unsigned char inqbytes[4];
 

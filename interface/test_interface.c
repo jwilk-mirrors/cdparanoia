@@ -66,9 +66,9 @@ static long test_read(cdrom_drive *d, void *p, long begin, long sectors){
   if(!fd)fd=fdopen(d->cdda_fd,"r");
 
   if(begin<lastread)
-    d->private->last_milliseconds=20;
+    d->private_data->last_milliseconds=20;
   else
-    d->private->last_milliseconds=sectors;
+    d->private_data->last_milliseconds=sectors;
 
 #ifdef CDDA_TEST_UNDERRUN
   sectors-=1;

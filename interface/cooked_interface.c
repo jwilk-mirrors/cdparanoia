@@ -13,13 +13,13 @@
 static int timed_ioctl(cdrom_drive *d, int fd, int command, void *arg){
   struct timespec tv1;
   struct timespec tv2;
-  int ret1=clock_gettime(d->private->clock,&tv1);
+  int ret1=clock_gettime(d->private_data->clock,&tv1);
   int ret2=ioctl(fd, command,arg);
-  int ret3=clock_gettime(d->private->clock,&tv2);
+  int ret3=clock_gettime(d->private_data->clock,&tv2);
   if(ret1<0 || ret3<0){
-    d->private->last_milliseconds=-1;
+    d->private_data->last_milliseconds=-1;
   }else{
-    d->private->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000. + (tv2.tv_nsec-tv1.tv_nsec)/1000000.;
+    d->private_data->last_milliseconds = (tv2.tv_sec-tv1.tv_sec)*1000. + (tv2.tv_nsec-tv1.tv_nsec)/1000000.;
   }
   return ret2;
 }

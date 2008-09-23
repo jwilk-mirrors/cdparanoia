@@ -264,11 +264,11 @@ cdrom_drive *cdda_identify_cooked(const char *dev, int messagedest,
   d->interface=COOKED_IOCTL;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
-  d->private=calloc(1,sizeof(*d->private));
+  d->private_data=calloc(1,sizeof(*d->private_data));
   {
     /* goddamnit */
     struct timespec tv;
-    d->private->clock=(clock_gettime(CLOCK_MONOTONIC,&tv)<0?CLOCK_REALTIME:CLOCK_MONOTONIC);
+    d->private_data->clock=(clock_gettime(CLOCK_MONOTONIC,&tv)<0?CLOCK_REALTIME:CLOCK_MONOTONIC);
   }
   idmessage(messagedest,messages,"\t\tCDROM sensed: %s\n",description);
   return(d);
@@ -674,15 +674,15 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
   d->messagedest = messagedest;
-  d->private=calloc(1,sizeof(*d->private));
+  d->private_data=calloc(1,sizeof(*d->private_data));
   {
     /* goddamnit */
     struct timespec tv;
-    d->private->clock=(clock_gettime(CLOCK_MONOTONIC,&tv)<0?CLOCK_REALTIME:CLOCK_MONOTONIC);
+    d->private_data->clock=(clock_gettime(CLOCK_MONOTONIC,&tv)<0?CLOCK_REALTIME:CLOCK_MONOTONIC);
   }
   if(use_sgio){
     d->interface=SGIO_SCSI;
-    d->private->sg_buffer=(unsigned char *)(d->private->sg_hd=malloc(MAX_BIG_BUFF_SIZE));
+    d->private_data->sg_buffer=(unsigned char *)(d->private_data->sg_hd=malloc(MAX_BIG_BUFF_SIZE));
     g_fd=d->cdda_fd=dup(d->ioctl_fd);
   }else{
     version=verify_SG_version(d,messagedest,messages);
@@ -696,8 +696,8 @@ cdrom_drive *cdda_identify_scsi(const char *generic_device,
     }
 
     /* malloc our big buffer for scsi commands */
-    d->private->sg_hd=malloc(MAX_BIG_BUFF_SIZE);
-    d->private->sg_buffer=((unsigned char *)d->private->sg_hd)+SG_OFF;
+    d->private_data->sg_hd=malloc(MAX_BIG_BUFF_SIZE);
+    d->private_data->sg_buffer=((unsigned char *)d->private_data->sg_hd)+SG_OFF;
   }
 
   {
@@ -772,9 +772,9 @@ cdda_identify_scsi_fail:
   if(i_fd!=-1)close(i_fd);
   if(g_fd!=-1)close(g_fd);
   if(d){
-    if(d->private){
-      if(d->private->sg_hd)free(d->private->sg_hd);
-      free(d->private);
+    if(d->private_data){
+      if(d->private_data->sg_hd)free(d->private_data->sg_hd);
+      free(d->private_data);
     }
     free(d);
   }
@@ -821,7 +821,7 @@ cdrom_drive *cdda_identify_test(const char *filename, int messagedest,
   d->interface=TEST_INTERFACE;
   d->bigendianp=-1; /* We don't know yet... */
   d->nsectors=-1;
-  d->private=calloc(1,sizeof(*d->private));
+  d->private_data=calloc(1,sizeof(*d->private_data));
   d->drive_model=copystring("File based test interface");
   idmessage(messagedest,messages,"\t\tCDROM sensed: %s\n",d->drive_model);
   

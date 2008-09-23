@@ -39,9 +39,9 @@ int cdda_close(cdrom_drive *d){
     if(d->drive_model)free(d->drive_model);
     if(d->cdda_fd!=-1)close(d->cdda_fd);
     if(d->ioctl_fd!=-1 && d->ioctl_fd!=d->cdda_fd)close(d->ioctl_fd);
-    if(d->private){
-      if(d->private->sg_hd)free(d->private->sg_hd);
-      free(d->private);
+    if(d->private_data){
+      if(d->private_data->sg_hd)free(d->private_data->sg_hd);
+      free(d->private_data);
     }
 
     free(d);
@@ -127,7 +127,7 @@ long cdda_read_timed(cdrom_drive *d, void *buffer, long beginsector, long sector
 	}
       }	
     }
-    if(ms)*ms=d->private->last_milliseconds;
+    if(ms)*ms=d->private_data->last_milliseconds;
     return(sectors);
   }
   
