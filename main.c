@@ -746,7 +746,7 @@ int main(int argc,char *argv[]){
       break;
     case 'p':
       output_type=0;
-      output_endian=-1;
+      output_endian=bigendianp();
       break;
     case 'r':
       output_type=0;
