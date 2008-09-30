@@ -118,7 +118,7 @@ long cdda_read_timed(cdrom_drive *d, void *buffer, long beginsector, long sector
 	if(d->bigendianp==-1) /* not determined yet */
 	  d->bigendianp=data_bigendianp(d);
 	
-	if(d->bigendianp!=bigendianp()){
+	if(buffer && d->bigendianp!=bigendianp()){
 	  int i;
 	  u_int16_t *p=(u_int16_t *)buffer;
 	  long els=sectors*CD_FRAMESIZE_RAW/2;
