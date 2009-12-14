@@ -51,7 +51,7 @@ static long parse_offset(cdrom_drive *d, char *offset, int begin){
 
   if(offset==NULL)return(-1);
 
-  /* seperate track from time offset */
+  /* separate track from time offset */
   temp=strchr(offset,']');
   if(temp){
     *temp='\0';
@@ -221,14 +221,14 @@ VERSION"\n"
 "  -V --version                    : print version info and quit\n"
 "  -Q --query                      : autosense drive, query disc and quit\n"
 "  -B --batch                      : 'batch' mode (saves each track to a\n"
-"                                    seperate file.\n"
+"                                    separate file.\n"
 "  -s --search-for-drive           : do an exhaustive search for drive\n"
 "  -h --help                       : print help\n\n"
 
-"  -p --output-raw                 : output raw 16 bit PCM in host byte \n"
+"  -p --output-raw                 : output raw 16-bit PCM in host byte \n"
 "                                    order\n"
-"  -r --output-raw-little-endian   : output raw 16 bit little-endian PCM\n"
-"  -R --output-raw-big-endian      : output raw 16 bit big-endian PCM\n"
+"  -r --output-raw-little-endian   : output raw 16-bit little endian PCM\n"
+"  -R --output-raw-big-endian      : output raw 16-bit big endian PCM\n"
 "  -w --output-wav                 : output as WAV file (default)\n"
 "  -f --output-aiff                : output as AIFF file\n"
 "  -a --output-aifc                : output as AIFF-C file\n\n"
@@ -295,7 +295,7 @@ VERSION"\n"
 "                       1[ww:xx:yy.zz]-2[aa:bb:cc.dd] \n\n"
 
 "Here, 1 and 2 are track numbers; the numbers in brackets provide a\n"
-"finer grained offset within a particular track. [aa:bb:cc.dd] is in\n"
+"finer-grained offset within a particular track. [aa:bb:cc.dd] is in\n"
 "hours/minutes/seconds/sectors format. Zero fields need not be\n"
 "specified: [::20], [:20], [20], [20.], etc, would be interpreted as\n"
 "twenty seconds, [10:] would be ten minutes, [.30] would be thirty\n"
@@ -303,7 +303,7 @@ VERSION"\n"
 
 "When only a single offset is supplied, it is interpreted as a starting\n"
 "offset and ripping will continue to the end of he track.  If a single\n"
-"offset is preceeded or followed by a hyphen, the implicit missing\n"
+"offset is preceded or followed by a hyphen, the implicit missing\n"
 "offset is taken to be the start or end of the disc, respectively. Thus:\n\n"
 
 "    1:[20.35]    Specifies ripping from track 1, second 20, sector 35 to \n"
@@ -323,12 +323,15 @@ VERSION"\n"
 "Don't forget to protect square brackets and preceeding hyphens from\n"
 "the shell...\n\n"
 "A few examples, protected from the shell:\n"
+"Don't forget to protect square brackets from the shell...\n\n"
+
+"A few examples, protected from the shell where appropriate:\n"
 "  A) query only with exhaustive search for a drive and full reporting\n"
 "     of autosense:\n"
 "       cdparanoia -vsQ\n\n"
-"  B) extract up to and including track 3, putting each track in a seperate\n"
+"  B) extract up to and including track 3, putting each track in a separate\n"
 "     file:\n"
-"       cdparanoia -B -- \"-3\"\n\n"
+"       cdparanoia -B -- -3\n\n"
 "  C) extract from track 1, time 0:30.12 to 1:10.00:\n"
 "       cdparanoia \"1[:30.12]-1[1:10]\"\n\n"
 
