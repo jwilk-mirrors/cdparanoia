@@ -1,5 +1,8 @@
 AC_INIT(interface/interface.c)
 
+VERSION="10.3pre" 
+AC_SUBST(VERSION) 
+
 cp $srcdir/configure.guess $srcdir/config.guess
 cp $srcdir/configure.sub $srcdir/config.sub
 
@@ -67,4 +70,4 @@ AC_SUBST(OPT)
 AC_SUBST(DEBUG)
 AC_SUBST(CC)
 
-AC_OUTPUT(Makefile interface/Makefile paranoia/Makefile)
+AC_OUTPUT(Makefile interface/Makefile paranoia/Makefile cdparanoia-3.pc)
